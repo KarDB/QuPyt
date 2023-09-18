@@ -30,8 +30,9 @@ else:
 try:
     import libHeLIC as heli
 except Exception:
-    logging.exception(
-        "Could not load HeliCam library".ljust(65, '.')+'[failed]')
+    # logging.exception(
+    #     "Could not load HeliCam library".ljust(65, '.')+'[failed]')
+    print("Could not load Heliotis software libHeLIC.")
 try:
     import nidaqmx
     from nidaqmx.constants import (Edge,
