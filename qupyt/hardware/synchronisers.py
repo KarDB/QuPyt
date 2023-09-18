@@ -810,7 +810,9 @@ class PStreamer(Synchroniser):
 
 
 class MockGenerator(Synchroniser):
-    def __init__(self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]):
+    def __init__(self,
+                 configuration: Dict[str, Any],
+                 channel_mapping: Dict[str, Any]):
         self.channel_mapping = channel_mapping
         self.device_type: str = "MockGenerator"
 
@@ -920,7 +922,6 @@ class PulseBlaster(Synchroniser):
         stop():
             Stops the execution of the Pulse Program and closes
             the communication. TTL outputs will return to zero.
-
     """
 
     def __init__(self,

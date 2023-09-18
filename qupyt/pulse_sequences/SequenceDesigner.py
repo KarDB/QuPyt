@@ -244,8 +244,8 @@ class PulseBlasterSequence:
         for sequence_block, block_repeats in sequencing_info:
             channel_bits += self.ps[sequence_block]['channel_bits'] * \
                 block_repeats
-            bits_duration += self.ps[sequence_block]['channel_bits'] * \
-                block_repeats
+            bits_duration += self.ps[sequence_block]['durations'] * \
+                block_repeats * 1000  # convert from mus to ns.
 
         return channel_bits, bits_duration
 
