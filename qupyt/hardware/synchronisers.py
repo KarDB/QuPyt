@@ -1035,6 +1035,14 @@ class PulseBlaster(Synchroniser):
                                             ct.c_int(instruction_data),
                                             ct.c_double(pulse_length))
 
+    def check_pulse_length_short(self, pulse_duration: float, current_option: float) -> float:
+        if pulse_duration != current_option:
+            logging.warning(
+                f"pulse duration of {pulse_duration} not possible with PB card. Setting to {current_option}")
+            pulse_duration = current_option
+            return pulse_duration
+        return pulse_duration
+
     def program_pb(self, channel_bit_masks: List[int],
                    pulse_duration_list: List[float]) -> None:
         '''
@@ -1050,23 +1058,37 @@ class PulseBlaster(Synchroniser):
         # int instruction_data, int pulse_length)
         for i, pulse_duration in zip(range(len(channel_bit_masks)),
                                      pulse_duration_list):
-            if pulse_duration >= 5:
+            # All pulse duration checks in mus.
+            if pulse_duration >= 0.01:
                 channel_bit_mask = channel_bit_masks[i]
             else:
                 # Short Pulse Feature:
                 # bits 23-21 controls the number of clock periods
-                if pulse_duration == 1:
+                if 0 < pulse_duration <= 0.003:
                     # 001 for 1 clock period, 2ns for 500 MHz
+                    pulse_duration = self.check_pulse_length_short(
+                        pulse_duration, 0.002)
                     channel_bit_mask = channel_bit_masks[i] + 2**21
-                elif pulse_duration == 2:
+                elif 0.003 < pulse_duration <= 0.005:
                     # 010 for 2 clock periods
+                    pulse_duration = self.check_pulse_length_short(
+                        pulse_duration, 0.004)
                     channel_bit_mask = channel_bit_masks[i] + 2**22
-                elif pulse_duration == 3:
+                elif 0.005 < pulse_duration <= 0.007:
                     # 011 for 3 clock periods
+                    pulse_duration = self.check_pulse_length_short(
+                        pulse_duration, 0.006)
                     channel_bit_mask = channel_bit_masks[i] + 2**21 + 2**22
-                elif pulse_duration == 4:
+                elif 0.007 < pulse_duration <= 0.009:
                     # 100 for 4 clock periods
+                    pulse_duration = self.check_pulse_length_short(
+                        pulse_duration, 0.008)
                     channel_bit_mask = channel_bit_masks[i] + 2**23
+                elif 0.009 < pulse_duration < 0.01:
+                    # 100 for 4 clock periods
+                    pulse_duration = self.check_pulse_length_short(
+                        pulse_duration, 0.01)
+                    channel_bit_mask = channel_bit_masks[i]
 
                 # Shortest minimum instruction time is 5 clock periods
                 # i.e. 10 ns for 500 MHz
