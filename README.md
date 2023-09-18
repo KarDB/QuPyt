@@ -1,3 +1,9 @@
+<div align="center">
+
+![logo](./assets/images/qp_logo.png)
+
+</div>
+
 # QuPyt
 
 Starting to delete obsolete files
