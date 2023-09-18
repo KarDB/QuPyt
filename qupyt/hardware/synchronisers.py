@@ -1073,24 +1073,26 @@ class PulseBlaster(Synchroniser):
                 pulse_duration = self.pb_min_instr_clk_cycles
 
             # Time resolution of PulseBlaster, given by 1/(clock frequency):
-            t_min = 1e3/self.samprate  # in ns
+            # t_min = 1e3/self.samprate  # in ns
+            # upload times as is
+            t_min = 1
 
             # Instructions for pulse sequence
             if i == 0:
                 start_instr_num = spapi.pb_inst_pbonly(
-                    channel_bit_mask, spapi.Inst.CONTINUE, 0, pulse_duration * t_min * spapi.ns)
+                    channel_bit_mask, spapi.Inst.CONTINUE, 0, pulse_duration * t_min * spapi.us)
                 self.error_catcher(start_instr_num)
             elif i != len(channel_bit_masks)-1:
                 status = spapi.pb_inst_pbonly(
-                    channel_bit_mask, spapi.Inst.CONTINUE, 0, pulse_duration * t_min * spapi.ns)
+                    channel_bit_mask, spapi.Inst.CONTINUE, 0, pulse_duration * t_min * spapi.us)
                 self.error_catcher(status)
             else:
                 status = spapi.pb_inst_pbonly(
-                    channel_bit_mask, spapi.Inst.BRANCH, start_instr_num, pulse_duration * t_min * spapi.ns)
+                    channel_bit_mask, spapi.Inst.BRANCH, start_instr_num, pulse_duration * t_min * spapi.us)
                 self.error_catcher(status)
 
         status = spapi.pb_inst_pbonly(
-            0, spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * spapi.ns)
+            0, spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * spapi.us)
         self.error_catcher(status)
 
         self.stop_programming()
