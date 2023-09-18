@@ -1,0 +1,54 @@
+experiment_type: Rabi
+
+# Devices
+sensor:
+  type: "MockCam"
+  config:
+    number_measurements: &nframes 50
+    image_roi:
+      - 300
+      - 300
+      - 0
+      - 0
+    #max_frame_rate: 35000
+    #
+averaging_mode: 'spread'
+averages: 3
+
+synchroniser:
+  type: 'MockSynchroniser'
+  config:
+    address: 'TCPIP::10.152.211.199::INSTR'
+      #sampling_rate: 5.0e9  # samples
+      #analog_mixing_freq: 500.0e6 # Hz
+  channel_mapping:
+    LASER: 1
+    READ: 2
+
+
+dynamic_steps: &n_dynamic_steps 1
+dynamic_devices:
+static_devices:
+  mw_source:
+    address: 'TCPIP::10.152.211.99::INSTR'
+    device_type: 'Mock'
+    channels:
+      channel_1:
+        amplitude: 8
+        frequency: 2.0351e9
+
+# Data
+data:
+  averaging_mode: 'spread'
+  dynamic_steps: *n_dynamic_steps
+  
+
+
+# Pulse Sequence
+ps_path: '/home/karl/Documents/coding/python/QuPyt/testpulseseqs/EoSense_esr.py'
+pulse_sequence:
+  mw_duration: 20
+  laserduration: 30
+  readout_time: 5
+  referenced_measurements: *nframes
+  max_framerate: 3500

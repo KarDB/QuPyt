@@ -1,0 +1,13 @@
+harvesters
+matplotlib
+nidaqmx
+numpy
+pulsestreamer
+pypylon
+pyserial
+PyVISA
+pyvisa-py
+PyYAML
+termcolor
+tqdm
+watchdog
