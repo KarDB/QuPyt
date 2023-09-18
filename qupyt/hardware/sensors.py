@@ -651,7 +651,7 @@ class DAQ(Sensor):
         sample clock and start trigger.
         """
         try:
-            self.NsampsPerDAQread: float = 2 * self.number_measurements
+            self.NsampsPerDAQread: float = self.number_measurements
             self.daq_task = nidaqmx.Task()
             self._create_analog_input_channel()
             self._configure_sample_clock()
