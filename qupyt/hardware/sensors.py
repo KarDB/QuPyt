@@ -8,7 +8,7 @@ import sys
 import os
 import logging
 import traceback
-from time import time
+from time import time, sleep
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 
@@ -303,6 +303,7 @@ class GenICamHarvester(Sensor):
         """
         self.cam.destroy()
         self.harvester.reset()
+        sleep(1)
         logging.info('Closed GenICam camera connection'.ljust(
             65, '.') + '[done]')
 
