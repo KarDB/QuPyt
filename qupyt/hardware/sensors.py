@@ -303,7 +303,6 @@ class GenICamHarvester(Sensor):
         """
         self.cam.destroy()
         self.harvester.reset()
-        sleep(1)
         logging.info('Closed GenICam camera connection'.ljust(
             65, '.') + '[done]')
 

@@ -53,7 +53,7 @@ def open_new_requested_devices(devs: Dict[str, Any],
             logging.info("Added {} to active devices dict".format(key)
                          .ljust(65, '.') + '[done]')
         else:
-            devs[key]['channels']['channel_1']['frequency'] = value['channels']['channel_1']['frequency']
+            devs[key]['channels'] = value['channels']
             logging.info("Updated {} in active devices dict".format(key)
                          .ljust(65, '.') + '[done]')
     return devs
