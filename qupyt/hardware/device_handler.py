@@ -62,13 +62,46 @@ def open_new_requested_devices(devs: Dict[str, Any],
 def set_all_static_params(devs: Dict[str, Any]) -> None:
     """Set all values requested for static devices"""
     for value in devs.values():
-        for channel, channel_values in value["channels"].items():
-            value["device"].set_frequency(
-                float(channel_values["frequency"]), int(channel[-1])
-            )
-            value["device"].set_amplitude(
-                float(channel_values["amplitude"]), int(channel[-1])
-            )
+        if 'slist' in value:
+            set_smb_slist(value)
+        else:
+            for channel, channel_values in value["channels"].items():
+                value["device"].set_frequency(
+                    float(channel_values["frequency"]), int(channel[-1])
+                )
+                value["device"].set_amplitude(
+                    float(channel_values["amplitude"]), int(channel[-1])
+                )
+
+
+def set_smb_slist(device_dict: Dict[str, Any]) -> None:
+    device_dict['device'].instance.write('SOURce1:FREQ:MODE CW')
+    device_dict['device'].opc_wait()
+    # select/create list
+    device_dict['device'].instance.write('SOURce1:LIST:SEL "SyncList"')
+    device_dict['device'].opc_wait()
+    # write frequency to list first row in arg first one being the NV
+    # second one the overhauser-frequency
+    over_freq = float(device_dict['channels']['channel_1']['overhauser_freq'])
+    nv_freq = float(device_dict['channels']['channel_1']['nv_freq'])
+    device_dict['device'].instance.write(
+        f"SOURce1:LIST:FREQ {over_freq} Hz, {nv_freq} Hz")
+    device_dict['device'].opc_wait()
+    # write amp to list first row in arg first one being the NV
+    # second one the overhauser-amp
+    over_amp = float(device_dict['channels']['channel_1']['overhauser_amp'])
+    nv_amp = float(device_dict['channels']['channel_1']['nv_amp'])
+    device_dict['device'].instance.write(
+        f"SOURce1:LIST:POW {over_amp} dBm, {nv_amp} dBm")
+    device_dict['device'].opc_wait()
+    # set list mode to step not auto
+    device_dict['device'].instance.write("SOURce1:LIST:MODE STEP")
+    device_dict['device'].opc_wait()
+    # set trigger type to external
+    device_dict['device'].instance.write("SOURce1:LIST:TRIG:SOUR EXT")
+    device_dict['device'].opc_wait()
+    device_dict['device'].instance.write('SOURce1:FREQ:MODE LIST')
+    device_dict['device'].opc_wait()
 
 
 def set_all_dynamic_params(dynamic_devices: Dict[str, Any],

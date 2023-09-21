@@ -25,7 +25,7 @@ from qupyt.hardware.synchronisers import SynchroniserFactory
 from qupyt.hardware.sensors import SensorFactory
 from qupyt.measurement_logic.run_measurement import run_measurement
 from qupyt.hardware.signal_sources import SignalSource
-from qupyt.set_up import get_waiting_room, make_userdirs, get_log_dir
+from qupyt.set_up import get_waiting_room, make_userdirs, get_log_dir, get_home_dir
 
 make_userdirs()
 parser = argparse.ArgumentParser(description='Start QuPyt measurement')
@@ -62,6 +62,16 @@ def _on_modified(event: FileModifiedEvent) -> None:
     event_thread.clear()
 
 
+def set_busy() -> None:
+    with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
+        file.write('busy')
+
+
+def set_ready() -> None:
+    with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
+        file.write('ready')
+
+
 def parse_input() -> None:
     static_devices: Dict[str, SignalSource] = {}
     dynamic_devices: Dict[str, SignalSource] = {}
@@ -74,7 +84,9 @@ def parse_input() -> None:
             dh.close_superfluous_devices(
                 dynamic_devices, dynamic_devices_requested)
             event_thread.wait()
+            set_ready()
         try:
+            set_busy()
             logging.info('STARTED NEW MEASUREMENT'.ljust(65, '=') + '[START]')
             instruction_file = queue.get()
             with open(instruction_file, "r", encoding='utf-8') as file:

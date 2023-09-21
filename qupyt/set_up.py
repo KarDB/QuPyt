@@ -35,6 +35,15 @@ def get_waiting_room() -> Path:
     return _make_user_dir_list()['homepath_waitingroom']
 
 
+def get_home_dir() -> Path:
+    """
+    :return: Directory to which status
+     files will be written and read.
+    :rtype: Path
+    """
+    return _make_user_dir_list()['homepath']
+
+
 def _make_user_dir_list() -> Dict[str, Path]:
     homepath = pathlib.Path.home() / '.qupyt'
     homepath_log = pathlib.Path.home() / '.qupyt/log'
