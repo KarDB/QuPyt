@@ -204,7 +204,7 @@ class PulseSequence:
 class PulseBlasterSequence:
     def __init__(self,
                  channel_mapping: Dict[str, Any],
-                 yaml_file: Path = get_seq_dir() / 'sequence.yaml') -> None:
+                 yaml_file: Path = get_seq_dir() / 'sequence2.yaml') -> None:
         self.event_times: List[float] = []
         self.event_durations: List[float] = []
         self.event_channel: List[str] = []
@@ -297,14 +297,14 @@ class PulseBlasterSequence:
         raise ValueError(f'No event {event}, options are "up" or "down"')
 
     def _compute_channel_bits(self) -> None:
-        if self.event_times[0] != 0:
-            self.channel_bits.append(0)
-            self.segment_durations.append(self.event_times[0])
         for i, _ in enumerate(self.event_durations):
             prev_val = self.channel_bits[-1] if self.channel_bits else 0
             self.channel_bits.append(
                 prev_val + 2 ** (self.channel_mapping[self.event_channel[i]])
                 * self._event_to_sign(self.events[i]))
+        if self.event_times[0] != 0:
+            self.channel_bits.insert(0, 0)
+            self.event_durations.insert(0, self.event_times[0])
         self._pop_uncessary_entries()
 
     def _pop_uncessary_entries(self) -> None:
