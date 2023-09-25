@@ -14,14 +14,19 @@ class Data(ConfigurationMixin):
         self.number_dynamic_steps: int
         self.number_measurements: int
         self.data_type: type
+        self.compress: bool = False
         self.data: np.ndarray
         self.attribute_map = {
             'dynamic_steps': self._set_number_dynamic_steps,
             'averaging_mode': self._set_averaging_mode,
             'number_measurements': self._set_number_measurements,
-            'roi_shape': self._set_roi_shape
+            'roi_shape': self._set_roi_shape,
+            'compress': self._set_compress_mode
         }
         self._update_from_configuration(configuration)
+
+    def _set_compress_mode(self, compression_value: bool) -> None:
+        self.compress = compression_value
 
     def _set_dtype_from_sensor(self, sensor: Sensor) -> None:
         self.data_type = sensor.target_data_type
@@ -87,4 +92,7 @@ class Data(ConfigurationMixin):
          main measurement loop.
         :type filename: str
         """
-        np.save(filename, self.data)
+        if self.compress:
+            np.save(filename, self.data.mean(axis=(3, 4)))
+        else:
+            np.save(filename, self.data)

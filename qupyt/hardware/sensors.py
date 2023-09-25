@@ -636,7 +636,7 @@ class DAQ(Sensor):
         self.max_voltage: float = 1.0
         self.daq_timeout: int = 3600  # / s
         super().__init__(configuration)
-        self.roi_shape = [0]
+        self.roi_shape = [1]
         self.attribute_map['min_voltage'] = self._set_min_voltage
         self.attribute_map['max_voltage'] = self._set_max_voltage
         self.attribute_map['apd_input'] = self._set_apd_input
