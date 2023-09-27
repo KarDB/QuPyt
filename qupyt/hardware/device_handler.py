@@ -75,6 +75,7 @@ def set_all_static_params(devs: Dict[str, Any]) -> None:
 
 
 def set_smb_slist(device_dict: Dict[str, Any]) -> None:
+    device_dict['device'].instance.write('*RST')
     device_dict['device'].instance.write('SOURce1:FREQ:MODE CW')
     device_dict['device'].opc_wait()
     # select/create list
@@ -85,14 +86,14 @@ def set_smb_slist(device_dict: Dict[str, Any]) -> None:
     over_freq = float(device_dict['channels']['channel_1']['overhauser_freq'])
     nv_freq = float(device_dict['channels']['channel_1']['nv_freq'])
     device_dict['device'].instance.write(
-        f"SOURce1:LIST:FREQ {over_freq} Hz, {nv_freq} Hz")
+        f"SOURce1:LIST:FREQ {nv_freq} Hz, {over_freq} Hz")
     device_dict['device'].opc_wait()
     # write amp to list first row in arg first one being the NV
     # second one the overhauser-amp
     over_amp = float(device_dict['channels']['channel_1']['overhauser_amp'])
     nv_amp = float(device_dict['channels']['channel_1']['nv_amp'])
     device_dict['device'].instance.write(
-        f"SOURce1:LIST:POW {over_amp} dBm, {nv_amp} dBm")
+        f"SOURce1:LIST:POW {nv_amp} dBm, {over_amp} dBm")
     device_dict['device'].opc_wait()
     # set list mode to step not auto
     device_dict['device'].instance.write("SOURce1:LIST:MODE STEP")
