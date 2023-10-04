@@ -76,6 +76,9 @@ def set_all_static_params(devs: Dict[str, Any]) -> None:
 
 def set_smb_slist(device_dict: Dict[str, Any]) -> None:
     device_dict['device'].instance.write('*RST')
+    device_dict['device'].opc_wait()
+    device_dict['device'].instance.write('OUTP ON')
+    device_dict['device'].opc_wait()
     device_dict['device'].instance.write('SOURce1:FREQ:MODE CW')
     device_dict['device'].opc_wait()
     # select/create list

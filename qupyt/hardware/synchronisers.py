@@ -977,7 +977,10 @@ class PulseBlaster(Synchroniser):
                       'green'))
 
     def trigger(self) -> None:
-        pass
+        status = spapi.pb_start()
+        self.error_catcher(status)
+        print(colored('Started execution of Pulseblaster card pulse program!',
+                      'green'))
 
     def stop(self) -> None:
         '''

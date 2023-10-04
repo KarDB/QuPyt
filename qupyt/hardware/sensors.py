@@ -721,7 +721,7 @@ class DAQ(Sensor):
                 excpt,
             )
             sys.exit()
-        return np.asarray(samples)
+        return np.asarray(samples).reshape((len(samples), 1))
 
     def _set_min_voltage(self, min_voltage: float) -> None:
         self.min_voltage = float(min_voltage)
