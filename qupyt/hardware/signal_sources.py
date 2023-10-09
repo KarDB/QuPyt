@@ -71,7 +71,7 @@ class SignalSource(visa_handler.VisaObject, MW_Sources):
         )
         self.opc_wait()
         logging.info(
-            "{self.s_type} set frequency channel {channel} to"
+            f"{self.s_type} set frequency channel {channel} to"
             .ljust(65, ".") + f"{freq}"
         )
 

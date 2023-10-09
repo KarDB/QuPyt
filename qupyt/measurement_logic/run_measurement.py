@@ -45,6 +45,7 @@ def run_measurement(static_devices: Dict[str, Any],
             sleep(0.1)
             for _ in tqdm(range(int(params["averages"])),
                           leave=itervalue == (iterator_size - 1)):
+                sleep(2.5)
                 data = sensor.acquire_data(synchroniser)
                 data_container.update_data(data, itervalue)
         return_status = 'success'

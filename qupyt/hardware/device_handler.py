@@ -106,6 +106,7 @@ def set_smb_slist(device_dict: Dict[str, Any]) -> None:
     device_dict['device'].opc_wait()
     device_dict['device'].instance.write('SOURce1:FREQ:MODE LIST')
     device_dict['device'].opc_wait()
+    logging.info("SMB set slist values.".ljust(65, ".") + "[done]")
 
 
 def set_all_dynamic_params(dynamic_devices: Dict[str, Any],
