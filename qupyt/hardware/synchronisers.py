@@ -702,7 +702,8 @@ class PStreamer(Synchroniser):
             self.seq = [(self.total_duration, 0)]
             return self.seq
         # Add the final low to make the sequence last its length
-        self.seq.append((self.total_duration - pointer_i, 0))
+        if self.total_duration_unparsed != "ignore":
+            self.seq.append((self.total_duration - pointer_i, 0))
         return self.seq
 
     def plot_sequence(self) -> None:
@@ -727,19 +728,25 @@ class PStreamer(Synchroniser):
             self.yaml_file = set_up.get_seq_dir() / "sequence.yaml"
             with open(self.yaml_file, "r", encoding='utf-8') as file:
                 full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
-            total_duration = float(
-                full_pulse_list['total_duration']) * 1e3  # convert to ns
             sequence_order = full_pulse_list['sequencing_order']
             sequencing_repeats = full_pulse_list['sequencing_repeats']
-            if total_duration - round(total_duration) != 0:
-                logging.warning(
-                    "Warning: The total duration is not multiple of the\
-                            sampling time and is being rounded!".ljust(65, '.')
-                    + '[WARNING]'
-                )
-                self.total_duration = int(round(total_duration))
-            else:
-                self.total_duration = int(total_duration)
+
+            total_duration_unparsed = full_pulse_list['total_duration']
+            self.total_duration_unparsed = total_duration_unparsed
+            if total_duration_unparsed == 'ignore':
+                self.total_duration = np.INF
+            if total_duration_unparsed != 'ignore':
+                total_duration = float(
+                    total_duration_unparsed) * 1e3  # convert to ns
+                if total_duration - round(total_duration) != 0:
+                    logging.warning(
+                        "Warning: The total duration is not multiple of the\
+                                sampling time and is being rounded!".ljust(65, '.')
+                        + '[WARNING]'
+                    )
+                    self.total_duration = int(round(total_duration))
+                else:
+                    self.total_duration = int(total_duration)
 
             # Generate Sequence objects for all pulseseqeunce blocks.
             # These will be sequenced together later.
