@@ -55,6 +55,7 @@ def run_measurement(static_devices: Dict[str, Any],
         return_status = 'failed'
     finally:
         sensor.close()
+        synchroniser.close()
         print('sensor closed')
         params['filename'] = params['experiment_type'] + "_" + mid
         params['measurement_status'] = return_status
