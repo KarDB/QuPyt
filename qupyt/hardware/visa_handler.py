@@ -25,6 +25,7 @@ class VisaObject:
         try:
             rm = pyvisa.ResourceManager()
             self.instance = rm.open_resource(handle)
+            self.instance.timeout = 60000
             logging.info(
                 "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
                 + "[done]"

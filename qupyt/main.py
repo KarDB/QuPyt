@@ -83,8 +83,8 @@ def parse_input() -> None:
                 static_devices, static_devices_requested)
             dh.close_superfluous_devices(
                 dynamic_devices, dynamic_devices_requested)
-            event_thread.wait()
             set_ready()
+            event_thread.wait()
         try:
             set_busy()
             logging.info('STARTED NEW MEASUREMENT'.ljust(65, '=') + '[START]')

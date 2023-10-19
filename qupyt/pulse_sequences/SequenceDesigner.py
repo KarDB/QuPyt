@@ -285,7 +285,9 @@ class PulseBlasterSequence:
     def _get_event_durations(self) -> None:
         self.event_durations = [
             i-j for i, j in zip(self.event_times[1:], self.event_times[:-1])]
-        if self.event_times[-1] != self.total_duration:
+        if self.total_duration == 'ignore':
+            pass
+        elif self.event_times[-1] != self.total_duration:
             self.event_durations.append(
                 self.total_duration - self.event_times[-1])
 
