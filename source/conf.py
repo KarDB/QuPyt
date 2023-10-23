@@ -20,7 +20,8 @@ release = '0.1.0'
 
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.inheritance_diagram'
+    'sphinx.ext.inheritance_diagram',
+    'sphinx_rtd_theme'
 ]
 autodoc_member_order = 'bysource'
 
@@ -35,4 +36,4 @@ html_extra_path = ['example_configs/']
 # html_theme = 'alabaster'
 html_theme = 'sphinx_rtd_theme'
 # html_theme = 'furo'
-html_static_path = ['_static']
+# html_static_path = ['_static']

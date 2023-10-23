@@ -95,32 +95,49 @@ def parse_input() -> None:
             parameter_update = write_user_ps(Path(params['ps_path']),
                                              params['pulse_sequence'])
             update_params_dict(params, parameter_update)
+            logging.info('Wrote sequence and updated parameter dict'.ljust(
+                65, '.') + '[done]')
             synchroniser = SynchroniserFactory.create_synchroniser(
                 params['synchroniser']['type'],
                 params['synchroniser']['config'],
                 params['synchroniser']['channel_mapping']
             )
+            logging.info('Opening synchroniser'.ljust(65, '.') + '[done]')
             sensor = SensorFactory.create_sensor(
                 params['sensor']['type'],
                 params['sensor']['config']
             )
+            logging.info('Opening sensor'.ljust(
+                65, '.') + '[done]')
 
             static_devices_requested, dynamic_devices_requested = dh.get_device_dicts(
                 params
             )
             dh.open_new_requested_devices(
                 static_devices, static_devices_requested)
+            logging.info('Opening or updating static devices'.ljust(
+                65, '.') + '[done]')
             dh.open_new_requested_devices(
                 dynamic_devices, dynamic_devices_requested)
+            logging.info('Opening or updating dynamic devices'.ljust(
+                65, '.') + '[done]')
 
             dh.close_superfluous_devices(
                 static_devices, static_devices_requested)
+            logging.info('Closing static devices'.ljust(
+                65, '.') + '[done]')
             dh.close_superfluous_devices(
                 dynamic_devices, dynamic_devices_requested)
+            logging.info('Closing dynamic devices'.ljust(
+                65, '.') + '[done]')
 
+            logging.info('Startin measurement loop'.ljust(
+                65, '.') + '[start]')
             success_status = run_measurement(
                 static_devices, dynamic_devices, sensor, synchroniser, params
             )
+            logging.info(f'Finished measurement loop with status {success_status}'.ljust(
+                65, '.') + '[done]')
             if success_status == "success":
                 os.remove(instruction_file + "_running")
             elif success_status == "failed":

@@ -1,4 +1,3 @@
-.. _rabi:
 ESR Configuration File
 ======================
 

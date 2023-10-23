@@ -63,6 +63,7 @@ def set_all_static_params(devs: Dict[str, Any]) -> None:
     """Set all values requested for static devices"""
     for value in devs.values():
         if 'slist' in value:
+            logging.info('Setting slist parameters'.ljust(65, '.') + '[start]')
             set_smb_slist(value)
         else:
             for channel, channel_values in value["channels"].items():
@@ -121,16 +122,18 @@ def set_all_dynamic_params(dynamic_devices: Dict[str, Any],
                         channel_values["frequency_sweep_values"][index_value]),
                     channel[-1],
                 )
-            except Exception as e:
-                print(e)
-                pass
+            except Exception:
+                logging.exception(
+                    f"Failed to set {value['device_type']} frequency".ljust(65, '.') + '[failed]')
             try:
                 value["device"].set_amplitude(
                     float(
                         channel_values["amplitude_sweep_values"][index_value]),
                     channel[-1],
                 )
-            except:
+            except Exception:
+                logging.exception(
+                    f"Failed to set {value['device_type']} amplitude".ljust(65, '.') + '[failed]')
                 continue
 
 
@@ -152,7 +155,8 @@ def make_sweep_lists(dynamic_devices: Dict[str, Any],
                         channel_values["functional_amplitude"]
                     )
             except:
-                pass
+                logging.info(
+                    f"Failed to generate amplitude sweep list for {device_values['device_type']}".ljust(65, '.') + '[failed]')
             try:
                 if channel_values["min_frequency"] is not None:
                     channel_values["frequency_sweep_values"] = np.linspace(
@@ -166,7 +170,8 @@ def make_sweep_lists(dynamic_devices: Dict[str, Any],
                         channel_values["functional_frequency"]
                     )
             except:
-                pass
+                logging.info(
+                    f"Failed to generate frequency sweep list for {device_values['device_type']}".ljust(65, '.') + '[failed]')
     return dynamic_devices
 
 

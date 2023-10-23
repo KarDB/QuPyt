@@ -869,59 +869,72 @@ class MockGenerator(Synchroniser):
 
 class PulseBlaster(Synchroniser):
     """
-        Class to represent PulseBlaster card.
+    Class to represent PulseBlaster card.
 
-        Attributes
-        ----------
-        int PBclk :
-            PulseBlaster clock frequency (in MHz)
-        int PB_min_instr_clk_cycles:
-            minimum instruction time, in clock periods
-        int PB_STARTtrig:
-            PB channel bit to DAQ start trigger
-        int PB_DAQ:
-            PB channel bit to DAQ gate/ sample clock
-        int PB_AOM:
-            PB channel bit to TTL of AOM driver
-        int PB_MW:
-            PB channel bit to TTL of microwave switch
+    Attributes
+    ----------
+    int PBclk :
+        PulseBlaster clock frequency (in MHz)
+    int PB_min_instr_clk_cycles:
+        minimum instruction time, in clock periods
+    int PB_STARTtrig:
+        PB channel bit to DAQ start trigger
+    int PB_DAQ:
+        PB channel bit to DAQ gate/ sample clock
+    int PB_AOM:
+        PB channel bit to TTL of AOM driver
+    int PB_MW:
+        PB channel bit to TTL of microwave switch
 
-        Methods
-        -------
-        error_catcher(int status): Catches error in PB board status
-        configure_pb():
-            Configures PB board
-        int status pb_inst_pbonly(int bit flags, int instruction,
-            int instruction_data, int pulse_length):
-            Create single instruction for the pulse program
-        create_json_sequence(pulseseq_file_name):
-            Loads sequence array from npz file and save the decomposed
-            data (PB channel bit masks and pulse durations) into json file
-        decompose_sequence_array(seq_array, pulseseq_file_name):
-            Decomposes seq_array into PB channel bit masks
-            and corresponding pulse durations
-        decompose_sequence(sequence):
-            Decompose single sequence into PB channel
-            bit masks and its pulse durations
-        get_int_powers_of_two(sequence):
-            Finds integer list of powers of 2 for each bit sequence
-        load_sequence(pulseseq_file_name):
-            Loads Pb channel bit masks and pulse durations from json file
-            to pulse program memory
-        start_programming():
-            Starts the programming of PB pulse program
-        stop_programming():
-            Stops the programming of PB pulse program
-        program_pb(channel_bit_masks, pulse_duration_list):
-            Program pulse program memory using
-            PB channel bits and pulse durations
-        run():
-            Triggers/starts the execution of the Pulse Program
-        close():
-            Closes the communication with the PB board
-        stop():
-            Stops the execution of the Pulse Program and closes
-            the communication. TTL outputs will return to zero.
+    Methods
+    -------
+    error_catcher(int status): Catches error in PB board status
+
+    configure_pb():
+        Configures PB board
+
+    int status pb_inst_pbonly(int bit flags, int instruction,
+        int instruction_data, int pulse_length):
+        Create single instruction for the pulse program
+
+    create_json_sequence(pulseseq_file_name):
+        Loads sequence array from npz file and save the decomposed
+        data (PB channel bit masks and pulse durations) into json file
+
+    decompose_sequence_array(seq_array, pulseseq_file_name):
+        Decomposes seq_array into PB channel bit masks
+        and corresponding pulse durations
+
+    decompose_sequence(sequence):
+        Decompose single sequence into PB channel
+        bit masks and its pulse durations
+
+    get_int_powers_of_two(sequence):
+        Finds integer list of powers of 2 for each bit sequence
+
+    load_sequence(pulseseq_file_name):
+        Loads Pb channel bit masks and pulse durations from json file
+        to pulse program memory
+
+    start_programming():
+        Starts the programming of PB pulse program
+
+    stop_programming():
+        Stops the programming of PB pulse program
+
+    program_pb(channel_bit_masks, pulse_duration_list):
+        Program pulse program memory using
+        PB channel bits and pulse durations
+
+    run():
+        Triggers/starts the execution of the Pulse Program
+
+    close():
+        Closes the communication with the PB board
+
+    stop():
+        Stops the execution of the Pulse Program and closes
+        the communication. TTL outputs will return to zero.
     """
 
     def __init__(self,
@@ -984,8 +997,8 @@ class PulseBlaster(Synchroniser):
 
     def stop(self) -> None:
         '''
-            Stops the execution of the Pulse Program and closes the
-            communication. TTL outputs will return to zero.
+        Stops the execution of the Pulse Program and closes the
+        communication. TTL outputs will return to zero.
         '''
         # Returns a 0 on success or a negative number on an error.
         status = spapi.pb_stop()
@@ -994,12 +1007,13 @@ class PulseBlaster(Synchroniser):
 
     def error_catcher(self, status: int) -> None:
         '''
-            Checks the status of the PulseBlasterESR.
-            PB returns a negative number on an error,
-            and 0 or the instruction number on success.
-            If error, prints the error message.
-            Parameters:
-                int status: current status of PB board
+        Checks the status of the PulseBlasterESR.
+        PB returns a negative number on an error,
+        and 0 or the instruction number on success.
+        If error, prints the error message.
+
+        Parameters:
+            int status: current status of PB board
         '''
         if status < 0:
             print('Error: ', spapi.pb_get_error())
@@ -1023,16 +1037,19 @@ class PulseBlaster(Synchroniser):
         '''
         Create single instruction to send to the pulse program. It returns a negative number on an error, or the instruction number upon success. 
         If the function returns -99, an invalid parameter was passed to the function.
+
         Instruction format:
             int status pb_inst_pbonly(int bit flags, int instruction, int instruction_data, int pulse_length)
+
         Parameters:
             int bit flags: state of each TTL output bit.
             int instruction: type of instruction is to be executed.
             int instruction_data: data to be used with the instruction field.
             int pulse_length: duration of this pulse program instruction
+
         Returns:
             int status: current PB board status
-    '''
+        '''
         return spapi.spinapi.pb_inst_pbonly(ct.c_uint(flags),
                                             ct.c_int(instruction),
                                             ct.c_int(instruction_data),
