@@ -29,3 +29,16 @@ Please expect breaking changes to the API in the coming months. We plan to make 
 We are located at the Technical University of Munich and are funded by the German Research Foundation as well as the European Research Council.
 
 <img src="./assets/images/TUM_Logo_extern_mt_EN_RGB_s.svg" width="425"/> <img src="./assets/images/LOGO_ERC-FLAG_EU_.jpg" width="425"/> <img src="./assets/images/dfg_logo_englisch_blau_en.jpg" width="425"/>
+
+## Imprint
+
+Karl Briegel
+
+karl.briegel@tum.de
+
+Lichtenberg Strasse 4
+
+85748 Garching b. München
+
+Germany
+
