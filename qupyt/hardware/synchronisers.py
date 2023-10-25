@@ -734,7 +734,7 @@ class PStreamer(Synchroniser):
             total_duration_unparsed = full_pulse_list['total_duration']
             self.total_duration_unparsed = total_duration_unparsed
             if total_duration_unparsed == 'ignore':
-                self.total_duration = np.INF
+                self.total_duration = np.inf
             if total_duration_unparsed != 'ignore':
                 total_duration = float(
                     total_duration_unparsed) * 1e3  # convert to ns
