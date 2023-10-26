@@ -27,7 +27,7 @@ from pulsestreamer import TriggerStart, TriggerRearm
 from pulsestreamer import Sequence, OutputState
 from qupyt.hardware.visa_handler import VisaObject
 from qupyt import set_up
-from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
+from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType, PulseSequenceError
 try:
     import qupyt.hardware.wrappers.spinapi_adapted as spapi
 except (ImportError, NameError):
@@ -602,8 +602,7 @@ class PStreamer(Synchroniser):
         # Check if the asked name exists in the file
         if self.name not in list(self.pulse_list.keys()):
             logging.error("KeyError: No element named " + str(self.name) + ".")
-            self.seq = [(self.total_duration, 0)]
-            return self.seq
+            raise KeyError
 
         for i in range(len(self.pulse_list[self.name])):
             # Start and length of the pulse turned into
@@ -631,8 +630,7 @@ class PStreamer(Synchroniser):
                     + self.name
                     + " sequence definition makes no sense, pulses are overlaping!"
                 )
-                self.seq = [(self.total_duration, 0)]
-                return self.seq
+                raise PulseSequenceError
 
             # Check for unsupported analog signals
             freq_pulse_i = (
@@ -644,8 +642,7 @@ class PStreamer(Synchroniser):
                 logging.warning(
                     "Warning: Frequency different than 0. This programm does not support analog signals. Set frequency to 0."
                 )
-                self.seq = [(self.total_duration, 0)]
-                return self.seq
+                raise PulseSequenceError
 
             ampl_pulse_i = (
                 self.pulse_list.get(self.name) .get("pulse" + str(i + 1))
@@ -655,8 +652,7 @@ class PStreamer(Synchroniser):
                 logging.warning(
                     "Warning: Amplitude of the pulse different than 1 (can only be 0 or 1). This programm does not support analog signals. Set amplitude to 1."
                 )
-                self.seq = [(self.total_duration, 0)]
-                return self.seq
+                raise PulseSequenceError
 
             phase_pulse_i = (
                 self.pulse_list.get(self.name)
@@ -667,8 +663,7 @@ class PStreamer(Synchroniser):
                 logging.warning(
                     "Warning: Phase of the pulse different than 0. This programm does not support analog signals. Set amplitude to 1."
                 )
-                self.seq = [(self.total_duration, 0)]
-                return self.seq
+                raise PulseSequenceError
 
             # Check for non-multples of the sampling time.
             if (start_pulse_i - round(start_pulse_i) != 0) or (
@@ -696,11 +691,10 @@ class PStreamer(Synchroniser):
                 pointer_i = start_pulse_i + len_pulse_i
 
         # Check if the sequence is longer than the defined total time.
-        if pointer_i > self.total_duration:
+        if (pointer_i > self.total_duration and self.total_duration_unparsed != "ignore"):
             logging.error(
                 f"Error: {self.name} duration exceeds the defined total time.")
-            self.seq = [(self.total_duration, 0)]
-            return self.seq
+            raise PulseSequenceError
         # Add the final low to make the sequence last its length
         if self.total_duration_unparsed != "ignore":
             self.seq.append((self.total_duration - pointer_i, 0))

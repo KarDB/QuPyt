@@ -33,3 +33,8 @@ class ConfigurationMixin:
                 self.attribute_map[attr](value)
             else:
                 raise ValueError(f"Unknown attribute: {attr}")
+
+
+class PulseSequenceError(Exception):
+    "PulseStreamer sequence definintion contains non valid input (amplitude, frequency,...)"
+    pass
