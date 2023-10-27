@@ -15,18 +15,23 @@ class Data(ConfigurationMixin):
         self.number_measurements: int
         self.data_type: type
         self.compress: bool = False
+        self.live_compression = False
         self.data: np.ndarray
         self.attribute_map = {
             'dynamic_steps': self._set_number_dynamic_steps,
             'averaging_mode': self._set_averaging_mode,
             'number_measurements': self._set_number_measurements,
             'roi_shape': self._set_roi_shape,
-            'compress': self._set_compress_mode
+            'compress': self._set_compress_mode,
+            'live_compression': self._set_live_compression
         }
         self._update_from_configuration(configuration)
 
     def _set_compress_mode(self, compression_value: bool) -> None:
         self.compress = compression_value
+
+    def _set_live_compression(self, live_compression: bool) -> None:
+        self.live_compression = live_compression
 
     def _set_dtype_from_sensor(self, sensor: Sensor) -> None:
         self.data_type = sensor.target_data_type
@@ -59,6 +64,8 @@ class Data(ConfigurationMixin):
         # HeliCam gets number_images, whereas other get number_images / 2.
         # I suggest fixing this as number_images
         # Specifics have then to be dealt with in each class.
+        if self.live_compression:
+            self.roi_shape = [1]
         if self.averaging_mode == "sum":
             data_array_dim = [2, self.number_dynamic_steps,
                               1, *self.roi_shape]
@@ -77,12 +84,28 @@ class Data(ConfigurationMixin):
             data_array_dim, dtype=getattr(self, 'data_type', float))
 
     def update_data(self, data: np.ndarray, dynamic_step: int) -> None:
+        if self.live_compression:
+            self._update_data_compressed(data, dynamic_step)
+        else:
+            self._update_data_full(data, dynamic_step)
+
+    def _update_data_full(self, data: np.ndarray, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
             self.data[0, dynamic_step] += data[::2].sum(axis=0)
             self.data[1, dynamic_step] += data[1::2].sum(axis=0)
         elif self.averaging_mode == "spread":
             self.data[0, dynamic_step] += data[::2]
             self.data[1, dynamic_step] += data[1::2]
+
+    def _update_data_compressed(self, data: np.ndarray, dynamic_step: int) -> None:
+        if self.averaging_mode == "sum":
+            self.data[0,
+                      dynamic_step] += data[::2].mean(axis=(1, 2)).sum(axis=0)
+            self.data[1,
+                      dynamic_step] += data[1::2].mean(axis=(1, 2)).sum(axis=0)
+        elif self.averaging_mode == "spread":
+            self.data[0, dynamic_step] += data[::2].mean(axis=(1, 2))
+            self.data[1, dynamic_step] += data[1::2].mean(axis=(1, 2))
 
     def save(self, filename: str) -> None:
         """

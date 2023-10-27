@@ -586,30 +586,31 @@ class PStreamer(Synchroniser):
             logging.exception('Pulse Streamer: error stopping pulse sequence'
                               .ljust(65, '.') + '[done]')
 
-    def writeDigSeq(self, name: str) -> List[Tuple[int, int]]:
+    def writeDigSeq(self, channel_key: str) -> List[Tuple[int, int]]:
         """
         Parameters
         ----------
-        Name : str
-            Name of the pulse to be written (LASER, MW or READ)
+        channel_key : str
+            channel_key of the pulse to be written (LASER, MW or READ)
 
         Recieves a dictionary of pulses and returns sequence for the
         PulseStreamer of the given channel: LASER, MW or READ.
         """
-        self.name = name
+        self.channel_key = channel_key
         self.seq = []  # sequence of the channel
         pointer_i = 0  # pointer in time
-        # Check if the asked name exists in the file
-        if self.name not in list(self.pulse_list.keys()):
-            logging.error("KeyError: No element named " + str(self.name) + ".")
+        # Check if the asked channel_key exists in the file
+        if self.channel_key not in list(self.pulse_list.keys()):
+            logging.error("KeyError: No element named " +
+                          str(self.channel_key) + ".")
             raise KeyError
 
-        for i in range(len(self.pulse_list[self.name])):
+        for i in range(len(self.pulse_list[self.channel_key])):
             # Start and length of the pulse turned into
             # float in case it has str format.
             start_pulse_i = (
                 float(
-                    self.pulse_list.get(self.name)
+                    self.pulse_list.get(self.channel_key)
                     .get("pulse" + str(i + 1))
                     .get("start")
                 )
@@ -617,7 +618,7 @@ class PStreamer(Synchroniser):
             )
             len_pulse_i = (
                 float(
-                    self.pulse_list.get(self.name)
+                    self.pulse_list.get(self.channel_key)
                     .get("pulse" + str(i + 1))
                     .get("duration")
                 )
@@ -627,14 +628,14 @@ class PStreamer(Synchroniser):
             if pointer_i > start_pulse_i:
                 logging.error(
                     "Error: "
-                    + self.name
+                    + self.channel_key
                     + " sequence definition makes no sense, pulses are overlaping!"
                 )
                 raise PulseSequenceError
 
             # Check for unsupported analog signals
             freq_pulse_i = (
-                self.pulse_list.get(self.name)
+                self.pulse_list.get(self.channel_key)
                 .get("pulse" + str(i + 1))
                 .get("frequency")
             )
@@ -645,7 +646,8 @@ class PStreamer(Synchroniser):
                 raise PulseSequenceError
 
             ampl_pulse_i = (
-                self.pulse_list.get(self.name) .get("pulse" + str(i + 1))
+                self.pulse_list.get(self.channel_key) .get(
+                    "pulse" + str(i + 1))
                 .get("amplitude")
             )
             if ampl_pulse_i != 1 or ampl_pulse_i is None:
@@ -655,7 +657,7 @@ class PStreamer(Synchroniser):
                 raise PulseSequenceError
 
             phase_pulse_i = (
-                self.pulse_list.get(self.name)
+                self.pulse_list.get(self.channel_key)
                 .get("pulse" + str(i + 1))
                 .get("phase")
             )
@@ -693,7 +695,7 @@ class PStreamer(Synchroniser):
         # Check if the sequence is longer than the defined total time.
         if (pointer_i > self.total_duration and self.total_duration_unparsed != "ignore"):
             logging.error(
-                f"Error: {self.name} duration exceeds the defined total time.")
+                f"Error: {self.channel_key} duration exceeds the defined total time.")
             raise PulseSequenceError
         # Add the final low to make the sequence last its length
         if self.total_duration_unparsed != "ignore":

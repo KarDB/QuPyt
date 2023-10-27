@@ -227,6 +227,7 @@ class GenICamHarvester(Sensor):
         ]
         self.attribute_map['exposure_time'] = self._set_exposure_time
         self.attribute_map['image_roi'] = self._set_roi
+        self.attribute_map['gain'] = self._set_gain
         # GenTL needs to be set above.
         self.attribute_map['GenTL_producer_cti'] = self._throw_away_cti
         if configuration is not None:
@@ -237,6 +238,9 @@ class GenICamHarvester(Sensor):
 
     def _set_exposure_time(self, exposure_time: int) -> None:
         self.cam.remote_device.node_map.ExposureTime.value = exposure_time
+
+    def _set_gain(self, gain: int) -> None:
+        self.cam.remote_device.node_map.Gain.value = gain
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
         roi_shape_h_and_w = roi_shape_and_offset[:2]
