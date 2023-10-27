@@ -104,8 +104,10 @@ class Data(ConfigurationMixin):
             self.data[1,
                       dynamic_step] += data[1::2].mean(axis=(1, 2)).sum(axis=0)
         elif self.averaging_mode == "spread":
-            self.data[0, dynamic_step] += data[::2].mean(axis=(1, 2))
-            self.data[1, dynamic_step] += data[1::2].mean(axis=(1, 2))
+            self.data[0,
+                      dynamic_step] += data[::2].mean(axis=(1, 2)).reshape(-1, 1)
+            self.data[1,
+                      dynamic_step] += data[1::2].mean(axis=(1, 2)).reshape(-1, 1)
 
     def save(self, filename: str) -> None:
         """
