@@ -20,7 +20,8 @@ measurements/logfile_and_database/*
 .idea/
 pylab/.venv/*
 build/
+dist/
 UNKNOWN.egg-info/
 .mypy_cache/
-pylab.egg-info/
+qupyt.egg-info/
 sample_yamls/
