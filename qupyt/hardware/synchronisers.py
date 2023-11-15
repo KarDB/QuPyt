@@ -523,7 +523,8 @@ class PStreamer(Synchroniser):
         super().__init__()
         self.channel_mapping = channel_mapping
         self._update_from_configuration(configuration)
-        self._find_pulse_streamers()
+        if configuration['address'] == 'None':
+            self._find_pulse_streamers()
 
     def _find_pulse_streamers(self) -> None:
         devices = findPulseStreamers()
