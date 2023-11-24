@@ -135,7 +135,8 @@ class Sensor(ABC, ConfigurationMixin):
         self.number_measurements: int = 2
         self.target_data_type: type
         self.attribute_map = {
-            'number_measurements': lambda x: setattr(self, 'number_measurements', x)
+            'number_measurements': lambda x: setattr(self, 'number_measurements', x),
+            'target_data_type': lambda x: setattr(self, 'target_data_type', x)
         }
 
     @abstractmethod

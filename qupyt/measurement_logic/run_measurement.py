@@ -27,9 +27,6 @@ def run_measurement(static_devices: Dict[str, Any],
     mid = datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
     return_status = 'all_fail'
     try:
-        sensor.open()
-        print('sensor opened')
-
         data_container = Data(params['data'])
         data_container.set_dims_from_sensor(sensor)
         data_container.create_array()
@@ -38,6 +35,9 @@ def run_measurement(static_devices: Dict[str, Any],
         synchroniser.stop()
         synchroniser.load_sequence()
         synchroniser.run()
+        sleep(0.1)
+        sensor.open()
+        print('sensor opened')
         sleep(0.5)
         for itervalue in tqdm(range(iterator_size)):
             if dynamic_devices:
