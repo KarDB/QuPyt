@@ -361,7 +361,6 @@ class BaslerCam(Sensor):
         self.attribute_map['image_roi'] = self._set_roi
         if configuration is not None:
             self._update_from_configuration(configuration)
-        self.cam.Close()
 
     def _configure_defaults(self) -> None:
         self.cam.BinningHorizontal.SetValue(1)
@@ -456,7 +455,6 @@ class BaslerCam(Sensor):
 
     def open(self) -> None:
         """Opens camera."""
-        self.cam.Open()
         logging.info("Opening Balser"
                      .ljust(65, '.') + '[done]')
 
