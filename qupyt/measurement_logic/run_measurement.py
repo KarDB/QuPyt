@@ -66,4 +66,5 @@ def run_measurement(static_devices: Dict[str, Any],
             yaml.dump(params, file)
         del data_container
         gc.collect()
+        print(f"garbage is {gc.garbage}")
     return return_status
