@@ -5,6 +5,7 @@ import logging
 from time import sleep
 from datetime import datetime
 from typing import Dict, Any
+import gc
 
 import yaml
 from tqdm import tqdm
@@ -63,4 +64,6 @@ def run_measurement(static_devices: Dict[str, Any],
         data_container.save(params['filename'])
         with open(params['filename'] + '.yaml', 'w', encoding='utf-8') as file:
             yaml.dump(params, file)
+        del data_container
+        gc.collect()
     return return_status
