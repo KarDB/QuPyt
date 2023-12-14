@@ -31,7 +31,7 @@ dependencies = [
 find = {}
 
 [project.scripts]
-qupyt = "qupyt:entry"
+qupyt = "qupyt.main:main"
 
 [tool.mypy]
 check_untyped_defs = true
