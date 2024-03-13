@@ -44,11 +44,11 @@ def run_measurement(static_devices: Dict[str, Any],
             if dynamic_devices:
                 dh.set_all_dynamic_params(dynamic_devices, itervalue)
             sleep(0.1)
-            for _ in tqdm(range(int(params["averages"])),
-                          leave=itervalue == (iterator_size - 1)):
+            for avg in tqdm(range(int(params["averages"])),
+                            leave=itervalue == (iterator_size - 1)):
                 sleep(float(params.get('sleep', 0)))
                 data = sensor.acquire_data(synchroniser)
-                data_container.update_data(data, itervalue)
+                data_container.update_data(data, itervalue, avg)
         return_status = 'success'
     except Exception as e:
         print(f"exc {e}")

@@ -15,7 +15,8 @@ class Data(ConfigurationMixin):
         self.number_measurements: int
         self.data_type: type
         self.compress: bool = False
-        self.live_compression = False
+        self.live_compression: bool = False
+        self.save_in_chunks: int = 0
         self.data: np.ndarray
         self.attribute_map = {
             'dynamic_steps': self._set_number_dynamic_steps,
@@ -23,9 +24,13 @@ class Data(ConfigurationMixin):
             'number_measurements': self._set_number_measurements,
             'roi_shape': self._set_roi_shape,
             'compress': self._set_compress_mode,
-            'live_compression': self._set_live_compression
+            'live_compression': self._set_live_compression,
+            'save_in_chunks': self._set_save_chunk_size
         }
         self._update_from_configuration(configuration)
+
+    def _set_save_chunk_size(self, save_in_chunks: int) -> None:
+        self.save_in_chunks = save_in_chunks
 
     def _set_compress_mode(self, compression_value: bool) -> None:
         self.compress = compression_value
@@ -83,7 +88,13 @@ class Data(ConfigurationMixin):
         self.data = np.zeros(
             data_array_dim, dtype=getattr(self, 'data_type', float))
 
-    def update_data(self, data: np.ndarray, dynamic_step: int) -> None:
+    def update_data(self,
+                    data: np.ndarray,
+                    dynamic_step: int,
+                    avg_step: int) -> None:
+        if self.save_in_chunks != 0 and avg_step % self.save_in_chunks == 0:
+            self.save(f'save_chunk_{avg_step}.npy')
+            self.create_array()
         if self.live_compression:
             self._update_data_compressed(data, dynamic_step)
         else:
