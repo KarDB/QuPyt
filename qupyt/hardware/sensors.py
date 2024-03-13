@@ -135,7 +135,8 @@ class Sensor(ABC, ConfigurationMixin):
         self.number_measurements: int = 2
         self.target_data_type: type
         self.attribute_map = {
-            'number_measurements': lambda x: setattr(self, 'number_measurements', x)
+            'number_measurements': lambda x: setattr(self, 'number_measurements', x),
+            'target_data_type': lambda x: setattr(self, 'target_data_type', x)
         }
 
     @abstractmethod
@@ -227,6 +228,7 @@ class GenICamHarvester(Sensor):
         ]
         self.attribute_map['exposure_time'] = self._set_exposure_time
         self.attribute_map['image_roi'] = self._set_roi
+        self.attribute_map['gain'] = self._set_gain
         # GenTL needs to be set above.
         self.attribute_map['GenTL_producer_cti'] = self._throw_away_cti
         if configuration is not None:
@@ -237,6 +239,9 @@ class GenICamHarvester(Sensor):
 
     def _set_exposure_time(self, exposure_time: int) -> None:
         self.cam.remote_device.node_map.ExposureTime.value = exposure_time
+
+    def _set_gain(self, gain: int) -> None:
+        self.cam.remote_device.node_map.Gain.value = gain
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
         roi_shape_h_and_w = roi_shape_and_offset[:2]
@@ -356,7 +361,6 @@ class BaslerCam(Sensor):
         self.attribute_map['image_roi'] = self._set_roi
         if configuration is not None:
             self._update_from_configuration(configuration)
-        self.cam.Close()
 
     def _configure_defaults(self) -> None:
         self.cam.BinningHorizontal.SetValue(1)
@@ -451,7 +455,6 @@ class BaslerCam(Sensor):
 
     def open(self) -> None:
         """Opens camera."""
-        self.cam.Open()
         logging.info("Opening Balser"
                      .ljust(65, '.') + '[done]')
 

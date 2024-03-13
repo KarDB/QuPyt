@@ -4,6 +4,7 @@ how parameters are updated or set from
 a configuration dictionary.
 """
 from typing import Protocol, Callable, Any, Dict
+import logging
 
 
 # pylint: disable=too-few-public-methods
@@ -29,10 +30,11 @@ class ConfigurationMixin:
     def _update_from_configuration(self: UpdateConfigurationProtocol,
                                    configuration: Dict[str, Any]) -> None:
         for attr, value in configuration.items():
-            if attr in self.attribute_map:
+            try:
                 self.attribute_map[attr](value)
-            else:
-                raise ValueError(f"Unknown attribute: {attr}")
+            except KeyError:
+                logging.exception(f"Unknown attribute: {attr}")
+                raise KeyError(f"Unknown attribute: {attr}")
 
 
 class PulseSequenceError(Exception):

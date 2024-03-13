@@ -5,6 +5,7 @@ import logging
 from time import sleep
 from datetime import datetime
 from typing import Dict, Any
+import gc
 
 import yaml
 from tqdm import tqdm
@@ -27,9 +28,6 @@ def run_measurement(static_devices: Dict[str, Any],
     mid = datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
     return_status = 'all_fail'
     try:
-        sensor.open()
-        print('sensor opened')
-
         data_container = Data(params['data'])
         data_container.set_dims_from_sensor(sensor)
         data_container.create_array()
@@ -38,15 +36,19 @@ def run_measurement(static_devices: Dict[str, Any],
         synchroniser.stop()
         synchroniser.load_sequence()
         synchroniser.run()
+        sleep(0.1)
+        sensor.open()
+        print('sensor opened')
         sleep(0.5)
         for itervalue in tqdm(range(iterator_size)):
             if dynamic_devices:
                 dh.set_all_dynamic_params(dynamic_devices, itervalue)
             sleep(0.1)
-            for _ in tqdm(range(int(params["averages"])),
-                          leave=itervalue == (iterator_size - 1)):
+            for avg in tqdm(range(int(params["averages"])),
+                            leave=itervalue == (iterator_size - 1)):
+                sleep(float(params.get('sleep', 0)))
                 data = sensor.acquire_data(synchroniser)
-                data_container.update_data(data, itervalue)
+                data_container.update_data(data, itervalue, avg)
         return_status = 'success'
     except Exception as e:
         print(f"exc {e}")
@@ -62,4 +64,6 @@ def run_measurement(static_devices: Dict[str, Any],
         data_container.save(params['filename'])
         with open(params['filename'] + '.yaml', 'w', encoding='utf-8') as file:
             yaml.dump(params, file)
+        del data_container
+        gc.collect()
     return return_status
