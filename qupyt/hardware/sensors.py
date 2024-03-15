@@ -82,6 +82,8 @@ class SensorFactory:
                 return BaslerCam(configuration)
             if sensor_type == 'EoSense1.1CXP':
                 return GenICamHarvester(configuration)
+            if sensor_type == 'PhantomS710':
+                return GenICamPhantom(configuration)
             if sensor_type == 'HeliC3':
                 return HeliCam(configuration)
             if sensor_type == 'DAQ':
@@ -168,6 +170,168 @@ class Sensor(ABC, ConfigurationMixin):
         Closes and if necessary destroys the sensor instance.
         """
 
+class GenICamPhantom(Sensor):
+    """
+    Sensor class implementation for the PhantomS710 GenICam compliant camera.
+    This class relies on the excellent
+    `harvesters <https://github.com/genicam/harvesters>`_ library.
+    You will need to provide your own GenTL producer file for this to work.
+    Check the recommendations `here <https://github.com/genicam/harvesters>`_
+    or get it from your GenICam compliant camera manufacturer.
+
+    Arguments:
+        - **configuration** (dict): Configuration dictionary. Keys will be used
+          to select setter methods from an attribute map dicionary to set
+          associated values.
+
+          Possible configuration values:
+            - **exposure_time** (int, µs)
+            - **image_roi** (list[int]): Region Of Interest of the sensor in
+              the following format: [height, width, x_offset, y_offset].
+              The roi_shape attribute of the :class:`Sensor` base class will
+              be derived from this.
+            - **GenTL_producer_cti** (string): Path to the GenTL producer (cti)
+              file on your computer.
+            - **pixel_bits** (string): Sets number of bits per pixel. E.g. 'Mono8', 'Mono12' or 'Mono16'.
+            - **trigger_mode** (string): Sets camera in triggered mode. ['On', 'on', 'ON', 'Off', 'off', "OFF"]
+            - **trigger_source** (string): Sets input for the camera trigger. E.g. 'GPIO0', 'GPIO1'
+
+          Note that these configuration attributes extend those from the
+          :class:`Sensor` base class.
+
+    Raises (__init__):
+        - **FileNotFoundError**
+    """
+
+    def __init__(self, configuration: Dict[str, Any]) -> None:
+        self.harvester = Harvester()
+        self.cti_file = configuration['GenTL_producer_cti']
+        try:
+            self.harvester.add_file(self.cti_file)
+        except (FileNotFoundError, OSError) as err:
+            logging.exception("Could not find GenTL producer file (.cti)"
+                              .ljust(65, '.') + '[failed]')
+            logging.exception(f"Tried to locate file at {self.cti_file}")
+            raise err
+        self.harvester.update()
+        self.cam = self.harvester.create()
+        super().__init__(configuration)
+        self.cam.remote_device.node_map.LinkConfig.value = 'CXP_6'
+        self.cam.remote_device.node_map.PixelFormat.value = 'Mono8'
+        self.cam.remote_device.node_map.TriggerMode.value = 'TriggerModeOn'
+        self.cam.remote_device.node_map.TriggerSource.value = 'GPIO0'
+        self.cam.remote_device.node_map.TriggerSelector.value = 'ExposureStart'
+        self.cam.remote_device.node_map.ExposureTime.value = 20
+        self.cam.remote_device.node_map.OffsetX.value = 0
+        self.cam.remote_device.node_map.OffsetY.value = 0
+        self.cam.remote_device.node_map.Height.value = 800
+        self.cam.remote_device.node_map.Width.value = 1200
+        self.roi_shape = [
+            self.cam.remote_device.node_map.Height.value,
+            self.cam.remote_device.node_map.Width.value
+        ]
+        self.attribute_map['exposure_time'] = self._set_exposure_time
+        self.attribute_map['image_roi'] = self._set_roi
+        self.attribute_map['gain'] = self._set_gain
+        self.attribute_map['pixel_bits'] = self._set_pixel_bits
+        self.attribute_map['trigger_mode'] = self._set_trigger_mode
+        self.attribute_map['trigger_source'] = self._set_trigger_source
+        # GenTL needs to be set above.
+        self.attribute_map['GenTL_producer_cti'] = self._throw_away_cti
+        if configuration is not None:
+            self._update_from_configuration(configuration)
+
+    def _set_trigger_source(self, trigger_source: str) -> None:
+        '''e.g. GPIO0, GPIO1, ...'''
+        self.cam.remote_device.node_map.TriggerSource.value = trigger_source
+
+    def _set_trigger_mode(self, trigger_mode: str) -> None:
+        '''e.g. On of Off'''
+        if trigger_mode.lower() == 'on':
+            self.cam.remote_device.node_map.TriggerMode.value = 'TriggerModeOn'
+        if trigger_mode.lower() == 'off':
+            self.cam.remote_device.node_map.TriggerMode.value = 'TriggerModeOff'
+
+    def _set_pixel_bits(self, pixel_bits: str) -> None:
+        '''e.g. Mono8, Mono12 or Mono16'''
+        self.cam.remote_device.node_map.PixelFormat.value = pixel_bits
+
+    def _throw_away_cti(self, cti_file: str) -> None:
+        """cti must be set at the start. It is therefore ignored here."""
+
+    def _set_exposure_time(self, exposure_time: int) -> None:
+        self.cam.remote_device.node_map.ExposureTime.value = exposure_time
+
+    def _set_gain(self, gain: int) -> None:
+        self.cam.remote_device.node_map.Gain.value = gain
+
+    def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
+        roi_shape_h_and_w = roi_shape_and_offset[:2]
+        roi_offset_x_and_y = roi_shape_and_offset[2:]
+        try:
+            self.cam.remote_device.node_map.Height.value = roi_shape_h_and_w[0]
+            self.cam.remote_device.node_map.Width.value = roi_shape_h_and_w[1]
+            self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
+            self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
+            self.roi_shape = roi_shape_h_and_w
+            logging.info("Set Sensor roi to height: {} and width: {}\n\
+                          with offset X: {} and Y: {}"
+                         .format(roi_shape_h_and_w[0],
+                                 roi_shape_h_and_w[1],
+                                 roi_offset_x_and_y[0],
+                                 roi_offset_x_and_y[1])
+                         .ljust(65, '.') + '[done]')
+        except Exception as exc:
+            logging.exception("Failed to set roi of height: {} and width: {}\n\
+                               with offset X: {} and Y: {}"
+                              .format(roi_shape_h_and_w[0],
+                                      roi_shape_h_and_w[1],
+                                      roi_offset_x_and_y[0],
+                                      roi_offset_x_and_y[1])
+                              .ljust(65, '.') + '[failed]')
+            raise exc
+
+    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+        """
+        See :meth:`Sensor.acquire_data`.
+        """
+        time_1 = time()
+        height = self.cam.remote_device.node_map.Height.value
+        width = self.cam.remote_device.node_map.Width.value
+        self.cam.start()
+        data = np.zeros((self.number_measurements,
+                        height * width), dtype=np.uint32)
+        if synchroniser is not None:
+            synchroniser.trigger()
+        for _i in range(20):
+            with self.cam.fetch() as buffer:
+                continue
+        for i in range(self.number_measurements):
+            with self.cam.fetch() as buffer:
+                component = buffer.payload.components[0]
+                data[i] = component.data
+        self.cam.stop()
+        time_2 = time()
+        logging.info(f'Data acquisition took {time_2-time_1} s'
+                     .ljust(65, '.') + '[done]')
+        return data.reshape((self.number_measurements, height, width))
+
+    def open(self) -> None:
+        """
+        This function simply passes, since all necessary setup happens
+        in __init__. This is necessary to configure the camera.
+        """
+
+    def close(self) -> None:
+        """
+        Destroys the camera instance, and resets Harvester.
+        Without this, you won't be able to make a new camera instance,
+        as the camera will be exclusively owned by this one.
+        """
+        self.cam.destroy()
+        self.harvester.reset()
+        logging.info('Closed GenICam camera connection'.ljust(
+            65, '.') + '[done]')
 
 class GenICamHarvester(Sensor):
     """
