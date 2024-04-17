@@ -8,7 +8,7 @@ import sys
 import os
 import logging
 import traceback
-from time import time, sleep
+from time import time
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
 
@@ -29,19 +29,22 @@ else:
     sys.path.insert(0, r"/usr/share/libhelic/python/wrapper")
 try:
     import libHeLIC as heli
-except Exception:
-    # logging.exception(
-    #     "Could not load HeliCam library".ljust(65, '.')+'[failed]')
-    print("Could not load Heliotis software libHeLIC.")
+except ImportError:
+    logging.exception(
+        "Could not load HeliCam library".ljust(65, '.')+'[failed]')
+    print("""Could not load Heliotis software libHeLIC.
+          If you are not using a HeliCam you do not need this!""")
 try:
     import nidaqmx
     from nidaqmx.constants import (Edge,
                                    AcquisitionType,
                                    VoltageUnits,
                                    TerminalConfiguration)
-except Exception:
+except ImportError:
     logging.exception(
         "Could not load NI-DAQ library".ljust(65, '.')+'[failed]')
+    print("""Could not load NI-DAQ software nidaqmx.
+          If you are not using a NI-DAQ you do not need this!""")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
