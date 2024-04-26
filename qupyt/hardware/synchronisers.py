@@ -32,7 +32,8 @@ try:
     import qupyt.hardware.wrappers.spinapi_adapted as spapi
 except (ImportError, NameError):
     spapi = None
-
+    logging.warning(
+        "Could not load spinapi library".ljust(65, '.')+'[failed]\nIf you are not using a Pulse Streamer you do not need this!')
 
 class SynchroniserFactory:
     """

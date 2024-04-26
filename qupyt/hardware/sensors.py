@@ -30,10 +30,8 @@ else:
 try:
     import libHeLIC as heli
 except ImportError:
-    logging.exception(
-        "Could not load HeliCam library".ljust(65, '.')+'[failed]')
-    print("""Could not load Heliotis software libHeLIC.
-          If you are not using a HeliCam you do not need this!""")
+    logging.warning(
+        "Could not load HeliCam library".ljust(65, '.')+'[failed]\nIf you are not using a HeliCam you do not need this!')
 try:
     import nidaqmx
     from nidaqmx.constants import (Edge,
@@ -41,10 +39,8 @@ try:
                                    VoltageUnits,
                                    TerminalConfiguration)
 except ImportError:
-    logging.exception(
-        "Could not load NI-DAQ library".ljust(65, '.')+'[failed]')
-    print("""Could not load NI-DAQ software nidaqmx.
-          If you are not using a NI-DAQ you do not need this!""")
+    logging.warning(
+        "Could not load NI-DAQ library".ljust(65, '.')+'[failed]\nIf you are not using a NI-DAQ you do not need this!')
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
@@ -172,6 +168,7 @@ class Sensor(ABC, ConfigurationMixin):
         """
         Closes and if necessary destroys the sensor instance.
         """
+
 
 class GenICamPhantom(Sensor):
     """
@@ -335,6 +332,7 @@ class GenICamPhantom(Sensor):
         self.harvester.reset()
         logging.info('Closed GenICam camera connection'.ljust(
             65, '.') + '[done]')
+
 
 class GenICamHarvester(Sensor):
     """
