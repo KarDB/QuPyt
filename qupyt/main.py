@@ -53,7 +53,7 @@ Q:::::::QQ::::::::Qu:::::::::::::::uuPP::::::PP                  y:::::::y      
                                                                                                          
 '''
 
-print('Welcome to')
+print('\nWelcome to')
 print(qupyt_logo_text)
 
 make_userdirs()

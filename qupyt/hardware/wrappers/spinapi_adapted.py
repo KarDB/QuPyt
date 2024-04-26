@@ -25,6 +25,7 @@
 
 import ctypes
 from typing import Any
+import logging
 
 PULSE_PROGRAM = 0
 FREQ_REGS = 1
@@ -34,8 +35,9 @@ try:
 except:
     try:
         spinapi = ctypes.CDLL("spinapi")
-    except:
-        print("Failed to load spinapi library.")
+    except Exception:
+        logging.warning(
+        "Falied to load spinapi DLL".ljust(65, '.')+'[failed]')
 
 
 def enum(**enums: Any) -> type:
