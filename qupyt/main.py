@@ -27,6 +27,35 @@ from qupyt.measurement_logic.run_measurement import run_measurement
 from qupyt.hardware.signal_sources import SignalSource
 from qupyt.set_up import get_waiting_room, make_userdirs, get_log_dir, get_home_dir
 
+qupyt_logo_text = '''                                                                                                        
+                                                                                                         
+     QQQQQQQQQ                       PPPPPPPPPPPPPPPPP                                     tttt          
+   QQ:::::::::QQ                     P::::::::::::::::P                                 ttt:::t          
+ QQ:::::::::::::QQ                   P::::::PPPPPP:::::P                                t:::::t          
+Q:::::::QQQ:::::::Q                  PP:::::P     P:::::P                               t:::::t          
+Q::::::O   Q::::::Quuuuuu    uuuuuu    P::::P     P:::::Pyyyyyyy           yyyyyyyttttttt:::::ttttttt    
+Q:::::O     Q:::::Qu::::u    u::::u    P::::P     P:::::P y:::::y         y:::::y t:::::::::::::::::t    
+Q:::::O     Q:::::Qu::::u    u::::u    P::::PPPPPP:::::P   y:::::y       y:::::y  t:::::::::::::::::t    
+Q:::::O     Q:::::Qu::::u    u::::u    P:::::::::::::PP     y:::::y     y:::::y   tttttt:::::::tttttt    
+Q:::::O     Q:::::Qu::::u    u::::u    P::::PPPPPPPPP        y:::::y   y:::::y          t:::::t          
+Q:::::O     Q:::::Qu::::u    u::::u    P::::P                 y:::::y y:::::y           t:::::t          
+Q:::::O  QQQQ:::::Qu::::u    u::::u    P::::P                  y:::::y:::::y            t:::::t          
+Q::::::O Q::::::::Qu:::::uuuu:::::u    P::::P                   y:::::::::y             t:::::t    tttttt
+Q:::::::QQ::::::::Qu:::::::::::::::uuPP::::::PP                  y:::::::y              t::::::tttt:::::t
+ QQ::::::::::::::Q  u:::::::::::::::uP::::::::P                   y:::::y               tt::::::::::::::t
+   QQ:::::::::::Q    uu::::::::uu:::uP::::::::P                  y:::::y                  tt:::::::::::tt
+     QQQQQQQQ::::QQ    uuuuuuuu  uuuuPPPPPPPPPP                 y:::::y                     ttttttttttt  
+             Q:::::Q                                           y:::::y                                   
+              QQQQQQ                                          y:::::y                                    
+                                                             y:::::y                                     
+                                                            y:::::y                                      
+                                                           yyyyyyy                                       
+                                                                                                         
+'''
+
+print('Welcome to')
+print(qupyt_logo_text)
+
 make_userdirs()
 parser = argparse.ArgumentParser(description='Start QuPyt measurement')
 parser.add_argument('--verbose', action="store_true",
@@ -62,12 +91,12 @@ def _on_modified(event: FileModifiedEvent) -> None:
     event_thread.clear()
 
 
-def set_busy() -> None:
+def _set_busy() -> None:
     with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
         file.write('busy')
 
 
-def set_ready() -> None:
+def _set_ready() -> None:
     with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
         file.write('ready')
 
@@ -83,10 +112,10 @@ def parse_input() -> None:
                 static_devices, static_devices_requested)
             dh.close_superfluous_devices(
                 dynamic_devices, dynamic_devices_requested)
-            set_ready()
+            _set_ready()
             event_thread.wait()
         try:
-            set_busy()
+            _set_busy()
             logging.info('STARTED NEW MEASUREMENT'.ljust(65, '=') + '[START]')
             instruction_file = queue.get()
             with open(instruction_file, "r", encoding='utf-8') as file:

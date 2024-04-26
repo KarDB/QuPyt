@@ -39,4 +39,3 @@ class ConfigurationMixin:
 
 class PulseSequenceError(Exception):
     "PulseStreamer sequence definintion contains non valid input (amplitude, frequency,...)"
-    pass

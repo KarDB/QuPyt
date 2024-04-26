@@ -31,13 +31,15 @@ class VisaObject:
                 + "[done]"
             )
         except Exception:
-            rm.close()
-            rm.visalib._registry.clear()
             print('Opening VISA Object Failed')
             logging.exception(
                 "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
                 + "[failed]"
             )
+            raise
+        finally:
+            rm.close()
+            rm.visalib._registry.clear()
 
     def _get_instructions(self) -> None:
         """
@@ -53,7 +55,7 @@ class VisaObject:
                 "OPC": "*OPC?",
             }
 
-        if self.s_type == "SMB":
+        elif self.s_type == "SMB":
             self.command = {
                 "SetAmpl1": "POW ",
                 "GetAmpl1": "POW?",
@@ -93,6 +95,19 @@ class VisaObject:
 
         elif self.s_type == "TekAWG":
             self.command = {"OPC": "*OPC?"}
+
+        elif self.s_type == "TekAFG":
+            self.command = {
+                "SetAmpl1": "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude ",
+                "GetAmpl1": "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude?",
+                "SetFreq1": "SOURce1:FREQuency:FIXed ",
+                "GetFreq1": "SOURce1:FREQuency:FIXed?",
+                # The Tek AFG does not implement an OPC.
+                # We therefore skip the waiting time and
+                # Query impedance which will alwasy return
+                # Non zeros numbers.
+                "OPC": "OUTPut1:IMPedance?",
+            }
 
     def opc_wait(self) -> None:
         opcVal = 0
