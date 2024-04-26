@@ -91,12 +91,12 @@ def _on_modified(event: FileModifiedEvent) -> None:
     event_thread.clear()
 
 
-def set_busy() -> None:
+def _set_busy() -> None:
     with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
         file.write('busy')
 
 
-def set_ready() -> None:
+def _set_ready() -> None:
     with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
         file.write('ready')
 
@@ -112,10 +112,10 @@ def parse_input() -> None:
                 static_devices, static_devices_requested)
             dh.close_superfluous_devices(
                 dynamic_devices, dynamic_devices_requested)
-            set_ready()
+            _set_ready()
             event_thread.wait()
         try:
-            set_busy()
+            _set_busy()
             logging.info('STARTED NEW MEASUREMENT'.ljust(65, '=') + '[START]')
             instruction_file = queue.get()
             with open(instruction_file, "r", encoding='utf-8') as file:

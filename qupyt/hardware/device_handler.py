@@ -113,25 +113,18 @@ def set_all_dynamic_params(dynamic_devices: Dict[str, Any],
                            index_value: Dict[str, Any]) -> None:
     """Set all values requested for dynamic devices.
     This is a function of the sweep value index."""
-    for value in dynamic_devices.values():
-        for channel, channel_values in value["channels"].items():
-            try:
-                value["device"].set_frequency(
-                    float(
-                        channel_values["frequency_sweep_values"][index_value]),
-                    channel[-1],
-                )
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                value["device"].set_amplitude(
-                    float(
-                        channel_values["amplitude_sweep_values"][index_value]),
-                    channel[-1],
-                )
-            except:
-                continue
+    for dynamic_device in dynamic_devices.values():
+        # channel looks like channel_1
+        # therefore channel[-1] would be 1
+        for channel, channel_values in dynamic_device["channels"].items():
+            dynamic_device["device"].set_frequency(
+                float(channel_values["frequency_sweep_values"][index_value]),
+                channel[-1],
+            )
+            dynamic_device["device"].set_amplitude(
+                float(channel_values["amplitude_sweep_values"][index_value]),
+                channel[-1],
+            )
 
 
 def make_sweep_lists(dynamic_devices: Dict[str, Any],
@@ -139,34 +132,28 @@ def make_sweep_lists(dynamic_devices: Dict[str, Any],
     """Contruct array / listof values to be sweeped"""
     for device_values in dynamic_devices.values():
         for channel_values in device_values["channels"].values():
-            try:
-                if channel_values["min_amplitude"] is not None:
-                    channel_values["amplitude_sweep_values"] = np.linspace(
-                        float(channel_values["min_amplitude"]),
-                        float(channel_values["max_amplitude"]),
-                        steps,
-                    )
-                else:
-                    x = np.linspace(0, 1, steps)
-                    channel_values["amplitude_sweep_values"] = eval(
-                        channel_values["functional_amplitude"]
-                    )
-            except:
-                pass
-            try:
-                if channel_values["min_frequency"] is not None:
-                    channel_values["frequency_sweep_values"] = np.linspace(
-                        float(channel_values["min_frequency"]),
-                        float(channel_values["max_frequency"]),
-                        steps,
-                    )
-                else:
-                    x = np.linspace(0, 1, steps)
-                    channel_values["frequency_sweep_values"] = eval(
-                        channel_values["functional_frequency"]
-                    )
-            except:
-                pass
+            if channel_values["min_amplitude"] is not None:
+                channel_values["amplitude_sweep_values"] = np.linspace(
+                    float(channel_values["min_amplitude"]),
+                    float(channel_values["max_amplitude"]),
+                    steps,
+                )
+            else:
+                x = np.linspace(0, 1, steps)
+                channel_values["amplitude_sweep_values"] = eval(
+                    channel_values["functional_amplitude"]
+                )
+            if channel_values["min_frequency"] is not None:
+                channel_values["frequency_sweep_values"] = np.linspace(
+                    float(channel_values["min_frequency"]),
+                    float(channel_values["max_frequency"]),
+                    steps,
+                )
+            else:
+                x = np.linspace(0, 1, steps)
+                channel_values["frequency_sweep_values"] = eval(
+                    channel_values["functional_frequency"]
+                )
     return dynamic_devices
 
 
