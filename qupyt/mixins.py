@@ -39,3 +39,8 @@ class ConfigurationMixin:
 
 class PulseSequenceError(Exception):
     "PulseStreamer sequence definintion contains non valid input (amplitude, frequency,...)"
+
+
+# class ConfigurationError(Exception):
+#     m = "PulseStreamer sequence definintion contains non valid input (amplitude, frequency,...)"
+#     def __init__(self):

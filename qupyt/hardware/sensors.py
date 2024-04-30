@@ -226,6 +226,7 @@ class GenICamPhantom(Sensor):
         self.cam.remote.set("Height", 200)
         self.cam.remote.set("Width", 1280)
         self.cam.remote.set('PixelFormat', "Mono8")
+        self.image_dtype = np.uint8
         self.cam.remote.set('TriggerSource', 'GPIO0')
         self.cam.remote.set('TriggerMode', 'TriggerModeOn')
         self.cam.remote.set('ExposureTime', 20)
@@ -267,6 +268,14 @@ class GenICamPhantom(Sensor):
 
     def _set_pixel_bits(self, pixel_bits: str) -> None:
         '''e.g. Mono8, Mono12 or Mono16'''
+        if 'bayer' in pixel_bits.lower():
+            raise Exception
+        if pixel_bits.lower() == 'mono8':
+            self.image_dtype = np.uint8
+        elif pixel_bits.lower() in ['mono12', 'mono16']:
+            self.image_dtype = np.uint16
+        else:
+            raise Exception
         self.cam.remote.set("PixelFormat", pixel_bits)
 
     def _set_exposure_time(self, exposure_time: int) -> None:
@@ -311,7 +320,7 @@ class GenICamPhantom(Sensor):
         self.cam.realloc_buffers(self.number_measurements)
         self.cam.start()
         data = np.zeros((self.number_measurements,
-                        height*4, width), dtype=np.uint8)
+                        height*4, width), dtype=np.uint32)
         if synchroniser is not None:
             synchroniser.trigger()
         for i in range(self.number_measurements):
@@ -342,7 +351,7 @@ class GenICamPhantom(Sensor):
 
     def move_frame_from_pool(self, bufferPtr, imageSize, partNum) -> np.array:
         frame = np.empty(
-            (partNum*self.roi_shape[0], self.roi_shape[1]), dtype=np.uint8)
+            (partNum*self.roi_shape[0], self.roi_shape[1]), dtype=self.image_dtype)
         frame_ptr = frame.ctypes.data_as(ctypes.c_void_p)
         ctypes.memmove(frame_ptr, bufferPtr, imageSize*partNum)
         return frame
