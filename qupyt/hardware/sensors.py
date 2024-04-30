@@ -11,10 +11,26 @@ import traceback
 from time import time
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
+from math import floor
 
 import numpy as np
 from pypylon import pylon
 from harvesters.core import Harvester
+
+import ctypes
+from egrabber import (
+    EGenTL,
+    Buffer,
+    EGrabber,
+    EGrabberDiscovery,
+    BUFFER_INFO_BASE,
+    INFO_DATATYPE_PTR,
+    BUFFER_INFO_CUSTOM_PART_SIZE,
+    BUFFER_INFO_CUSTOM_NUM_PARTS,
+    INFO_DATATYPE_SIZET,
+    BUFFER_INFO_TIMESTAMP,
+    INFO_DATATYPE_UINT64
+)
 
 from qupyt.hardware.synchronisers import Synchroniser
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
@@ -200,79 +216,73 @@ class GenICamPhantom(Sensor):
           :class:`Sensor` base class.
 
     Raises (__init__):
-        - **FileNotFoundError**
     """
 
     def __init__(self, configuration: Dict[str, Any]) -> None:
-        self.harvester = Harvester()
-        self.cti_file = configuration['GenTL_producer_cti']
-        try:
-            self.harvester.add_file(self.cti_file)
-        except (FileNotFoundError, OSError) as err:
-            logging.exception("Could not find GenTL producer file (.cti)"
-                              .ljust(65, '.') + '[failed]')
-            logging.exception(f"Tried to locate file at {self.cti_file}")
-            raise err
-        self.harvester.update()
-        self.cam = self.harvester.create()
+        self.cam = self.discover_and_setup()
         super().__init__(configuration)
-        self.cam.remote_device.node_map.LinkConfig.value = 'CXP_6'
-        self.cam.remote_device.node_map.PixelFormat.value = 'Mono8'
-        self.cam.remote_device.node_map.TriggerMode.value = 'TriggerModeOn'
-        self.cam.remote_device.node_map.TriggerSource.value = 'GPIO0'
-        self.cam.remote_device.node_map.TriggerSelector.value = 'ExposureStart'
-        self.cam.remote_device.node_map.ExposureTime.value = 20
-        self.cam.remote_device.node_map.OffsetX.value = 0
-        self.cam.remote_device.node_map.OffsetY.value = 0
-        self.cam.remote_device.node_map.Height.value = 800
-        self.cam.remote_device.node_map.Width.value = 1200
+        # self.cam.remote_device.node_map.OffsetX.value = 0
+        # self.cam.remote_device.node_map.OffsetY.value = 0
+        self.cam.remote.set("Height", 200)
+        self.cam.remote.set("Width", 1280)
+        self.cam.remote.set('PixelFormat', "Mono8")
+        self.cam.remote.set('TriggerSource', 'GPIO0')
+        self.cam.remote.set('TriggerMode', 'TriggerModeOn')
+        self.cam.remote.set('ExposureTime', 20)
+        self.cam.stream.set('UnpackingMode', 'Lsb')
+        self.cam.stream.set('UnpackingMode', 'Lsb')
+        self.cam.remote.set('FlatFieldCorrection',
+                            'FlatFieldCorrectionOff')
         self.roi_shape = [
-            self.cam.remote_device.node_map.Height.value,
-            self.cam.remote_device.node_map.Width.value
+            self.cam.remote.get("Height")*4,
+            self.cam.remote.get("Width")
         ]
         self.attribute_map['exposure_time'] = self._set_exposure_time
         self.attribute_map['image_roi'] = self._set_roi
-        self.attribute_map['gain'] = self._set_gain
+        # self.attribute_map['gain'] = self._set_gain
         self.attribute_map['pixel_bits'] = self._set_pixel_bits
         self.attribute_map['trigger_mode'] = self._set_trigger_mode
         self.attribute_map['trigger_source'] = self._set_trigger_source
-        # GenTL needs to be set above.
-        self.attribute_map['GenTL_producer_cti'] = self._throw_away_cti
         if configuration is not None:
             self._update_from_configuration(configuration)
 
+    def discover_and_setup(self) -> EGrabber:
+        gentl = EGenTL()
+        discovery = EGrabberDiscovery(gentl)
+        discovery.discover()
+        cam = discovery.cameras[0]
+        self.grabber = EGrabber(cam)
+        return self.grabber
+
     def _set_trigger_source(self, trigger_source: str) -> None:
         '''e.g. GPIO0, GPIO1, ...'''
-        self.cam.remote_device.node_map.TriggerSource.value = trigger_source
+        self.cam.remote.set("TriggerSource", trigger_source)
 
     def _set_trigger_mode(self, trigger_mode: str) -> None:
         '''e.g. On of Off'''
         if trigger_mode.lower() == 'on':
-            self.cam.remote_device.node_map.TriggerMode.value = 'TriggerModeOn'
+            self.cam.remote.set("TriggerMode", "TriggerModeOn")
         if trigger_mode.lower() == 'off':
-            self.cam.remote_device.node_map.TriggerMode.value = 'TriggerModeOff'
+            self.cam.remote.set("TriggerMode", "TriggerModeOff")
 
     def _set_pixel_bits(self, pixel_bits: str) -> None:
         '''e.g. Mono8, Mono12 or Mono16'''
-        self.cam.remote_device.node_map.PixelFormat.value = pixel_bits
-
-    def _throw_away_cti(self, cti_file: str) -> None:
-        """cti must be set at the start. It is therefore ignored here."""
+        self.cam.remote.set("PixelFormat", pixel_bits)
 
     def _set_exposure_time(self, exposure_time: int) -> None:
-        self.cam.remote_device.node_map.ExposureTime.value = exposure_time
+        self.cam.remote.set("ExposureTime", exposure_time)
 
-    def _set_gain(self, gain: int) -> None:
-        self.cam.remote_device.node_map.Gain.value = gain
+    # def _set_gain(self, gain: int) -> None:
+    #     self.cam.remote_device.node_map.Gain.value = gain
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         roi_offset_x_and_y = roi_shape_and_offset[2:]
         try:
-            self.cam.remote_device.node_map.Height.value = roi_shape_h_and_w[0]
-            self.cam.remote_device.node_map.Width.value = roi_shape_h_and_w[1]
-            self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
-            self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
+            self.cam.remote.set("Height", int(roi_shape_h_and_w[0]/4))
+            self.cam.remote.set("Width", roi_shape_h_and_w[1])
+            # self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
+            # self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
             self.roi_shape = roi_shape_h_and_w
             logging.info("Set Sensor roi to height: {} and width: {}\n\
                           with offset X: {} and Y: {}"
@@ -296,25 +306,46 @@ class GenICamPhantom(Sensor):
         See :meth:`Sensor.acquire_data`.
         """
         time_1 = time()
-        height = self.cam.remote_device.node_map.Height.value
-        width = self.cam.remote_device.node_map.Width.value
+        height = self.cam.remote.get("Height")
+        width = self.cam.remote.get("Width")
+        self.cam.realloc_buffers(self.number_measurements)
         self.cam.start()
         data = np.zeros((self.number_measurements,
-                        height * width), dtype=np.uint32)
+                        height*4, width), dtype=np.uint8)
         if synchroniser is not None:
             synchroniser.trigger()
-        for _i in range(20):
-            with self.cam.fetch() as buffer:
-                continue
         for i in range(self.number_measurements):
-            with self.cam.fetch() as buffer:
-                component = buffer.payload.components[0]
-                data[i] = component.data
+            print(f'loop {i}')
+            with Buffer(self.cam) as buffer:
+                bufferPtr, imageSize, partNum, timeStamp = self.grab_frame_info(
+                    buffer)
+                raw_frame = self.move_frame_from_pool(
+                    bufferPtr, imageSize, partNum)
+                data[i] += raw_frame
         self.cam.stop()
         time_2 = time()
         logging.info(f'Data acquisition took {time_2-time_1} s'
                      .ljust(65, '.') + '[done]')
-        return data.reshape((self.number_measurements, height, width))
+        # return data.reshape((self.number_measurements, height, width))
+        return data
+
+    def grab_frame_info(self, buffer: Buffer):
+        bufferPtr = buffer.get_info(BUFFER_INFO_BASE, INFO_DATATYPE_PTR)
+        imageSize = buffer.get_info(
+            BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
+        partNum = buffer.get_info(
+            BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
+        timeStamp = buffer.get_info(
+            BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
+
+        return bufferPtr, imageSize, partNum, timeStamp
+
+    def move_frame_from_pool(self, bufferPtr, imageSize, partNum) -> np.array:
+        frame = np.empty(
+            (partNum*self.roi_shape[0], self.roi_shape[1]), dtype=np.uint8)
+        frame_ptr = frame.ctypes.data_as(ctypes.c_void_p)
+        ctypes.memmove(frame_ptr, bufferPtr, imageSize*partNum)
+        return frame
 
     def open(self) -> None:
         """
@@ -329,7 +360,6 @@ class GenICamPhantom(Sensor):
         as the camera will be exclusively owned by this one.
         """
         self.cam.destroy()
-        self.harvester.reset()
         logging.info('Closed GenICam camera connection'.ljust(
             65, '.') + '[done]')
 
