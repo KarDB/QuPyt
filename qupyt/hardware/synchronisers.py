@@ -35,6 +35,7 @@ except (ImportError, NameError):
     logging.warning(
         "Could not load spinapi library".ljust(65, '.')+'[failed]\nIf you are not using a Pulse Streamer you do not need this!')
 
+
 class SynchroniserFactory:
     """
     Synchroniser Factory responsible for creating and returning an instance of the
@@ -205,6 +206,7 @@ class AWGenerator(VisaObject, Synchroniser):
         Synchroniser.__init__(self)
         self.attribute_map['device_type'] = self._set_device_type
         self.attribute_map['sampling_rate'] = self._set_sampling_rate_attribute
+        self.attribute_map['channels'] = self._set_channels_attribute
         if configuration is not None:
             self._update_from_configuration(configuration)
         VisaObject.__init__(self, self.address, self.device_type)
@@ -483,6 +485,9 @@ class AWGenerator(VisaObject, Synchroniser):
 
     def _set_sampling_rate_attribute(self, sampling_rate: float) -> None:
         self.samprate = sampling_rate
+
+    def _set_channels_attribute(self, channels: list[int]) -> None:
+        self.channels = channels
 
     def plot_waveform(self, wavename: str) -> None:
         """
