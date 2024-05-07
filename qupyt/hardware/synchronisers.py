@@ -278,6 +278,7 @@ class AWGenerator(VisaObject, Synchroniser):
         if gated:
             self._sequence_gated(seqname, nongatereps)
 
+    # REMOVING THIS TEKTRONIX NON GATED OPTION
     def _sequence_non_gated(self,
                             seqname: str) -> None:
         print(
