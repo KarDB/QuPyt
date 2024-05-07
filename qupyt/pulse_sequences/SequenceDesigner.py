@@ -10,10 +10,17 @@ from qupyt.set_up import get_seq_dir
 
 class PulseSequenceYaml:
     def __init__(self,
+                 #  Channel list as you think about them
+                 #  marker 1, marker 2 and so on
                  channel_mapping: Dict[str, Any],
+                 #  Source as the AWG thinks about them
+                 #  e.g. source1 might include analog 1, marker 1, ...
+                 #  There is one analog channel per source but mulitple makers etc.
+                 awg_sources: list[int],
                  samprate: float = 5e9,
                  yaml_file: Path = get_seq_dir() / 'sequence.yaml') -> None:
         self.yaml_file = yaml_file
+        self.awg_sources = awg_sources
         self.channel_mapping = channel_mapping
         self.samp_rate = float(samprate)  # samples per second
 
@@ -43,6 +50,7 @@ class PulseSequenceYaml:
         seq = PulseSequence(
             len(sorted_pulse_blocks),
             duration,
+            self.awg_sources,
             samprate=self.samp_rate
         )
         for i, block in enumerate(sorted_pulse_blocks):
@@ -67,8 +75,9 @@ class PulseSequenceYaml:
 
 class PulseSequence:
     def __init__(self,
-                 numseqs,
-                 duration: float = 1.4,
+                 numseqs: int,
+                 duration: float,
+                 awg_sources: list[int],
                  samprate: float = 2.5e9) -> None:
         self.samp_rate = samprate  # samples per second
         self.min_time = 1 / samprate
@@ -76,6 +85,7 @@ class PulseSequence:
         self.time = np.linspace(
             0, duration, self.num_points)  # in microseconds
         self.numseqs = numseqs
+        self.awg_sources = awg_sources
 
         if self.num_points != samprate * duration * 10**-6:
             print(
@@ -88,7 +98,10 @@ class PulseSequence:
                 "The sequence duration is not an integer multiple of samples"
                 .ljust(65, ".") + "[WARNING]"
             )
-        self.pulses = np.zeros((numseqs, 10, self.num_points))
+
+        #  9 => 1 for analog, 8 for 8 bit marker and flag.
+        self.pulses = np.zeros(
+            (numseqs, 9 * len(self.awg_sources), self.num_points))
         self.sequencer = None
         self.sequencernames = None
         self.warning_counter = 0
@@ -142,7 +155,7 @@ class PulseSequence:
             start = self.time_to_index(start)
             duration = self.time_to_index(duration)
         else:
-            print("Interpreting input as number of sampling points!")
+            logging.info("Interpreting input as number of sampling points!")
 
         if freq is not None:
             frequency, phase = freq
@@ -162,24 +175,22 @@ class PulseSequence:
                         duration)] = amplitude * fr
 
     def make(self, name: str) -> None:
-        print(f'there where {self.warning_counter} warnings in PS generation')
-        logging.info(f'there where {self.warning_counter} warnings in PS generation'
-                     .ljust(65, '.') + '[success]')
-        final = np.zeros((self.numseqs, 4, self.num_points))
-        final[:, 0, :] = self.pulses[:, 0, :]
-        final[:, 1, :] = (
-            self.pulses[:, 1, :] * 2**7
-            + self.pulses[:, 2, :] * 2**6
-            + self.pulses[:, 3, :] * 2**5
-            + self.pulses[:, 4, :] * 2**4
-        )
-        final[:, 2, :] = self.pulses[:, 5, :]
-        final[:, 3, :] = (
-            self.pulses[:, 6, :] * 2**7
-            + self.pulses[:, 7, :] * 2**6
-            + self.pulses[:, 8, :] * 2**5
-            + self.pulses[:, 9, :] * 2**4
-        )
+        logging.info(f'There where {self.warning_counter} warnings in PS generation'
+                     .ljust(65, '.') + '[done]')
+        final = np.zeros(
+            (self.numseqs, 2*len(self.awg_sources), self.num_points))
+        for source_index, source in enumerate(self.awg_sources):
+            final[:, 2*source_index, :] = self.pulses[:, 9*source_index, :]
+            final[:, 2*source_index+1, :] = (
+                self.pulses[:, 9*source_index + 1, :] * 2**7
+                + self.pulses[:, 9*source_index + 2, :] * 2**6
+                + self.pulses[:, 9*source_index + 3, :] * 2**5
+                + self.pulses[:, 9*source_index + 4, :] * 2**4
+                + self.pulses[:, 9*source_index + 5, :] * 2**3
+                + self.pulses[:, 9*source_index + 6, :] * 2**2
+                + self.pulses[:, 9*source_index + 7, :] * 2**1
+                + self.pulses[:, 9*source_index + 8, :] * 2**0
+            )
 
         hash1 = hashlib.sha1(final.tobytes()).hexdigest()
         hash2 = hashlib.sha1(str(self.sequencer).encode("utf-8")).hexdigest()
@@ -197,8 +208,8 @@ class PulseSequence:
             finalhash,
             self.properties,
         )
-        print(colored(f"Pulse sequence written to {name}", "green"))
-        print(f"There where {self.warning_counter} warnings")
+        logging.info(f"Pulse sequence written to {name}".ljust(
+            65, '.') + '[done]')
 
 
 class PulseBlasterSequence:
