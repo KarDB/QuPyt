@@ -242,7 +242,7 @@ class AWGenerator(VisaObject, Synchroniser):
         sequence_translator.translate_yaml_to_numeric_instructions()
         self._load_sequence_block(get_seq_dir() / 'sequence.npz')
         self._upload_waveforms()
-        self._sequence('autoseq', gated=True, nongatereps=1)
+        self._sequence('autoseq', nongatereps=1)
         logging.info('Loaded and sequenced current pulse sequence'.ljust(
             65, '.') + '[done]')
         self.opc_wait()
@@ -270,148 +270,44 @@ class AWGenerator(VisaObject, Synchroniser):
         logging.info(f'Uploaded waveform {wavename}'.ljust(65, '.') + '[done]')
         self.opc_wait()
 
-    def _sequence(self, seqname: str,
-                  gated: bool = False,
-                  nongatereps: int = 1000) -> None:
-        if not gated:
-            self._sequence_non_gated(seqname)
-        if gated:
-            self._sequence_gated(seqname, nongatereps)
-
-    # REMOVING THIS TEKTRONIX NON GATED OPTION
-    def _sequence_non_gated(self,
-                            seqname: str) -> None:
-        print(
-            "WARNING!!! this has not been adapted for two different\
-                    source destinations yet!!")
+    def _sequence(self,
+                  seqname: str,
+                  nongatereps: int = 1) -> None:
         print('Setting up sequencer'.ljust(65, '.'), end='')
-        # channel 1
-        self.instance.write('slist:sequence:delete "'+seqname+'"')
-        self.instance.write('slist:sequence:new "' +
-                            seqname+'",'+str(len(self.wavenames))+',1')
-        self.instance.write('slist:sequence:step' +
-                            str(len(self.wavenames))+':goto "'
-                            + seqname+'",first')
-        self.instance.write(
-            'slist:sequence:event:jtiming "'+seqname+'" immediate')
-
-        for i, wav in enumerate(self.wavenames):
+        for channel in self.channels:
+            self.instance.write(f'slist:sequence:delete "sub_{channel}"')
             self.instance.write(
-                'slist:sequence:step'
-                + str(i+1)+':rcount "'+seqname+'",'
-                + str(self.seqrepeats[i]))
+                f'slist:sequence:new "sub_{channel}",{len(self.wavenames)},1')
             self.instance.write(
-                'slist:sequence:step'+str(i+1)+':tasset1:waveform "'
-                + seqname+'","'+wav+'"')
+                f'slist:sequence:event:jtiming "sub_{channel}" immediate')
+            for i, wavename in enumerate(self.wavenames):
+                self.instance.write(
+                    f'slist:sequence:step{i+1}:rcount "sub_{channel}",{self.seqrepeats[i]}')
+                self.instance.write(
+                    f'slist:sequence:step{i+1}:tasset1:waveform "sub_{channel}","{wavename}_{channel}"')
 
-        # channel 2
-        self.instance.write('slist:sequence:delete "'+seqname+'_2"')
-        self.instance.write('slist:sequence:new "' +
-                            seqname+'_2",'+str(len(self.wavenames))+',1')
-        self.instance.write(
-            'slist:sequence:step'+str(len(self.wavenames))+':goto "'
-            + seqname+'_2",first')
-        self.instance.write(
-            'slist:sequence:event:jtiming "'+seqname+'_2" immediate')
-
-        for i, wav in enumerate(self.wavenames):
+            self.instance.write(f'slist:sequence:delete "{seqname}_{channel}"')
             self.instance.write(
-                'slist:sequence:step'+str(i+1)+':rcount "'
-                + seqname+'_2",'+str(self.seqrepeats[i]))
+                f'slist:sequence:new "{seqname}_{channel}",2,1')
             self.instance.write(
-                'slist:sequence:step'+str(i+1)+':tasset1:waveform "'
-                + seqname+'_2","'+wav+'_2"')
-
-        self.instance.write('source1:casset:sequence "'+seqname+'",1')
-        self.instance.write('source2:casset:sequence "'+seqname+'_2",1')
-        self.opc_wait()
-        print(colored(' [done]', 'green'))
-
-    def _sequence_gated(self,
-                        seqname: str,
-                        nongatereps: int = 1000) -> None:
-        print('Setting up sequencer'.ljust(65, '.'), end='')
-
-        self.instance.write('slist:sequence:delete "'+'sub1'+'"')
-        self.instance.write('slist:sequence:new "' +
-                            'sub1'+'",'+str(len(self.wavenames))+',1')
-        self.instance.write(
-            'slist:sequence:event:jtiming "'+'sub1'+'" immediate')
-
-        self.instance.write('slist:sequence:delete "'+'sub2'+'"')
-        self.instance.write('slist:sequence:new "' +
-                            'sub2'+'",'+str(len(self.wavenames))+',1')
-        self.instance.write(
-            'slist:sequence:event:jtiming "'+'sub2'+'" immediate')
-
-        for i, wav in enumerate(self.wavenames):
+                f'slist:sequence:step2:goto "{seqname}_{channel}",first')
             self.instance.write(
-                'slist:sequence:step'+str(i+1)+':rcount "'
-                + 'sub1'+'",'+str(self.seqrepeats[i]))
+                f'slist:sequence:event:jtiming "{seqname}_{channel}" immediate')
+
+            # for gating pulse
             self.instance.write(
-                'slist:sequence:step'+str(i+1)+':tasset1:waveform "'
-                + 'sub1'+'","'+wav+'"')
-            # for second channel:
+                f'slist:sequence:step1:rcount "{seqname}_{channel}", INF')
             self.instance.write(
-                'slist:sequence:step'+str(i+1)+':rcount "'
-                + 'sub2'+'",'+str(self.seqrepeats[i]))
+                f'slist:sequence:step1:tasset1:waveform "{seqname}_{channel}","{self.wavenames[0]}_{channel}"')
+
+            # for actual seq
             self.instance.write(
-                'slist:sequence:step'+str(i+1)+':tasset1:waveform "'
-                + 'sub2'+'","'+wav+'_2"')
+                f'slist:sequence:step2:rcount "{seqname}_{channel}", {nongatereps}')
+            self.instance.write(
+                f'slist:sequence:step2:tasset1:sequence "{seqname}_{channel}","sub_{channel}"')
 
-        seqshape = self.instance.query_binary_values(
-            f'wlist:waveform:data? "{self.wavenames[0]}"')
-        seqshape = np.asarray([seqshape, seqshape])
-        seqshape[:, :] = 0
-        self._upload_waveform('gate', seqshape)
-        # same thing twice for both sources:
-        # 1)
-        self.instance.write('slist:sequence:delete "'+seqname+'"')
-        self.instance.write('slist:sequence:new "'+seqname+'",2'+',1')
-        self.instance.write(
-            'slist:sequence:step2:goto "'+seqname+'",first')
-        self.instance.write(
-            'slist:sequence:event:jtiming "'+seqname+'" immediate')
-
-        # for gating pulse
-        self.instance.write(
-            'slist:sequence:step1:rcount "'+seqname+'", INF')
-        self.instance.write(
-            'slist:sequence:step1:tasset1:waveform "'
-            + seqname+'","' + self.wavenames[0] + '"')
-
-        # for actual seq
-        self.instance.write(
-            'slist:sequence:step2:rcount "'+seqname+'",'+str(nongatereps))
-        self.instance.write(
-            'slist:sequence:step2:tasset1:sequence "'+seqname+'","sub1"')
-
-        # 2)
-        # _2 is distinguishing factor here
-        self.instance.write('slist:sequence:delete "' + seqname + '_2"')
-        self.instance.write('slist:sequence:new "' +
-                            seqname + '_2",2' + ',1')
-        self.instance.write(
-            'slist:sequence:step2:goto "' + seqname + '_2",first')
-        self.instance.write(
-            'slist:sequence:event:jtiming "' + seqname + '_2" immediate')
-
-        # for gating pulse
-        self.instance.write(
-            'slist:sequence:step1:rcount "' + seqname + '_2", INF')
-        self.instance.write(
-            'slist:sequence:step1:tasset1:waveform "'
-            + seqname + '_2","'+self.wavenames[0]+'_2"')
-
-        # for actual seq
-        self.instance.write(
-            'slist:sequence:step2:rcount "' + seqname
-            + '_2",' + str(nongatereps))
-        self.instance.write(
-            'slist:sequence:step2:tasset1:sequence "'
-            + seqname + '_2","sub2"')
-        self.instance.write('source1:casset:sequence "'+seqname+'",1')
-        self.instance.write('source2:casset:sequence "'+seqname+'_2",1')
+            self.instance.write(
+                f'source{channel}:casset:sequence "{seqname}_{channel}",1')
         self.opc_wait()
         print(colored(' [done]', 'green'))
 
@@ -436,15 +332,12 @@ class AWGenerator(VisaObject, Synchroniser):
                                 ascii=True,
                                 desc="uploading waveforms",
                                 ):
-            self._upload_waveform(wavename, self.waveform_block[i, 0:2])
-            self.opc_wait()
-            self._upload_waveform(wavename + "_2",
-                                  self.waveform_block[i, 2:])
-            self.opc_wait()
-
-        print(f"took {time() - time_1} sec to upload")
-        print("upload".ljust(65, ".") + colored(" [done]", "green"))
-        logging.info("Tek AWG uploaded waveforms".ljust(65, ".") + '[done]')
+            for channel_index, channel in enumerate(self.channels):
+                self._upload_waveform(
+                    f'{wavename}_{channel}', self.waveform_block[i, channel_index*2:(channel_index*2)+2])
+                self.opc_wait()
+        logging.info(
+            f"Uploaded Tektronix AWG waveforms in {time() - time_1} seconds".ljust(65, ".") + '[done]')
 
     def _set_output_on(self, channel: int) -> None:
         self.instance.write(f'outp{channel} on')
