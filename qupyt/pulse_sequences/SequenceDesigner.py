@@ -99,9 +99,9 @@ class PulseSequence:
                 .ljust(65, ".") + "[WARNING]"
             )
 
-        #  9 => 1 for analog, 8 for 8 bit marker and flag.
+        #  5 => 1 for analog, 4 for 8 bit marker.
         self.pulses = np.zeros(
-            (numseqs, 9 * len(self.awg_sources), self.num_points))
+            (numseqs, 5 * len(self.awg_sources), self.num_points))
         self.sequencer = None
         self.sequencernames = None
         self.warning_counter = 0
@@ -180,16 +180,12 @@ class PulseSequence:
         final = np.zeros(
             (self.numseqs, 2*len(self.awg_sources), self.num_points))
         for source_index, source in enumerate(self.awg_sources):
-            final[:, 2*source_index, :] = self.pulses[:, 9*source_index, :]
+            final[:, 2*source_index, :] = self.pulses[:, 5*source_index, :]
             final[:, 2*source_index+1, :] = (
-                self.pulses[:, 9*source_index + 1, :] * 2**7
-                + self.pulses[:, 9*source_index + 2, :] * 2**6
-                + self.pulses[:, 9*source_index + 3, :] * 2**5
-                + self.pulses[:, 9*source_index + 4, :] * 2**4
-                + self.pulses[:, 9*source_index + 5, :] * 2**3
-                + self.pulses[:, 9*source_index + 6, :] * 2**2
-                + self.pulses[:, 9*source_index + 7, :] * 2**1
-                + self.pulses[:, 9*source_index + 8, :] * 2**0
+                self.pulses[:, 5*source_index + 1, :] * 2**7
+                + self.pulses[:, 5*source_index + 2, :] * 2**6
+                + self.pulses[:, 5*source_index + 3, :] * 2**5
+                + self.pulses[:, 5*source_index + 4, :] * 2**4
             )
 
         hash1 = hashlib.sha1(final.tobytes()).hexdigest()

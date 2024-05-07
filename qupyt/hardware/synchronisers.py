@@ -238,7 +238,7 @@ class AWGenerator(VisaObject, Synchroniser):
         self.stop()
         self._clear_awg()
         sequence_translator = PulseSequenceYaml(
-            self.channel_mapping, samprate=self.samprate)
+            self.channel_mapping, self.channels, samprate=self.samprate)
         sequence_translator.translate_yaml_to_numeric_instructions()
         self._load_sequence_block(get_seq_dir() / 'sequence.npz')
         self._upload_waveforms()

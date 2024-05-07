@@ -30,16 +30,15 @@ class VisaObject:
                 "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
                 + "[done]"
             )
-        except Exception:
+        except Exception as e:
             print('Opening VISA Object Failed')
             logging.exception(
                 "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
                 + "[failed]"
             )
-            raise
-        finally:
             rm.close()
             rm.visalib._registry.clear()
+            raise e
 
     def _get_instructions(self) -> None:
         """
