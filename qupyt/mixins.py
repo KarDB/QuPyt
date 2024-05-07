@@ -41,6 +41,29 @@ class PulseSequenceError(Exception):
     "PulseStreamer sequence definintion contains non valid input (amplitude, frequency,...)"
 
 
-# class ConfigurationError(Exception):
-#     m = "PulseStreamer sequence definintion contains non valid input (amplitude, frequency,...)"
-#     def __init__(self):
+class ConfigurationError(Exception):
+    """Error type to be raised for hardware misconfigurations"""
+
+    def __init__(self, config_param, value, valids) -> None:
+        self.config_param = config_param
+        self.value = value
+        self.valids = valids
+        super().__init__(self._format_message())
+
+    def _format_message(self) -> str:
+        return (
+            f"Invalid configuration values!\n"
+            f"It seems you tried to configure {self.config_param} as {self.value}\n"
+            f"Try using one of the following configuration options instead:\n\n"
+            " ===>   "
+            f"{self.valids}\n\n"
+
+        )
+
+
+# def expect_config_error(config_param, value, valids):
+#     def decorator(func):
+#         def wrapper(*args):
+#             try:
+#                 func(*args)
+#             except:

@@ -33,7 +33,7 @@ from egrabber import (
 )
 
 from qupyt.hardware.synchronisers import Synchroniser
-from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
+from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType, ConfigurationError
 # Imports for HeliCam
 if sys.platform == "win32":
     # from msvcrt import getch
@@ -189,11 +189,8 @@ class Sensor(ABC, ConfigurationMixin):
 class GenICamPhantom(Sensor):
     """
     Sensor class implementation for the PhantomS710 GenICam compliant camera.
-    This class relies on the excellent
-    `harvesters <https://github.com/genicam/harvesters>`_ library.
-    You will need to provide your own GenTL producer file for this to work.
-    Check the recommendations `here <https://github.com/genicam/harvesters>`_
-    or get it from your GenICam compliant camera manufacturer.
+    It builds on the EGrabber library provided by Euresys.
+    Therefore, it will only work with the Framegrabber / Camera combination.
 
     Arguments:
         - **configuration** (dict): Configuration dictionary. Keys will be used
@@ -202,13 +199,13 @@ class GenICamPhantom(Sensor):
 
           Possible configuration values:
             - **exposure_time** (int, µs)
-            - **image_roi** (list[int]): Region Of Interest of the sensor in
+            - **image_roi** (list[int]): THIS SETTER IS NOT FULLY IMPEMENTED FOR THIS CAMERA!
+              Region Of Interest of the sensor in
               the following format: [height, width, x_offset, y_offset].
               The roi_shape attribute of the :class:`Sensor` base class will
               be derived from this.
-            - **GenTL_producer_cti** (string): Path to the GenTL producer (cti)
-              file on your computer.
             - **pixel_bits** (string): Sets number of bits per pixel. E.g. 'Mono8', 'Mono12' or 'Mono16'.
+              Note that we currently do not support the "bayer" pixel format.
             - **trigger_mode** (string): Sets camera in triggered mode. ['On', 'on', 'ON', 'Off', 'off', "OFF"]
             - **trigger_source** (string): Sets input for the camera trigger. E.g. 'GPIO0', 'GPIO1'
 
@@ -216,10 +213,12 @@ class GenICamPhantom(Sensor):
           :class:`Sensor` base class.
 
     Raises (__init__):
+
+        - ConfigurationError
     """
 
     def __init__(self, configuration: Dict[str, Any]) -> None:
-        self.cam = self.discover_and_setup()
+        self.cam = self._discover_and_setup()
         super().__init__(configuration)
         # self.cam.remote_device.node_map.OffsetX.value = 0
         # self.cam.remote_device.node_map.OffsetY.value = 0
@@ -247,7 +246,7 @@ class GenICamPhantom(Sensor):
         if configuration is not None:
             self._update_from_configuration(configuration)
 
-    def discover_and_setup(self) -> EGrabber:
+    def _discover_and_setup(self) -> EGrabber:
         gentl = EGenTL()
         discovery = EGrabberDiscovery(gentl)
         discovery.discover()
@@ -260,22 +259,37 @@ class GenICamPhantom(Sensor):
         self.cam.remote.set("TriggerSource", trigger_source)
 
     def _set_trigger_mode(self, trigger_mode: str) -> None:
-        '''e.g. On of Off'''
+        '''
+        e.g. On of Off
+
+        Raises:
+            - ConfigurationError
+        '''
         if trigger_mode.lower() == 'on':
             self.cam.remote.set("TriggerMode", "TriggerModeOn")
-        if trigger_mode.lower() == 'off':
+        elif trigger_mode.lower() == 'off':
             self.cam.remote.set("TriggerMode", "TriggerModeOff")
+        else:
+            raise ConfigurationError(
+                'trigger_mode', trigger_mode, ["on", "off"])
 
     def _set_pixel_bits(self, pixel_bits: str) -> None:
-        '''e.g. Mono8, Mono12 or Mono16'''
+        '''
+        e.g. Mono8, Mono12 or Mono16
+
+        Raises:
+            - ConfigurationError
+        '''
         if 'bayer' in pixel_bits.lower():
-            raise Exception
+            raise ConfigurationError('pixel_bits', 'bayer', [
+                                     'mono8', 'mono12', 'mono16'])
         if pixel_bits.lower() == 'mono8':
             self.image_dtype = np.uint8
         elif pixel_bits.lower() in ['mono12', 'mono16']:
             self.image_dtype = np.uint16
         else:
-            raise Exception
+            raise ConfigurationError('pixel_bits', pixel_bits, [
+                                     'mono8', 'mono12', 'mono16'])
         self.cam.remote.set("PixelFormat", pixel_bits)
 
     def _set_exposure_time(self, exposure_time: int) -> None:
@@ -293,20 +307,12 @@ class GenICamPhantom(Sensor):
             # self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
             # self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
             self.roi_shape = roi_shape_h_and_w
-            logging.info("Set Sensor roi to height: {} and width: {}\n\
-                          with offset X: {} and Y: {}"
-                         .format(roi_shape_h_and_w[0],
-                                 roi_shape_h_and_w[1],
-                                 roi_offset_x_and_y[0],
-                                 roi_offset_x_and_y[1])
+            logging.info(f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
+                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}"
                          .ljust(65, '.') + '[done]')
         except Exception as exc:
-            logging.exception("Failed to set roi of height: {} and width: {}\n\
-                               with offset X: {} and Y: {}"
-                              .format(roi_shape_h_and_w[0],
-                                      roi_shape_h_and_w[1],
-                                      roi_offset_x_and_y[0],
-                                      roi_offset_x_and_y[1])
+            logging.exception(f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
+                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}"
                               .ljust(65, '.') + '[failed]')
             raise exc
 
@@ -326,10 +332,10 @@ class GenICamPhantom(Sensor):
         for i in range(self.number_measurements):
             print(f'loop {i}')
             with Buffer(self.cam) as buffer:
-                bufferPtr, imageSize, partNum, timeStamp = self.grab_frame_info(
+                buffer_ptr, image_size, part_num, _ = self._grab_frame_info(
                     buffer)
-                raw_frame = self.move_frame_from_pool(
-                    bufferPtr, imageSize, partNum)
+                raw_frame = self._move_frame_from_pool(
+                    buffer_ptr, image_size, part_num)
                 data[i] += raw_frame
         self.cam.stop()
         time_2 = time()
@@ -338,22 +344,22 @@ class GenICamPhantom(Sensor):
         # return data.reshape((self.number_measurements, height, width))
         return data
 
-    def grab_frame_info(self, buffer: Buffer):
-        bufferPtr = buffer.get_info(BUFFER_INFO_BASE, INFO_DATATYPE_PTR)
-        imageSize = buffer.get_info(
+    def _grab_frame_info(self, buffer: Buffer):
+        buffer_ptr = buffer.get_info(BUFFER_INFO_BASE, INFO_DATATYPE_PTR)
+        image_size = buffer.get_info(
             BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
-        partNum = buffer.get_info(
+        part_num = buffer.get_info(
             BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
-        timeStamp = buffer.get_info(
+        time_stamp = buffer.get_info(
             BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
 
-        return bufferPtr, imageSize, partNum, timeStamp
+        return buffer_ptr, image_size, part_num, time_stamp
 
-    def move_frame_from_pool(self, bufferPtr, imageSize, partNum) -> np.array:
+    def _move_frame_from_pool(self, buffer_ptr, image_size, part_num) -> np.array:
         frame = np.empty(
-            (partNum*self.roi_shape[0], self.roi_shape[1]), dtype=self.image_dtype)
+            (part_num*self.roi_shape[0], self.roi_shape[1]), dtype=self.image_dtype)
         frame_ptr = frame.ctypes.data_as(ctypes.c_void_p)
-        ctypes.memmove(frame_ptr, bufferPtr, imageSize*partNum)
+        ctypes.memmove(frame_ptr, buffer_ptr, image_size*part_num)
         return frame
 
     def open(self) -> None:
@@ -364,7 +370,7 @@ class GenICamPhantom(Sensor):
 
     def close(self) -> None:
         """
-        Destroys the camera instance, and resets Harvester.
+        Destroys the camera instance.
         Without this, you won't be able to make a new camera instance,
         as the camera will be exclusively owned by this one.
         """
