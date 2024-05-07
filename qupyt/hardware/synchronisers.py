@@ -286,6 +286,9 @@ class AWGenerator(VisaObject, Synchroniser):
                 self.instance.write(
                     f'slist:sequence:step{i+1}:tasset1:waveform "sub_{channel}","{wavename}_{channel}"')
 
+                # self.instance.write(
+                #     f'slist:sequence:step{i+1}:tflag1:aflag "sub_{channel}",{self.high_low[i]}')
+
             self.instance.write(f'slist:sequence:delete "{seqname}_{channel}"')
             self.instance.write(
                 f'slist:sequence:new "{seqname}_{channel}",2,1')

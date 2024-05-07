@@ -55,6 +55,8 @@ class PulseSequenceYaml:
         )
         for i, block in enumerate(sorted_pulse_blocks):
             for channel, pulses in sequence_instructions[block].items():
+                if type(self.channel_mapping[channel]) is str:
+                    continue
                 for pulse in pulses.values():
                     seq.add_pulse(
                         i,
