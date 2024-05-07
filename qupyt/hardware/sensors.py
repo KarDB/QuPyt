@@ -280,14 +280,12 @@ class GenICamPhantom(Sensor):
         Raises:
             - ConfigurationError
         '''
-        if 'bayer' in pixel_bits.lower():
-            raise ConfigurationError('pixel_bits', 'bayer', [
-                                     'mono8', 'mono12', 'mono16'])
         if pixel_bits.lower() == 'mono8':
             self.image_dtype = np.uint8
         elif pixel_bits.lower() in ['mono12', 'mono16']:
             self.image_dtype = np.uint16
         else:
+            #  The 'bayer' pixel format is not supported
             raise ConfigurationError('pixel_bits', pixel_bits, [
                                      'mono8', 'mono12', 'mono16'])
         self.cam.remote.set("PixelFormat", pixel_bits)
