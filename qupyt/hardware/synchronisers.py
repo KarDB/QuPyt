@@ -9,7 +9,7 @@ import logging
 import pickle
 from time import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, Tuple, List, Union
 from pathlib import Path
 import sys
 import ctypes as ct
@@ -194,6 +194,7 @@ class AWGenerator(VisaObject, Synchroniser):
         self.device_type: str = "TekAWG"
         self.samprate: float = 5e9
         self.channel_mapping = channel_mapping
+        self.flag_channels = self._extract_flags(channel_mapping)
 
         self.wavenames: list[str]
         self.seqrepeats: list[int]
@@ -212,6 +213,11 @@ class AWGenerator(VisaObject, Synchroniser):
             self._update_from_configuration(configuration)
         VisaObject.__init__(self, self.address, self.device_type)
         self.instance.timeout = 20000
+
+    def _extract_flags(self, channel_mapping: Dict[str, Union[int, str]]) -> list[str]:
+        return [
+            channel_value for channel_value in channel_mapping.values() if not isinstance(channel_value, int)
+        ]
 
     def open(self) -> None:
         self._configure()
@@ -287,8 +293,13 @@ class AWGenerator(VisaObject, Synchroniser):
                 self.instance.write(
                     f'slist:sequence:step{i+1}:tasset1:waveform "sub_{channel}","{wavename}_{channel}"')
 
-                # self.instance.write(
-                #     f'slist:sequence:step{i+1}:tflag1:aflag "sub_{channel}",{self.high_low[i]}')
+                for flag_channel in self.flag_channels:
+                    if flag_channel in self.flag_values[wavename]:
+                        self.instance.write(
+                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",HIGH')
+                    else:
+                        self.instance.write(
+                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",LOW')
 
             self.instance.write(f'slist:sequence:delete "{seqname}_{channel}"')
             self.instance.write(

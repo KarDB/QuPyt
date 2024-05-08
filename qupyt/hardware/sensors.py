@@ -6,6 +6,7 @@ Sensor Module handling the creation and usage of sensors.
 from __future__ import annotations
 import sys
 import os
+import gc
 import logging
 import traceback
 from time import time
@@ -218,7 +219,7 @@ class GenICamPhantom(Sensor):
     """
 
     def __init__(self, configuration: Dict[str, Any]) -> None:
-        self.cam = self._discover_and_setup()
+        self.cam, self.cam_instance = self._discover_and_setup()
         super().__init__(configuration)
         # self.cam.remote_device.node_map.OffsetX.value = 0
         # self.cam.remote_device.node_map.OffsetY.value = 0
@@ -252,7 +253,7 @@ class GenICamPhantom(Sensor):
         discovery.discover()
         cam = discovery.cameras[0]
         self.grabber = EGrabber(cam)
-        return self.grabber
+        return self.grabber, cam
 
     def _set_trigger_source(self, trigger_source: str) -> None:
         '''e.g. GPIO0, GPIO1, ...'''
@@ -328,7 +329,6 @@ class GenICamPhantom(Sensor):
         if synchroniser is not None:
             synchroniser.trigger()
         for i in range(self.number_measurements):
-            print(f'loop {i}')
             with Buffer(self.cam) as buffer:
                 buffer_ptr, image_size, part_num, _ = self._grab_frame_info(
                     buffer)
@@ -339,7 +339,6 @@ class GenICamPhantom(Sensor):
         time_2 = time()
         logging.info(f'Data acquisition took {time_2-time_1} s'
                      .ljust(65, '.') + '[done]')
-        # return data.reshape((self.number_measurements, height, width))
         return data
 
     def _grab_frame_info(self, buffer: Buffer):
@@ -372,7 +371,10 @@ class GenICamPhantom(Sensor):
         Without this, you won't be able to make a new camera instance,
         as the camera will be exclusively owned by this one.
         """
-        self.cam.destroy()
+        self.cam = None
+        self.cam_instance = None
+        self.grabber = None
+        gc.collect()
         logging.info('Closed GenICam camera connection'.ljust(
             65, '.') + '[done]')
 
