@@ -6,6 +6,7 @@ Handle AWG input and output.
 
 from __future__ import annotations
 import logging
+import pickle
 from time import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Tuple, List
@@ -319,6 +320,7 @@ class AWGenerator(VisaObject, Synchroniser):
         self.waveform_block = block['arr_0']
         self.seqrepeats = list(block['arr_1'])
         self.wavenames = list(block['arr_2'])
+        self.flag_values = pickle.loads(block['arr_5'])
         logging.info('loaded wave sequence from file'.ljust(
             65, '.')+f'{seqname}')
 

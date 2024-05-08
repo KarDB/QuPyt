@@ -1,4 +1,5 @@
 import logging
+import pickle
 from typing import Dict, Any, List, Tuple
 import hashlib
 from pathlib import Path
@@ -53,16 +54,20 @@ class PulseSequenceYaml:
             self.awg_sources,
             samprate=self.samp_rate
         )
+        flag_channels: Dict[str, Any] = {}
         for i, block in enumerate(sorted_pulse_blocks):
+            flag_channels[block] = []
             for channel, pulses in sequence_instructions[block].items():
-                if type(self.channel_mapping[channel]) is str:
+                mapped_channel = self.channel_mapping[channel]
+                if isinstance(mapped_channel, str):
+                    flag_channels[block].append(mapped_channel)
                     continue
                 for pulse in pulses.values():
                     seq.add_pulse(
                         i,
                         float(pulse['start']),
                         float(pulse['duration']),
-                        channel=self.channel_mapping[channel],
+                        channel=mapped_channel,
                         inputtype="time",
                         amplitude=float(pulse['amplitude']),
                         freq=(
@@ -70,6 +75,7 @@ class PulseSequenceYaml:
                             float(pulse['phase'])
                         )
                     )
+        seq.flag_channels = pickle.dumps(flag_channels)
         seq.sequencer = sequencing_repeats
         seq.sequencernames = sequence_order
         seq.make('sequence.npz')
@@ -106,6 +112,7 @@ class PulseSequence:
             (numseqs, 5 * len(self.awg_sources), self.num_points))
         self.sequencer = None
         self.sequencernames = None
+        self.flag_channels: Any
         self.warning_counter = 0
         self.properties = {"Values": "None"}
 
@@ -205,6 +212,7 @@ class PulseSequence:
             self.sequencernames,
             finalhash,
             self.properties,
+            self.flag_channels
         )
         logging.info(f"Pulse sequence written to {name}".ljust(
             65, '.') + '[done]')
