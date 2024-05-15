@@ -25,6 +25,12 @@ class MockSignalSource(MW_Sources):
     def __init__(self, address: str) -> None:
         self.address = address
 
+    def __repr__(self) -> str:
+        return f'MockSignalSource(address: {self.address})'
+
+    def __str__(self) -> str:
+        return f'Signal source of type MockSignalSource(address: {self.address})'
+
     def set_frequency(self, freq: float, channel: int) -> None:
         sleep(0.1)
         logging.info(
@@ -89,6 +95,12 @@ class WindFreak(MW_Sources):
             traceback.print_exc()
         self.set_power_level(1)
 
+    def __repr__(self) -> str:
+        return f'WindFreak(address: {self.address})'
+
+    def __str__(self) -> str:
+        return f'Signal source of type (synth-nv) WindFreak(address: {self.address})'
+
     def set_amplitude(self, ampl: float, channel: int) -> None:
         # channel is just here to conform with the API
         _ = channel
@@ -145,6 +157,12 @@ class WindFreakHDM(MW_Sources):
         self.address = address
         self.instance = serial.Serial(self.address, timeout=1)
         self.set_power_level(1)
+
+    def __repr__(self) -> str:
+        return f'WindFreakHDM(address: {self.address})'
+
+    def __str__(self) -> str:
+        return f'Signal source of type (synth-hd) WindFreakHDM(address: {self.address})'
 
     def set_amplitude(self, ampl: float, channel: int) -> None:
         # channel is just here to conform with the API

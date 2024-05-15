@@ -26,7 +26,7 @@ def close_superfluous_devices(devs: Dict[str, Any],
         if (key, value["address"]) not in requested_name_address_tuples:
             devs[key]["device"].close()
             rem = devs.pop(key)
-            logging.info("Removed {} from active devices dict".format(rem)
+            logging.info(f"Removed {rem} from active devices dict"
                          .ljust(65, '.') + '[done]')
     return devs
 
@@ -50,11 +50,11 @@ def open_new_requested_devices(devs: Dict[str, Any],
                 device = SignalSource(value["address"], value["device_type"])
             devs[key] = value
             devs[key]["device"] = device
-            logging.info("Added {} to active devices dict".format(key)
+            logging.info(f"Added {repr(devs[key]['device'])} to active devices dict"
                          .ljust(65, '.') + '[done]')
         else:
             devs[key]['channels'] = value['channels']
-            logging.info("Updated {} in active devices dict".format(key)
+            logging.info(f"Updated {repr(devs[key]['device'])} in active devices dict"
                          .ljust(65, '.') + '[done]')
     return devs
 

@@ -19,19 +19,23 @@ from pypylon import pylon
 from harvesters.core import Harvester
 
 import ctypes
-from egrabber import (
-    EGenTL,
-    Buffer,
-    EGrabber,
-    EGrabberDiscovery,
-    BUFFER_INFO_BASE,
-    INFO_DATATYPE_PTR,
-    BUFFER_INFO_CUSTOM_PART_SIZE,
-    BUFFER_INFO_CUSTOM_NUM_PARTS,
-    INFO_DATATYPE_SIZET,
-    BUFFER_INFO_TIMESTAMP,
-    INFO_DATATYPE_UINT64
-)
+try:
+    from egrabber import (
+        EGenTL,
+        Buffer,
+        EGrabber,
+        EGrabberDiscovery,
+        BUFFER_INFO_BASE,
+        INFO_DATATYPE_PTR,
+        BUFFER_INFO_CUSTOM_PART_SIZE,
+        BUFFER_INFO_CUSTOM_NUM_PARTS,
+        INFO_DATATYPE_SIZET,
+        BUFFER_INFO_TIMESTAMP,
+        INFO_DATATYPE_UINT64
+    )
+except ImportError:
+    logging.warning(
+        "Could not load egrabber library".ljust(65, '.')+'[failed]\nIf you are not using a Phantom S710 (or similar) camera you do not need this!')
 
 from qupyt.hardware.synchronisers import Synchroniser
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType, ConfigurationError
@@ -244,8 +248,15 @@ class GenICamPhantom(Sensor):
         self.attribute_map['pixel_bits'] = self._set_pixel_bits
         self.attribute_map['trigger_mode'] = self._set_trigger_mode
         self.attribute_map['trigger_source'] = self._set_trigger_source
+        self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
+
+    def __repr__(self) -> str:
+        return f'GenICamPhantom(configuration: {self.initial_configuration_dict})'
+
+    def __str__(self) -> str:
+        return f'Phantom S710 camera instance: GenICamPhantom(configuration: {self.initial_configuration_dict})'
 
     def _discover_and_setup(self) -> EGrabber:
         gentl = EGenTL()
@@ -439,10 +450,17 @@ class GenICamHarvester(Sensor):
         self.attribute_map['exposure_time'] = self._set_exposure_time
         self.attribute_map['image_roi'] = self._set_roi
         self.attribute_map['gain'] = self._set_gain
+        self.initial_configuration_dict = configuration
         # GenTL needs to be set above.
         self.attribute_map['GenTL_producer_cti'] = self._throw_away_cti
         if configuration is not None:
             self._update_from_configuration(configuration)
+
+    def __repr__(self) -> str:
+        return f'GenICamHarvester(configuration: {self.initial_configuration_dict})'
+
+    def __str__(self) -> str:
+        return f'GenICam Harvester compliant camera instance: GenICamHarvester(configuration: {self.initial_configuration_dict})'
 
     def _throw_away_cti(self, cti_file: str) -> None:
         """cti must be set at the start. It is therefore ignored here."""
@@ -569,8 +587,15 @@ class BaslerCam(Sensor):
         self.attribute_map['binning_mode_horizontal'] = self._set_mode_binning_horizontal
         self.attribute_map['binning_mode_vertical'] = self._set_mode_binning_vertical
         self.attribute_map['image_roi'] = self._set_roi
+        self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
+
+    def __repr__(self) -> str:
+        return f'BaslerCam(configuration: {self.initial_configuration_dict})'
+
+    def __str__(self) -> str:
+        return f'Basler pylon camera instance: BaslerCam(configuration: {self.initial_configuration_dict})'
 
     def _configure_defaults(self) -> None:
         self.cam.BinningHorizontal.SetValue(1)
@@ -727,10 +752,17 @@ class HeliCam(Sensor):
         self.attribute_map['SensNavM2'] = self._set_SensNavM2
         self.attribute_map['exposure_time'] = self._set_SensTqp
         self.attribute_map['number_measurements'] = self._set_number_measurements
+        self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
         self.he_sys = heli.LibHeLIC()
         self.roi_shape = [300, 300]
+
+    def __repr__(self) -> str:
+        return f'HeliCam(configuration: {self.initial_configuration_dict})'
+
+    def __str__(self) -> str:
+        return f'HeliCam C3 camera instance: HeliCam(configuration: {self.initial_configuration_dict})'
 
     def _set_SensTqp(self, exposure_time: int) -> None:
         # Clockcyle of camera is 35 MHz -> 35 cycles per mus
@@ -856,8 +888,15 @@ class DAQ(Sensor):
         self.attribute_map['sample_clk'] = self._set_sample_clk
         self.attribute_map['start_trig'] = self._set_start_trig
         self.attribute_map['max_samp_rate'] = self._set_max_sampling_rate
+        self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
+
+    def __repr__(self) -> str:
+        return f'DAQ(configuration: {self.initial_configuration_dict})'
+
+    def __str__(self) -> str:
+        return f'NI-DAQ sensor instance (nidaqmx): DAQ(configuration: {self.initial_configuration_dict})'
 
     def open(self) -> None:
         """
@@ -992,8 +1031,15 @@ class MockCam(Sensor):
         super().__init__(configuration)
         self.roi_shape = [200, 200]
         self.attribute_map['image_roi'] = self._set_roi
+        self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
+
+    def __repr__(self) -> str:
+        return f'MockCam(configuration: {self.initial_configuration_dict})'
+
+    def __str__(self) -> str:
+        return f'MockCam sensor instance: DAQ(configuration: {self.initial_configuration_dict})'
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
         self.roi_shape = roi_shape_and_offset[:2]

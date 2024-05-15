@@ -40,6 +40,12 @@ class VisaObject:
             rm.visalib._registry.clear()
             raise e
 
+    def __repr__(self) -> str:
+        return f'VisaObject(handle: {self.handle}, s_type: {self.s_type})'
+
+    def __str__(self) -> str:
+        return f'VisaObject(handle: {self.handle}, s_type: {self.s_type})'
+
     def _get_instructions(self) -> None:
         """
         Get set of instructions depending

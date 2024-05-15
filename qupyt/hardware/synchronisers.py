@@ -439,8 +439,15 @@ class PStreamer(Synchroniser):
         super().__init__()
         self.channel_mapping = channel_mapping
         self._update_from_configuration(configuration)
+        self.initial_configuration_dict = configuration
         if configuration['address'] == 'None':
             self._find_pulse_streamers()
+
+    def __repr__(self) -> str:
+        return f'PStreamer(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+
+    def __str__(self) -> str:
+        return f'Synchronizer of type PStreamer(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
 
     def _find_pulse_streamers(self) -> None:
         devices = findPulseStreamers()
@@ -737,10 +744,17 @@ class MockGenerator(Synchroniser):
         self.device_type: str = "MockGenerator"
 
         Synchroniser.__init__(self)
+        self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
         logging.info('MockSynchroniser instance created'.ljust(
             65, '.') + '[done]')
+
+    def __repr__(self) -> str:
+        return f'MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+
+    def __str__(self) -> str:
+        return f'Synchronizer of type MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
 
     def open(self) -> None:
         logging.info('Opened MockSynchroniser'.ljust(
@@ -862,8 +876,15 @@ class PulseBlaster(Synchroniser):
         Synchroniser.__init__(self)
         self.attribute_map['sampling_rate'] = self._set_sampling_rate_attribute
         self.attribute_map['min_instr_clk_cycles'] = self._set_min_instr_clk_cycles
+        self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
+
+    def __repr__(self) -> str:
+        return f'PulseBlaster(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+
+    def __str__(self) -> str:
+        return f'Synchronizer of type PulseBlaster(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
 
     def open(self) -> None:
         self.configure_pb()

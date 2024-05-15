@@ -1,11 +1,11 @@
 # pylint: disable=logging-format-interpolation
 # pylint: disable=logging-not-lazy
-import serial
 import traceback
 import logging
+import serial
 
 
-class power_supply:
+class PowerSupply:
     """remote controll for Konrad KD300/6000 series
     Connection Type USB. Provide easy access to most
     relevant functions"""
@@ -20,6 +20,12 @@ class power_supply:
             logging.error(f'Connection to power supply {address} failed'
                           .ljust(65, '.')+'[failed]')
             traceback.print_exc()
+
+    def __repr__(self) -> str:
+        return f'PowerSupply(address: {self.address})'
+
+    def __str__(self) -> str:
+        return f'PowerSupply (address: {self.address})'
 
     def on(self) -> None:
         self.instance.write(b"OUT1")
