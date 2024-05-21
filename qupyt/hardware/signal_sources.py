@@ -166,7 +166,7 @@ class WindFreakHDM(MW_Sources):
 
     def set_amplitude(self, ampl: float, channel: int) -> None:
         # channel is just here to conform with the API
-        _ = channel
+        self.instance.write(f"C{channel}".encode())
         self.instance.write(f"W{ampl}".encode())  # min 0 , max 63
         logging.info(
             "Windfreak set amplitude to"
@@ -175,7 +175,7 @@ class WindFreakHDM(MW_Sources):
 
     def set_frequency(self, freq: float, channel: int) -> None:
         # channel is just here to conform with the API
-        _ = channel
+        self.instance.write(f"C{channel}".encode())
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 8)}".encode())
         logging.info(
