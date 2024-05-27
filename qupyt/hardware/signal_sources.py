@@ -11,17 +11,17 @@ import serial
 from qupyt.hardware import visa_handler
 
 
-class MW_Sources(ABC):
+class SignalSource(ABC):
     @abstractmethod
-    def set_frequency(self, freq: float, channel: int) -> None:
+    def _set_frequency(self, freq: float, channel: int) -> None:
         pass
 
     @abstractmethod
-    def set_amplitude(self, ampl: float, channel: int) -> None:
+    def _set_amplitude(self, ampl: float, channel: int) -> None:
         pass
 
 
-class MockSignalSource(MW_Sources):
+class MockSignalSource(SignalSource):
     def __init__(self, address: str) -> None:
         self.address = address
 
@@ -50,7 +50,7 @@ class MockSignalSource(MW_Sources):
         pass
 
 
-class SignalSource(visa_handler.VisaObject, MW_Sources):
+class VisaSignalSource(visa_handler.VisaObject, SignalSource):
     def get_amplitude(self, channel: int) -> float:
         ampl = self.instance.query(self.command[f"GetAmpl{channel}"])
         self.opc_wait()
@@ -82,7 +82,7 @@ class SignalSource(visa_handler.VisaObject, MW_Sources):
         )
 
 
-class WindFreak(MW_Sources):
+class WindFreak(SignalSource):
     def __init__(self, address: str) -> None:
         self.address = address
         try:
@@ -152,7 +152,7 @@ class WindFreak(MW_Sources):
         return self.instance.readline().decode().replace("\n", "")
 
 
-class WindFreakHDM(MW_Sources):
+class WindFreakHDM(SignalSource):
     def __init__(self, address: str) -> None:
         self.address = address
         self.instance = serial.Serial(self.address, timeout=1)
