@@ -24,7 +24,7 @@ def run_measurement(static_devices: Dict[str, Any],
 
     dh.make_sweep_lists(dynamic_devices, int(params.get('dynamic_steps')))
     dh.set_all_static_params(static_devices)
-    iterator_size = dh.get_iterator_size(dynamic_devices)
+    iterator_size = int(params.get('dynamic_steps', 1))
     mid = datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
     return_status = 'all_fail'
     try:

@@ -16,9 +16,11 @@ from qupyt.hardware.signal_sources import SignalSource, MockSignalSource
 
 def close_superfluous_devices(devs: Dict[str, Any],
                               requested_devs: Dict[str, Any]) -> Dict[str, Any]:
-    """close all devices not requested for the next measurement.
-    Compare dict of requested and existing devices. Close and remove
-    devices not requested."""
+    """
+    Close all devices not requested for the next measurement.
+    Compare dict of requested and existing devices.
+    Close and remove devices not requested.
+    """
     requested_name_address_tuples = [
         (key, val["address"]) for key, val in requested_devs.items()
     ]
@@ -33,9 +35,11 @@ def close_superfluous_devices(devs: Dict[str, Any],
 
 def open_new_requested_devices(devs: Dict[str, Any],
                                requested_devs: Dict[str, Any]) -> Dict[str, Any]:
-    """Open all devices requested for the next measurement that are
-    not in the current active dict. Compare dict of requested and
-    existing devices."""
+    """
+    Open all devices requested for the next measurement that are
+    not in the current active dict.
+    Compare dict of requested and existing devices.
+    """
     current_name_address_tuples = [(key, val["address"])
                                    for key, val in devs.items()]
     for key, value in list(requested_devs.items()):
@@ -111,8 +115,10 @@ def set_smb_slist(device_dict: Dict[str, Any]) -> None:
 
 def set_all_dynamic_params(dynamic_devices: Dict[str, Any],
                            index_value: Dict[str, Any]) -> None:
-    """Set all values requested for dynamic devices.
-    This is a function of the sweep value index."""
+    """
+    Set all values requested for dynamic devices.
+    This is a function of the sweep value index.
+    """
     for dynamic_device in dynamic_devices.values():
         # channel looks like channel_1
         # therefore channel[-1] would be 1
@@ -158,25 +164,14 @@ def make_sweep_lists(dynamic_devices: Dict[str, Any],
 
 
 def get_device_dicts(content: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    static_devices_requested = content["static_devices"]
-    dynamic_devices_requested = content["dynamic_devices"]
-    if static_devices_requested is None:
-        static_devices_requested = {}
-    if dynamic_devices_requested is None:
-        dynamic_devices_requested = {}
+    """
+    Extract static and dynamic device request dicts from configuration
+    YAML file.
+    Creates a deep copy to not alter the original configuration.
+
+    :param content: Full configuration dictionary as loaded from config YAML
+    :type content: Dict[str, Any]
+    """
+    static_devices_requested = content.get("static_devices", {})
+    dynamic_devices_requested = content.get("dynamic_devices", {})
     return copy.deepcopy(static_devices_requested), copy.deepcopy(dynamic_devices_requested)
-
-
-def get_iterator_size(dynamic_devices: Dict[str, Any]) -> int:
-    if dynamic_devices:
-        for devices in dynamic_devices.values():
-            for channel in devices["channels"].values():
-                try:
-                    iterator_size = len(channel["frequency_sweep_values"])
-                except:
-                    iterator_size = len(channel["amplitude_sweep_values"])
-                break
-            break
-    if not dynamic_devices:
-        iterator_size = 1
-    return iterator_size
