@@ -19,7 +19,7 @@ import yaml
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler, FileModifiedEvent, FileClosedEvent
 
-import qupyt.hardware.device_handler as dh
+from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
 from qupyt.pulse_sequences.pulse_sequence_handler import write_user_ps, update_params_dict
 from qupyt.hardware.synchronisers import SynchroniserFactory
 from qupyt.hardware.sensors import SensorFactory
@@ -102,16 +102,12 @@ def _set_ready() -> None:
 
 
 def parse_input() -> None:
-    static_devices: Dict[str, SignalSource] = {}
-    dynamic_devices: Dict[str, SignalSource] = {}
+    static_devices = DeviceHandler({})
+    dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
     while True:
         if queue.empty():
-            static_devices_requested: Dict[str, SignalSource] = {}
-            dynamic_devices_requested: Dict[str, SignalSource] = {}
-            dh.close_superfluous_devices(
-                static_devices, static_devices_requested)
-            dh.close_superfluous_devices(
-                dynamic_devices, dynamic_devices_requested)
+            static_devices.update_devices({})
+            dynamic_devices.update_devices({})
             _set_ready()
             event_thread.wait()
         try:
@@ -133,20 +129,10 @@ def parse_input() -> None:
                 params['sensor']['type'],
                 params['sensor']['config']
             )
-
-            static_devices_requested, dynamic_devices_requested = dh.get_device_dicts(
-                params
-            )
-            dh.open_new_requested_devices(
-                static_devices, static_devices_requested)
-            dh.open_new_requested_devices(
-                dynamic_devices, dynamic_devices_requested)
-
-            dh.close_superfluous_devices(
-                static_devices, static_devices_requested)
-            dh.close_superfluous_devices(
-                dynamic_devices, dynamic_devices_requested)
-
+            static_devices.update_devices(params.get('static_devices', {}))
+            dynamic_devices.number_dynamic_steps = int(
+                params['number_dynamic_steps'])
+            dynamic_devices.update_devices(params.get('dynamic_devices', {}))
             success_status = run_measurement(
                 static_devices, dynamic_devices, sensor, synchroniser, params
             )

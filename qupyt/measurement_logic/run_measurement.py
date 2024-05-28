@@ -10,20 +10,19 @@ import gc
 import yaml
 from tqdm import tqdm
 
-import qupyt.hardware.device_handler as dh
+from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
 from qupyt.measurement_logic.data_handling import Data
 from qupyt.hardware.synchronisers import Synchroniser
 from qupyt.hardware.sensors import Sensor
 
 
-def run_measurement(static_devices: Dict[str, Any],
-                    dynamic_devices: Dict[str, Any],
+def run_measurement(static_devices: DeviceHandler,
+                    dynamic_devices: DynamicDeviceHandler,
                     sensor: Sensor,
                     synchroniser: Synchroniser,
                     params: Dict[str, Any]) -> str:
 
-    dh.make_sweep_lists(dynamic_devices, int(params.get('dynamic_steps')))
-    dh.set_all_static_params(static_devices)
+    static_devices.set_all_params()
     iterator_size = int(params.get('dynamic_steps', 1))
     mid = datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
     return_status = 'all_fail'
@@ -40,8 +39,7 @@ def run_measurement(static_devices: Dict[str, Any],
         sensor.open()
         sleep(0.5)
         for itervalue in tqdm(range(iterator_size)):
-            if dynamic_devices:
-                dh.set_all_dynamic_params(dynamic_devices, itervalue)
+            dynamic_devices.next_dynamic_step()
             sleep(0.1)
             for avg in tqdm(range(int(params["averages"])),
                             leave=itervalue == (iterator_size - 1)):

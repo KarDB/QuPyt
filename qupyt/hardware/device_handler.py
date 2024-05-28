@@ -30,7 +30,7 @@ class DeviceHandler:
         superfluous devices and subsequently opening
         newly requested devices.
         """
-        self.requested_devices = requested_devices
+        self.requested_devices = copy.deepcopy(requested_devices)
         self.close_superfluous_devices()
         self.open_new_requested_devices()
 
@@ -101,14 +101,11 @@ class DeviceHandler:
 
 class DynamicDeviceHandler(DeviceHandler):
     def __init__(
-        self, requested_devices: Dict[str, Any], number_dynamic_steps: int
+        self, requested_devices: Dict[str, Any], number_dynamic_steps: int = 1
     ) -> None:
         self.number_dynamic_steps = number_dynamic_steps
         self.current_dynamic_step = 0
         super().__init__(requested_devices)
-
-    # TO OPEN DYNAMIC DEVICES, remove the config subdict and pass an emtpy dict.
-    # create dynamic values and pass new config to device on every update.
 
     def open_new_requested_devices(self) -> None:
         """
@@ -144,6 +141,7 @@ class DynamicDeviceHandler(DeviceHandler):
                     )
                     + "[done]"
                 )
+        self._reset_step_counter()
         self._make_sweep_lists()
 
     def next_dynamic_step(self) -> None:
@@ -166,6 +164,9 @@ class DynamicDeviceHandler(DeviceHandler):
         if not isinstance(value_list[1], list):
             return 'channel_1', value_list
         return value_list[0], value_list[1]
+
+    def _reset_step_counter(self) -> None:
+        self.current_dynamic_step = 0
 
     def _make_sweep_lists(self) -> None:
         """Contruct array / listof values to be sweeped"""
