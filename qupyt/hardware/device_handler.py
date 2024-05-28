@@ -1,3 +1,5 @@
+# pylint: disable=logging-format-interpolation
+# pylint: disable=logging-not-lazy
 """
 This file handles all aspect of the various signal sources in
 active use. Newly requested devices are opened and added
@@ -8,118 +10,183 @@ or sweeped are handled here as well.
 """
 import copy
 import logging
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, List, Union, Tuple
 import numpy as np
 from qupyt.hardware.signal_sources import DeviceFactory
 
 
-def close_superfluous_devices(devs: Dict[str, Any],
-                              requested_devs: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Close all devices not requested for the next measurement.
-    Compare dict of requested and existing devices.
-    Close and remove devices not requested.
-    """
-    requested_name_address_tuples = [
-        (key, val["address"]) for key, val in requested_devs.items()
-    ]
-    for key, value in list(devs.items()):
-        if (key, value["address"]) not in requested_name_address_tuples:
-            devs[key]["device"].close()
-            rem = devs.pop(key)
-            logging.info(f"Removed {rem} from active devices dict"
-                         .ljust(65, '.') + '[done]')
-    return devs
+class DeviceHandler:
+    def __init__(
+        self,
+        requested_devices: Dict[str, Any],
+    ) -> None:
+        self.requested_devices: Dict[str, Any] = {}
+        self.devices: Dict[str, Any] = {}
+        self.update_requested_device_dict(requested_devices)
 
+    def update_devices(self, requested_devices: Dict[str, Any]) -> None:
+        """
+        Updates the device dicts by first closing all
+        superfluous devices and subsequently opening
+        newly requested devices.
+        """
+        self.requested_devices = requested_devices
+        self.close_superfluous_devices()
+        self.open_new_requested_devices()
 
-def open_new_requested_devices(devs: Dict[str, Any],
-                               requested_devs: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Open all devices requested for the next measurement that are
-    not in the current active dict.
-    Compare dict of requested and existing devices.
-    """
-    current_name_address_tuples = [(key, val["address"])
-                                   for key, val in devs.items()]
-    for key, value in list(requested_devs.items()):
-        if (key, value["address"]) not in current_name_address_tuples:
-            device = DeviceFactory.create_device(value)
-            devs[key] = value
-            devs[key]["device"] = device
-            logging.info(f"Added {repr(devs[key]['device'])} to active devices dict"
-                         .ljust(65, '.') + '[done]')
-        else:
-            devs[key]['channels'] = value['channels']
-            logging.info(f"Updated {repr(devs[key]['device'])} in active devices dict"
-                         .ljust(65, '.') + '[done]')
-    return devs
+    def close_superfluous_devices(self) -> None:
+        """
+        Close all devices not requested for the next measurement.
+        Compare dict of requested and existing devices.
+        Close and remove devices not requested.
+        """
+        requested_name_address_tuples = [
+            (key, val["address"]) for key, val in self.requested_devices.items()
+        ]
+        for key, value in list(self.devices.items()):
+            if (key, value["address"]) not in requested_name_address_tuples:
+                self.devices[key]["device"].close()
+                rem = self.devices.pop(key)
+                logging.info(
+                    f"Removed {rem} from active devices dict".ljust(
+                        65, ".") + "[done]"
+                )
 
-
-def set_all_static_params(devs: Dict[str, Any]) -> None:
-    """Set all values requested for static devices"""
-    for value in devs.values():
-        value["device"].set_values()
-
-
-def set_all_dynamic_params(dynamic_devices: Dict[str, Any],
-                           index_value: Dict[str, Any]) -> None:
-    """
-    Set all values requested for dynamic devices.
-    This is a function of the sweep value index.
-    """
-    for dynamic_device in dynamic_devices.values():
-        # channel looks like channel_1
-        # therefore channel[-1] would be 1
-        for channel, channel_values in dynamic_device["channels"].items():
-            dynamic_device["device"].set_frequency(
-                float(channel_values["frequency_sweep_values"][index_value]),
-                channel[-1],
-            )
-            dynamic_device["device"].set_amplitude(
-                float(channel_values["amplitude_sweep_values"][index_value]),
-                channel[-1],
-            )
-
-
-def make_sweep_lists(dynamic_devices: Dict[str, Any],
-                     steps: int) -> Dict[str, Any]:
-    """Contruct array / listof values to be sweeped"""
-    for device_values in dynamic_devices.values():
-        for channel_values in device_values["channels"].values():
-            if channel_values["min_amplitude"] is not None:
-                channel_values["amplitude_sweep_values"] = np.linspace(
-                    float(channel_values["min_amplitude"]),
-                    float(channel_values["max_amplitude"]),
-                    steps,
+    def open_new_requested_devices(self) -> None:
+        """
+        Open all devices requested for the next measurement that are
+        not in the current active dict.
+        Compare dict of requested and existing devices.
+        """
+        current_name_address_tuples = [
+            (key, val["address"]) for key, val in self.devices.items()
+        ]
+        for key, value in list(self.requested_devices.items()):
+            if (key, value["address"]) not in current_name_address_tuples:
+                device = DeviceFactory.create_device(value)
+                self.devices[key] = value
+                self.devices[key]["device"] = device
+                logging.info(
+                    f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
+                        65, "."
+                    )
+                    + "[done]"
                 )
             else:
-                x = np.linspace(0, 1, steps)
-                channel_values["amplitude_sweep_values"] = eval(
-                    channel_values["functional_amplitude"]
+                self.devices[key]["config"] = value["config"]
+                logging.info(
+                    f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
+                        65, "."
+                    )
+                    + "[done]"
                 )
-            if channel_values["min_frequency"] is not None:
-                channel_values["frequency_sweep_values"] = np.linspace(
-                    float(channel_values["min_frequency"]),
-                    float(channel_values["max_frequency"]),
-                    steps,
+
+    def set_all_params(self) -> None:
+        """Set all values requested for static devices"""
+        for value in self.devices.values():
+            value["device"].set_values()
+
+    def update_requested_device_dict(
+        self,
+        requested_devices: Dict[str, Any],
+    ) -> None:
+        """
+        Creates a deep copy to not alter the original configuration.
+
+        :param content: Full configuration dictionary as loaded from config YAML
+        :type content: Dict[str, Any]
+        """
+        self.requested_devices = copy.deepcopy(requested_devices)
+
+
+class DynamicDeviceHandler(DeviceHandler):
+    def __init__(
+        self, requested_devices: Dict[str, Any], number_dynamic_steps: int
+    ) -> None:
+        self.number_dynamic_steps = number_dynamic_steps
+        self.current_dynamic_step = 0
+        super().__init__(requested_devices)
+
+    # TO OPEN DYNAMIC DEVICES, remove the config subdict and pass an emtpy dict.
+    # create dynamic values and pass new config to device on every update.
+
+    def open_new_requested_devices(self) -> None:
+        """
+        Open all devices requested for the next measurement that are
+        not in the current active dict.
+        Compare dict of requested and existing devices.
+        """
+        current_name_address_tuples = [
+            (key, val["address"]) for key, val in self.devices.items()
+        ]
+        for key, value in list(self.requested_devices.items()):
+            if (key, value["address"]) not in current_name_address_tuples:
+                # Remove config dicts.
+                # These will be updated for every new value.
+                creation_dict = copy.deepcopy(value)
+                creation_dict["sweep_config"] = creation_dict["config"]
+                creation_dict["config"] = {}
+                device = DeviceFactory.create_device(creation_dict)
+                self.devices[key] = value
+                self.devices[key]["device"] = device
+                logging.info(
+                    f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
+                        65, "."
+                    )
+                    + "[done]"
                 )
             else:
-                x = np.linspace(0, 1, steps)
-                channel_values["frequency_sweep_values"] = eval(
-                    channel_values["functional_frequency"]
+                self.devices[key]["sweep_config"] = copy.deepcopy(
+                    value["config"])
+                logging.info(
+                    f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
+                        65, "."
+                    )
+                    + "[done]"
                 )
-    return dynamic_devices
+        self._make_sweep_lists()
 
+    def next_dynamic_step(self) -> None:
+        """
+        Set all values requested for dynamic devices.
+        This is a function of the sweep value index.
+        """
+        for device in self.devices.values():
+            current_config = {}
+            for parameter, sweep_values in device["sweep_lists"]:
+                current_config[parameter] = (
+                    sweep_values['channel'],
+                    sweep_values['sweep_values'][self.current_dynamic_step]
+                )
+            device['config'] = current_config
+            device.set_values()
+        self.current_dynamic_step += 1
 
-def get_device_dicts(content: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """
-    Extract static and dynamic device request dicts from configuration
-    YAML file.
-    Creates a deep copy to not alter the original configuration.
+    def _get_channel_and_sweeplist(self, value_list: Union[List[float], Tuple[str, List[float]]]) -> Tuple[str, List[float]]:
+        if not isinstance(value_list[1], list):
+            return 'channel_1', value_list
+        return value_list[0], value_list[1]
 
-    :param content: Full configuration dictionary as loaded from config YAML
-    :type content: Dict[str, Any]
-    """
-    static_devices_requested = content.get("static_devices", {})
-    dynamic_devices_requested = content.get("dynamic_devices", {})
-    return copy.deepcopy(static_devices_requested), copy.deepcopy(dynamic_devices_requested)
+    def _make_sweep_lists(self) -> None:
+        """Contruct array / listof values to be sweeped"""
+        for device in self.devices.values():
+            for parameter, value_list in device["sweep_config"].values():
+                channel, value_list = self._get_channel_and_sweeplist(
+                    value_list)
+                if all(isinstance(x, (int, float)) for x in value_list):
+                    if len(value_list) == 2:
+                        device["sweep_lists"][parameter]['sweep_values'] = np.linspace(
+                            value_list[0], value_list[1], self.number_dynamic_steps
+                        )
+                        device["sweep_lists"][parameter]['channel'] = channel
+                    else:
+                        if len(value_list) != self.number_dynamic_steps:
+                            raise ValueError(
+                                "Trying to set manual sweep value list. Please make sure the number of dynamic_steps matches the length of the provided list"
+                            )
+                        device["sweep_lists"][parameter]['sweep_values'] = value_list
+                        device["sweep_lists"][parameter]['channel'] = channel
+                else:
+                    raise ValueError(
+                        "Currently only numeric values are allowed for dynamic devices"
+                    )

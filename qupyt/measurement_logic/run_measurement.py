@@ -38,7 +38,6 @@ def run_measurement(static_devices: Dict[str, Any],
         synchroniser.run()
         sleep(0.1)
         sensor.open()
-        print('sensor opened')
         sleep(0.5)
         for itervalue in tqdm(range(iterator_size)):
             if dynamic_devices:

@@ -12,13 +12,12 @@ import traceback
 from time import time
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, List
-from math import floor
+import ctypes
 
 import numpy as np
 from pypylon import pylon
 from harvesters.core import Harvester
 
-import ctypes
 try:
     from egrabber import (
         EGenTL,
