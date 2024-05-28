@@ -44,7 +44,7 @@ class PulseSequenceError(Exception):
 class ConfigurationError(Exception):
     """Error type to be raised for hardware misconfigurations"""
 
-    def __init__(self, config_param, value, valids) -> None:
+    def __init__(self, config_param: Any, value: Any, valids: Any) -> None:
         self.config_param = config_param
         self.value = value
         self.valids = valids
@@ -59,11 +59,3 @@ class ConfigurationError(Exception):
             f"{self.valids}\n\n"
 
         )
-
-
-# def expect_config_error(config_param, value, valids):
-#     def decorator(func):
-#         def wrapper(*args):
-#             try:
-#                 func(*args)
-#             except:

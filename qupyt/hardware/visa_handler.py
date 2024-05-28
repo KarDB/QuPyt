@@ -8,37 +8,44 @@ from time import sleep
 import logging
 from typing import Dict
 import pyvisa
+from qupyt.mixins import ConfigurationError
 
 
 class VisaObject:
-    """Visa class acting as parent for all devices intended to connet via the VISA protocol."""
+    """
+    Visa class acting as parent for all devices intended
+    to connect via the VISA protocol.
+    """
 
     def __init__(self, handle: str, s_type: str) -> None:
         """
         handle: visa adress of signal source
         s_type: source type (SRS, RS)...
         """
+        self.known_s_types = ["SRS", "SMB", "Rigol", "TekAWG", "TekAFG"]
         self.handle = handle
         self.s_type = s_type
+        if self.s_type not in self.known_s_types:
+            raise ConfigurationError(
+                'the VISA device type', self.s_type, self.known_s_types)
         self.command: Dict[str, str]
         self._get_instructions()
         try:
-            rm = pyvisa.ResourceManager()
-            self.instance = rm.open_resource(handle)
+            resource_manager = pyvisa.ResourceManager()
+            self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
             logging.info(
-                "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
+                f"Opening {s_type} at adress {handle}".ljust(65, ".")
                 + "[done]"
             )
-        except Exception as e:
-            print('Opening VISA Object Failed')
+        except Exception as exc:
             logging.exception(
-                "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
+                f"Opening {s_type} at adress {handle}".ljust(65, ".")
                 + "[failed]"
             )
-            rm.close()
-            rm.visalib._registry.clear()
-            raise e
+            resource_manager.close()
+            resource_manager.visalib._registry.clear()
+            raise exc
 
     def __repr__(self) -> str:
         return f'VisaObject(handle: {self.handle}, s_type: {self.s_type})'
@@ -115,10 +122,15 @@ class VisaObject:
             }
 
     def opc_wait(self) -> None:
-        opcVal = 0
-        while opcVal == 0:
+        """
+        Check if the device has finished all tasks and is
+        ready to execute the next command.
+        Pauses execution until the device is ready.
+        """
+        opc_val = 0
+        while opc_val == 0:
             opc = self.instance.query(self.command["OPC"])
-            opcVal = int(opc)
+            opc_val = int(opc)
 
     def close(self) -> None:
         if self.s_type == "TekAWG":
@@ -128,11 +140,10 @@ class VisaObject:
             self.instance.close()
             self.instance.visalib._registry.clear()
             logging.info(
-                "Closing {} at adress {}"
-                .format(self.s_type, self.handle)
+                f"Closing {self.s_type} at adress {self.handle}"
                 .ljust(65, ".")
                 + "[done]"
             )
         except Exception:
-            logging.exception('Closing {} at adress {} failed'.format(
-                self.s_type, self.handle).ljust(65, '.') + '[failed]')
+            logging.exception('Closing {self.s_type} at adress {self.handle} failed'
+                              .ljust(65, '.') + '[failed]')
