@@ -608,9 +608,9 @@ class BaslerCam(Sensor):
         self.attribute_map["exposure_time"] = self._set_exposure_time
         self.attribute_map["binning_horizontal"] = self._set_binning_horizontal
         self.attribute_map["binning_vertical"] = self._set_binning_vertical
-        self.attribute_map[
-            "binning_mode_horizontal"
-        ] = self._set_mode_binning_horizontal
+        self.attribute_map["binning_mode_horizontal"] = (
+            self._set_mode_binning_horizontal
+        )
         self.attribute_map["binning_mode_vertical"] = self._set_mode_binning_vertical
         self.attribute_map["image_roi"] = self._set_roi
         self.initial_configuration_dict = configuration

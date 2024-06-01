@@ -3,6 +3,7 @@ A shared mixin class to unify
 how parameters are updated or set from
 a configuration dictionary.
 """
+
 from typing import Protocol, Callable, Any, Dict
 import logging
 

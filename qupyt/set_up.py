@@ -4,6 +4,7 @@ all necessary user directories exist, and provide
 get functions to query to correct path
 on the user's machine.
 """
+
 import pathlib
 from pathlib import Path
 from typing import Dict

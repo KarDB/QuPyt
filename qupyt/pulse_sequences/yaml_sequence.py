@@ -1,6 +1,7 @@
 """
 Generation of yaml file based pulse sequences.
 """
+
 from typing import Dict, Any, Optional
 import yaml
 from qupyt import set_up

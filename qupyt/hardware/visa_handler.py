@@ -4,6 +4,7 @@ For different microwave sources or visa devices, the commands to set e.g.
 an output power are unified by storing the device speicif commands in a
 dictionary for each device.
 """
+
 from time import sleep
 import logging
 from typing import Dict
