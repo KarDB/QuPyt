@@ -30,14 +30,17 @@ try:
         BUFFER_INFO_CUSTOM_NUM_PARTS,
         INFO_DATATYPE_SIZET,
         BUFFER_INFO_TIMESTAMP,
-        INFO_DATATYPE_UINT64
+        INFO_DATATYPE_UINT64,
     )
 except ImportError:
     logging.warning(
-        "Could not load egrabber library".ljust(65, '.')+'[failed]\nIf you are not using a Phantom S710 (or similar) camera you do not need this!')
+        "Could not load egrabber library".ljust(65, ".")
+        + "[failed]\nIf you are not using a Phantom S710 (or similar) camera you do not need this!"
+    )
 
 from qupyt.hardware.synchronisers import Synchroniser
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType, ConfigurationError
+
 # Imports for HeliCam
 if sys.platform == "win32":
     # from msvcrt import getch
@@ -51,16 +54,22 @@ try:
     import libHeLIC as heli
 except ImportError:
     logging.warning(
-        "Could not load HeliCam library".ljust(65, '.')+'[failed]\nIf you are not using a HeliCam you do not need this!')
+        "Could not load HeliCam library".ljust(65, ".")
+        + "[failed]\nIf you are not using a HeliCam you do not need this!"
+    )
 try:
     import nidaqmx
-    from nidaqmx.constants import (Edge,
-                                   AcquisitionType,
-                                   VoltageUnits,
-                                   TerminalConfiguration)
+    from nidaqmx.constants import (
+        Edge,
+        AcquisitionType,
+        VoltageUnits,
+        TerminalConfiguration,
+    )
 except ImportError:
     logging.warning(
-        "Could not load NI-DAQ library".ljust(65, '.')+'[failed]\nIf you are not using a NI-DAQ you do not need this!')
+        "Could not load NI-DAQ library".ljust(65, ".")
+        + "[failed]\nIf you are not using a NI-DAQ you do not need this!"
+    )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
@@ -83,6 +92,7 @@ class SensorFactory:
     Example:
         >>> cam = SensorFactory.create_sensor('EoSense1.1CXP', {'number_measurements_referenced': 10})
     """
+
     @staticmethod
     def create_sensor(sensor_type: str, configuration: Dict[str, Any]) -> Sensor:
         """
@@ -97,29 +107,29 @@ class SensorFactory:
         :raises ValueError:
         """
         try:
-            if sensor_type == 'Basler1920':
+            if sensor_type == "Basler1920":
                 return BaslerCam(configuration)
-            if sensor_type == 'EoSense1.1CXP':
+            if sensor_type == "EoSense1.1CXP":
                 return GenICamHarvester(configuration)
-            if sensor_type == 'PhantomS710':
+            if sensor_type == "PhantomS710":
                 return GenICamPhantom(configuration)
-            if sensor_type == 'HeliC3':
+            if sensor_type == "HeliC3":
                 return HeliCam(configuration)
-            if sensor_type == 'DAQ':
+            if sensor_type == "DAQ":
                 return DAQ(configuration)
-            if sensor_type == 'MockCam':
+            if sensor_type == "MockCam":
                 return MockCam(configuration)
-            raise ValueError(
-                f'Requested sensor type {sensor_type} does not exists')
+            raise ValueError(f"Requested sensor type {sensor_type} does not exists")
         except Exception as exc:
-            logging.exception('Could not open desired camera'
-                              .ljust(65, '.') + '[failed]')
+            logging.exception(
+                "Could not open desired camera".ljust(65, ".") + "[failed]"
+            )
             traceback.print_exc()
             raise exc
 
 
 class Sensor(ABC, ConfigurationMixin):
-    '''
+    """
     Abstract Base Class for all sensors. All sensors implemented in QuPyt
     should inherit from this class. This helps ensure compliance with the
     sensor API.
@@ -146,26 +156,29 @@ class Sensor(ABC, ConfigurationMixin):
           Check the configuration options for the individual sensors.
         - **number_measurements** (int): Set by the number_measurements
           attribute in the configuration dict.
-    '''
+    """
+
     attribute_map: UpdateConfigurationType
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:  # pylint: disable=unused-argument
+    def __init__(
+        self, configuration: Dict[str, Any]
+    ) -> None:  # pylint: disable=unused-argument
         # configuration is not used in the ABC, however
         # all child classes must take it as input.
         self.roi_shape: list[int]
         self.number_measurements: int = 2
         self.target_data_type: type
         self.attribute_map = {
-            'number_measurements': lambda x: setattr(self, 'number_measurements', x),
-            'target_data_type': lambda x: setattr(self, 'target_data_type', x)
+            "number_measurements": lambda x: setattr(self, "number_measurements", x),
+            "target_data_type": lambda x: setattr(self, "target_data_type", x),
         }
 
     @abstractmethod
     def open(self) -> None:
-        '''
+        """
         Implements the discovery and establishes the connection
         to a sensor.
-        '''
+        """
 
     @abstractmethod
     def acquire_data(self, synchroniser: Optional[Synchroniser]) -> np.ndarray:
@@ -228,34 +241,33 @@ class GenICamPhantom(Sensor):
         # self.cam.remote_device.node_map.OffsetY.value = 0
         self.cam.remote.set("Height", 200)
         self.cam.remote.set("Width", 1280)
-        self.cam.remote.set('PixelFormat', "Mono8")
+        self.cam.remote.set("PixelFormat", "Mono8")
         self.image_dtype = np.uint8
-        self.cam.remote.set('TriggerSource', 'GPIO0')
-        self.cam.remote.set('TriggerMode', 'TriggerModeOn')
-        self.cam.remote.set('ExposureTime', 20)
-        self.cam.stream.set('UnpackingMode', 'Lsb')
-        self.cam.stream.set('UnpackingMode', 'Lsb')
-        self.cam.remote.set('FlatFieldCorrection',
-                            'FlatFieldCorrectionOff')
+        self.cam.remote.set("TriggerSource", "GPIO0")
+        self.cam.remote.set("TriggerMode", "TriggerModeOn")
+        self.cam.remote.set("ExposureTime", 20)
+        self.cam.stream.set("UnpackingMode", "Lsb")
+        self.cam.stream.set("UnpackingMode", "Lsb")
+        self.cam.remote.set("FlatFieldCorrection", "FlatFieldCorrectionOff")
         self.roi_shape = [
-            self.cam.remote.get("Height")*4,
-            self.cam.remote.get("Width")
+            self.cam.remote.get("Height") * 4,
+            self.cam.remote.get("Width"),
         ]
-        self.attribute_map['exposure_time'] = self._set_exposure_time
-        self.attribute_map['image_roi'] = self._set_roi
+        self.attribute_map["exposure_time"] = self._set_exposure_time
+        self.attribute_map["image_roi"] = self._set_roi
         # self.attribute_map['gain'] = self._set_gain
-        self.attribute_map['pixel_bits'] = self._set_pixel_bits
-        self.attribute_map['trigger_mode'] = self._set_trigger_mode
-        self.attribute_map['trigger_source'] = self._set_trigger_source
+        self.attribute_map["pixel_bits"] = self._set_pixel_bits
+        self.attribute_map["trigger_mode"] = self._set_trigger_mode
+        self.attribute_map["trigger_source"] = self._set_trigger_source
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
 
     def __repr__(self) -> str:
-        return f'GenICamPhantom(configuration: {self.initial_configuration_dict})'
+        return f"GenICamPhantom(configuration: {self.initial_configuration_dict})"
 
     def __str__(self) -> str:
-        return f'Phantom S710 camera instance: GenICamPhantom(configuration: {self.initial_configuration_dict})'
+        return f"Phantom S710 camera instance: GenICamPhantom(configuration: {self.initial_configuration_dict})"
 
     def _discover_and_setup(self) -> EGrabber:
         gentl = EGenTL()
@@ -266,39 +278,39 @@ class GenICamPhantom(Sensor):
         return self.grabber, cam
 
     def _set_trigger_source(self, trigger_source: str) -> None:
-        '''e.g. GPIO0, GPIO1, ...'''
+        """e.g. GPIO0, GPIO1, ..."""
         self.cam.remote.set("TriggerSource", trigger_source)
 
     def _set_trigger_mode(self, trigger_mode: str) -> None:
-        '''
+        """
         e.g. On of Off
 
         Raises:
             - ConfigurationError
-        '''
-        if trigger_mode.lower() == 'on':
+        """
+        if trigger_mode.lower() == "on":
             self.cam.remote.set("TriggerMode", "TriggerModeOn")
-        elif trigger_mode.lower() == 'off':
+        elif trigger_mode.lower() == "off":
             self.cam.remote.set("TriggerMode", "TriggerModeOff")
         else:
-            raise ConfigurationError(
-                'trigger_mode', trigger_mode, ["on", "off"])
+            raise ConfigurationError("trigger_mode", trigger_mode, ["on", "off"])
 
     def _set_pixel_bits(self, pixel_bits: str) -> None:
-        '''
+        """
         e.g. Mono8, Mono12 or Mono16
 
         Raises:
             - ConfigurationError
-        '''
-        if pixel_bits.lower() == 'mono8':
+        """
+        if pixel_bits.lower() == "mono8":
             self.image_dtype = np.uint8
-        elif pixel_bits.lower() in ['mono12', 'mono16']:
+        elif pixel_bits.lower() in ["mono12", "mono16"]:
             self.image_dtype = np.uint16
         else:
             #  The 'bayer' pixel format is not supported
-            raise ConfigurationError('pixel_bits', pixel_bits, [
-                                     'mono8', 'mono12', 'mono16'])
+            raise ConfigurationError(
+                "pixel_bits", pixel_bits, ["mono8", "mono12", "mono16"]
+            )
         self.cam.remote.set("PixelFormat", pixel_bits)
 
     def _set_exposure_time(self, exposure_time: int) -> None:
@@ -311,18 +323,26 @@ class GenICamPhantom(Sensor):
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         roi_offset_x_and_y = roi_shape_and_offset[2:]
         try:
-            self.cam.remote.set("Height", int(roi_shape_h_and_w[0]/4))
+            self.cam.remote.set("Height", int(roi_shape_h_and_w[0] / 4))
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
             # self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
             # self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
             self.roi_shape = roi_shape_h_and_w
-            logging.info(f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}"
-                         .ljust(65, '.') + '[done]')
+            logging.info(
+                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
+                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(
+                    65, "."
+                )
+                + "[done]"
+            )
         except Exception as exc:
-            logging.exception(f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}"
-                              .ljust(65, '.') + '[failed]')
+            logging.exception(
+                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
+                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(
+                    65, "."
+                )
+                + "[failed]"
+            )
             raise exc
 
     def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
@@ -334,39 +354,35 @@ class GenICamPhantom(Sensor):
         width = self.cam.remote.get("Width")
         self.cam.realloc_buffers(self.number_measurements)
         self.cam.start()
-        data = np.zeros((self.number_measurements,
-                        height*4, width), dtype=np.uint32)
+        data = np.zeros((self.number_measurements, height * 4, width), dtype=np.uint32)
         if synchroniser is not None:
             synchroniser.trigger()
         for i in range(self.number_measurements):
             with Buffer(self.cam) as buffer:
-                buffer_ptr, image_size, part_num, _ = self._grab_frame_info(
-                    buffer)
-                raw_frame = self._move_frame_from_pool(
-                    buffer_ptr, image_size, part_num)
+                buffer_ptr, image_size, part_num, _ = self._grab_frame_info(buffer)
+                raw_frame = self._move_frame_from_pool(buffer_ptr, image_size, part_num)
                 data[i] += raw_frame
         self.cam.stop()
         time_2 = time()
-        logging.info(f'Data acquisition took {time_2-time_1} s'
-                     .ljust(65, '.') + '[done]')
+        logging.info(
+            f"Data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+        )
         return data
 
     def _grab_frame_info(self, buffer: Buffer):
         buffer_ptr = buffer.get_info(BUFFER_INFO_BASE, INFO_DATATYPE_PTR)
-        image_size = buffer.get_info(
-            BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
-        part_num = buffer.get_info(
-            BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
-        time_stamp = buffer.get_info(
-            BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
+        image_size = buffer.get_info(BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
+        part_num = buffer.get_info(BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
+        time_stamp = buffer.get_info(BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
 
         return buffer_ptr, image_size, part_num, time_stamp
 
     def _move_frame_from_pool(self, buffer_ptr, image_size, part_num) -> np.array:
         frame = np.empty(
-            (part_num*self.roi_shape[0], self.roi_shape[1]), dtype=self.image_dtype)
+            (part_num * self.roi_shape[0], self.roi_shape[1]), dtype=self.image_dtype
+        )
         frame_ptr = frame.ctypes.data_as(ctypes.c_void_p)
-        ctypes.memmove(frame_ptr, buffer_ptr, image_size*part_num)
+        ctypes.memmove(frame_ptr, buffer_ptr, image_size * part_num)
         return frame
 
     def open(self) -> None:
@@ -385,8 +401,7 @@ class GenICamPhantom(Sensor):
         self.cam_instance = None
         self.grabber = None
         gc.collect()
-        logging.info('Closed GenICam camera connection'.ljust(
-            65, '.') + '[done]')
+        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
 
 
 class GenICamHarvester(Sensor):
@@ -421,22 +436,23 @@ class GenICamHarvester(Sensor):
 
     def __init__(self, configuration: Dict[str, Any]) -> None:
         self.harvester = Harvester()
-        self.cti_file = configuration['GenTL_producer_cti']
+        self.cti_file = configuration["GenTL_producer_cti"]
         try:
             self.harvester.add_file(self.cti_file)
         except (FileNotFoundError, OSError) as err:
-            logging.exception("Could not find GenTL producer file (.cti)"
-                              .ljust(65, '.') + '[failed]')
+            logging.exception(
+                "Could not find GenTL producer file (.cti)".ljust(65, ".") + "[failed]"
+            )
             logging.exception(f"Tried to locate file at {self.cti_file}")
             raise err
         self.harvester.update()
         self.cam = self.harvester.create()
         super().__init__(configuration)
-        self.cam.remote_device.node_map.CxpLinkConfiguration.value = 'CXP12_X4'
-        self.cam.remote_device.node_map.PixelFormat.value = 'Mono10'
-        self.cam.remote_device.node_map.TriggerMode.value = 'On'
-        self.cam.remote_device.node_map.TriggerSource.value = 'Line0'
-        self.cam.remote_device.node_map.TriggerSelector.value = 'FrameStart'
+        self.cam.remote_device.node_map.CxpLinkConfiguration.value = "CXP12_X4"
+        self.cam.remote_device.node_map.PixelFormat.value = "Mono10"
+        self.cam.remote_device.node_map.TriggerMode.value = "On"
+        self.cam.remote_device.node_map.TriggerSource.value = "Line0"
+        self.cam.remote_device.node_map.TriggerSelector.value = "FrameStart"
         self.cam.remote_device.node_map.ExposureTime.value = 20
         self.cam.remote_device.node_map.OffsetX.value = 0
         self.cam.remote_device.node_map.OffsetY.value = 0
@@ -444,22 +460,22 @@ class GenICamHarvester(Sensor):
         self.cam.remote_device.node_map.Width.value = 1200
         self.roi_shape = [
             self.cam.remote_device.node_map.Height.value,
-            self.cam.remote_device.node_map.Width.value
+            self.cam.remote_device.node_map.Width.value,
         ]
-        self.attribute_map['exposure_time'] = self._set_exposure_time
-        self.attribute_map['image_roi'] = self._set_roi
-        self.attribute_map['gain'] = self._set_gain
+        self.attribute_map["exposure_time"] = self._set_exposure_time
+        self.attribute_map["image_roi"] = self._set_roi
+        self.attribute_map["gain"] = self._set_gain
         self.initial_configuration_dict = configuration
         # GenTL needs to be set above.
-        self.attribute_map['GenTL_producer_cti'] = self._throw_away_cti
+        self.attribute_map["GenTL_producer_cti"] = self._throw_away_cti
         if configuration is not None:
             self._update_from_configuration(configuration)
 
     def __repr__(self) -> str:
-        return f'GenICamHarvester(configuration: {self.initial_configuration_dict})'
+        return f"GenICamHarvester(configuration: {self.initial_configuration_dict})"
 
     def __str__(self) -> str:
-        return f'GenICam Harvester compliant camera instance: GenICamHarvester(configuration: {self.initial_configuration_dict})'
+        return f"GenICam Harvester compliant camera instance: GenICamHarvester(configuration: {self.initial_configuration_dict})"
 
     def _throw_away_cti(self, cti_file: str) -> None:
         """cti must be set at the start. It is therefore ignored here."""
@@ -479,21 +495,31 @@ class GenICamHarvester(Sensor):
             self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
             self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
             self.roi_shape = roi_shape_h_and_w
-            logging.info("Set Sensor roi to height: {} and width: {}\n\
-                          with offset X: {} and Y: {}"
-                         .format(roi_shape_h_and_w[0],
-                                 roi_shape_h_and_w[1],
-                                 roi_offset_x_and_y[0],
-                                 roi_offset_x_and_y[1])
-                         .ljust(65, '.') + '[done]')
+            logging.info(
+                "Set Sensor roi to height: {} and width: {}\n\
+                          with offset X: {} and Y: {}".format(
+                    roi_shape_h_and_w[0],
+                    roi_shape_h_and_w[1],
+                    roi_offset_x_and_y[0],
+                    roi_offset_x_and_y[1],
+                ).ljust(
+                    65, "."
+                )
+                + "[done]"
+            )
         except Exception as exc:
-            logging.exception("Failed to set roi of height: {} and width: {}\n\
-                               with offset X: {} and Y: {}"
-                              .format(roi_shape_h_and_w[0],
-                                      roi_shape_h_and_w[1],
-                                      roi_offset_x_and_y[0],
-                                      roi_offset_x_and_y[1])
-                              .ljust(65, '.') + '[failed]')
+            logging.exception(
+                "Failed to set roi of height: {} and width: {}\n\
+                               with offset X: {} and Y: {}".format(
+                    roi_shape_h_and_w[0],
+                    roi_shape_h_and_w[1],
+                    roi_offset_x_and_y[0],
+                    roi_offset_x_and_y[1],
+                ).ljust(
+                    65, "."
+                )
+                + "[failed]"
+            )
             raise exc
 
     def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
@@ -504,8 +530,7 @@ class GenICamHarvester(Sensor):
         height = self.cam.remote_device.node_map.Height.value
         width = self.cam.remote_device.node_map.Width.value
         self.cam.start()
-        data = np.zeros((self.number_measurements,
-                        height * width), dtype=np.uint32)
+        data = np.zeros((self.number_measurements, height * width), dtype=np.uint32)
         if synchroniser is not None:
             synchroniser.trigger()
         for _i in range(20):
@@ -517,8 +542,9 @@ class GenICamHarvester(Sensor):
                 data[i] = component.data
         self.cam.stop()
         time_2 = time()
-        logging.info(f'Data acquisition took {time_2-time_1} s'
-                     .ljust(65, '.') + '[done]')
+        logging.info(
+            f"Data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+        )
         return data.reshape((self.number_measurements, height, width))
 
     def open(self) -> None:
@@ -535,8 +561,7 @@ class GenICamHarvester(Sensor):
         """
         self.cam.destroy()
         self.harvester.reset()
-        logging.info('Closed GenICam camera connection'.ljust(
-            65, '.') + '[done]')
+        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
 
 
 class BaslerCam(Sensor):
@@ -580,21 +605,23 @@ class BaslerCam(Sensor):
         self._configure_defaults()
         self._configure_const()
         super().__init__(configuration)
-        self.attribute_map['exposure_time'] = self._set_exposure_time
-        self.attribute_map['binning_horizontal'] = self._set_binning_horizontal
-        self.attribute_map['binning_vertical'] = self._set_binning_vertical
-        self.attribute_map['binning_mode_horizontal'] = self._set_mode_binning_horizontal
-        self.attribute_map['binning_mode_vertical'] = self._set_mode_binning_vertical
-        self.attribute_map['image_roi'] = self._set_roi
+        self.attribute_map["exposure_time"] = self._set_exposure_time
+        self.attribute_map["binning_horizontal"] = self._set_binning_horizontal
+        self.attribute_map["binning_vertical"] = self._set_binning_vertical
+        self.attribute_map[
+            "binning_mode_horizontal"
+        ] = self._set_mode_binning_horizontal
+        self.attribute_map["binning_mode_vertical"] = self._set_mode_binning_vertical
+        self.attribute_map["image_roi"] = self._set_roi
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
 
     def __repr__(self) -> str:
-        return f'BaslerCam(configuration: {self.initial_configuration_dict})'
+        return f"BaslerCam(configuration: {self.initial_configuration_dict})"
 
     def __str__(self) -> str:
-        return f'Basler pylon camera instance: BaslerCam(configuration: {self.initial_configuration_dict})'
+        return f"Basler pylon camera instance: BaslerCam(configuration: {self.initial_configuration_dict})"
 
     def _configure_defaults(self) -> None:
         self.cam.BinningHorizontal.SetValue(1)
@@ -636,8 +663,9 @@ class BaslerCam(Sensor):
             arr[i] = frame
             grab_result.Release()
         time_2 = time()
-        logging.info(f'Basler data acquisition took {time_2-time_1} s'
-                     .ljust(65, '.') + '[done]')
+        logging.info(
+            f"Basler data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+        )
         return arr
 
     def _set_exposure_time(self, exposure_time: int) -> None:
@@ -662,21 +690,31 @@ class BaslerCam(Sensor):
             self._set_roi_shape(roi_shape_h_and_w)
             self._set_roi_offset_x_and_y(roi_offset_x_and_y)
             self.roi_shape = roi_shape_h_and_w
-            logging.info("Set Sensor roi to height: {} and width: {}\n\
-                          with offset X: {} and Y: {}"
-                         .format(roi_shape_h_and_w[0],
-                                 roi_shape_h_and_w[1],
-                                 roi_offset_x_and_y[0],
-                                 roi_offset_x_and_y[1])
-                         .ljust(65, '.') + '[done]')
+            logging.info(
+                "Set Sensor roi to height: {} and width: {}\n\
+                          with offset X: {} and Y: {}".format(
+                    roi_shape_h_and_w[0],
+                    roi_shape_h_and_w[1],
+                    roi_offset_x_and_y[0],
+                    roi_offset_x_and_y[1],
+                ).ljust(
+                    65, "."
+                )
+                + "[done]"
+            )
         except Exception as exc:
-            logging.exception("Failed to set roi of height: {} and width {}\n\
-                               with offset X: {} and Y: {}"
-                              .format(roi_shape_h_and_w[0],
-                                      roi_shape_h_and_w[1],
-                                      roi_offset_x_and_y[0],
-                                      roi_offset_x_and_y[1])
-                              .ljust(65, '.') + '[failed]')
+            logging.exception(
+                "Failed to set roi of height: {} and width {}\n\
+                               with offset X: {} and Y: {}".format(
+                    roi_shape_h_and_w[0],
+                    roi_shape_h_and_w[1],
+                    roi_offset_x_and_y[0],
+                    roi_offset_x_and_y[1],
+                ).ljust(
+                    65, "."
+                )
+                + "[failed]"
+            )
             raise exc
 
     def _set_roi_shape(self, roi_shape_h_and_w: List[int]) -> None:
@@ -689,15 +727,13 @@ class BaslerCam(Sensor):
 
     def open(self) -> None:
         """Opens camera."""
-        logging.info("Opening Balser"
-                     .ljust(65, '.') + '[done]')
+        logging.info("Opening Balser".ljust(65, ".") + "[done]")
 
     def close(self) -> None:
         """Closes the the camera.
         A new camera instance may now be created."""
         self.cam.Close()
-        logging.info('Closed Basler camera connection'.ljust(
-            65, '.') + '[done]')
+        logging.info("Closed Basler camera connection".ljust(65, ".") + "[done]")
 
 
 class HeliCam(Sensor):
@@ -748,9 +784,9 @@ class HeliCam(Sensor):
             "AcqStop": 0,
         }
         super().__init__(configuration)
-        self.attribute_map['SensNavM2'] = self._set_SensNavM2
-        self.attribute_map['exposure_time'] = self._set_SensTqp
-        self.attribute_map['number_measurements'] = self._set_number_measurements
+        self.attribute_map["SensNavM2"] = self._set_SensNavM2
+        self.attribute_map["exposure_time"] = self._set_SensTqp
+        self.attribute_map["number_measurements"] = self._set_number_measurements
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
@@ -758,21 +794,21 @@ class HeliCam(Sensor):
         self.roi_shape = [300, 300]
 
     def __repr__(self) -> str:
-        return f'HeliCam(configuration: {self.initial_configuration_dict})'
+        return f"HeliCam(configuration: {self.initial_configuration_dict})"
 
     def __str__(self) -> str:
-        return f'HeliCam C3 camera instance: HeliCam(configuration: {self.initial_configuration_dict})'
+        return f"HeliCam C3 camera instance: HeliCam(configuration: {self.initial_configuration_dict})"
 
     def _set_SensTqp(self, exposure_time: int) -> None:
         # Clockcyle of camera is 35 MHz -> 35 cycles per mus
         SensTqp = exposure_time * 35 - 11
-        self.settings['SensTqp'] = int(SensTqp)
+        self.settings["SensTqp"] = int(SensTqp)
 
     def _set_SensNavM2(self, SensNavM2: int) -> None:
-        self.settings['SensNavM2'] = int(SensNavM2)
+        self.settings["SensNavM2"] = int(SensNavM2)
 
     def _set_number_measurements(self, number_measurements: int) -> None:
-        self.settings['SensNFrames'] = int(number_measurements/2)
+        self.settings["SensNFrames"] = int(number_measurements / 2)
         self.number_measurements = int(number_measurements)
 
     def open(self) -> None:
@@ -786,11 +822,9 @@ class HeliCam(Sensor):
             res = self.he_sys.Acquire()
         for key, value in self.settings.items():
             setattr(self.he_sys.map, key, value)
-        self.he_sys.AllocCamData(
-            1, heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0
-        )
+        self.he_sys.AllocCamData(1, heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
         self.he_sys.SetTimeout(10000)
-        logging.info('Heli C3 opened'.ljust(65, '.') + '[done]')
+        logging.info("Heli C3 opened".ljust(65, ".") + "[done]")
 
     def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
         """
@@ -804,8 +838,8 @@ class HeliCam(Sensor):
         res = self.he_sys.Acquire()
         if res < 0:
             logging.warning(
-                'Your camera appears to have timed out'
-                .ljust(65, ',') + '[done]')
+                "Your camera appears to have timed out".ljust(65, ",") + "[done]"
+            )
         _ = self.he_sys.ProcessCamData(1, 0, 0)
         meta = self.he_sys.CamDataMeta()
         img = self.he_sys.GetCamData(1, 0, heli.ct.byref(meta))
@@ -818,15 +852,17 @@ class HeliCam(Sensor):
         return_frames[::2] = raw_frames[:, :, :, 0]
         return_frames[1::2] = raw_frames[:, :, :, 1]
         time_2 = time()
-        logging.info(f'HeliCam C3 data acquisition took {time_2-time_1} s'
-                     .ljust(65, '.') + '[done]')
+        logging.info(
+            f"HeliCam C3 data acquisition took {time_2-time_1} s".ljust(65, ".")
+            + "[done]"
+        )
         return return_frames
 
     def close(self) -> None:
         """Closes the the camera.
         A new camera instance may now be created."""
         self.he_sys.Close()
-        logging.info('HeliCam C3 closed'.ljust(65, '.') + '[done]')
+        logging.info("HeliCam C3 closed".ljust(65, ".") + "[done]")
 
 
 class DAQ(Sensor):
@@ -881,21 +917,21 @@ class DAQ(Sensor):
         self.daq_timeout: int = 3600  # / s
         super().__init__(configuration)
         self.roi_shape = [1]
-        self.attribute_map['min_voltage'] = self._set_min_voltage
-        self.attribute_map['max_voltage'] = self._set_max_voltage
-        self.attribute_map['apd_input'] = self._set_apd_input
-        self.attribute_map['sample_clk'] = self._set_sample_clk
-        self.attribute_map['start_trig'] = self._set_start_trig
-        self.attribute_map['max_samp_rate'] = self._set_max_sampling_rate
+        self.attribute_map["min_voltage"] = self._set_min_voltage
+        self.attribute_map["max_voltage"] = self._set_max_voltage
+        self.attribute_map["apd_input"] = self._set_apd_input
+        self.attribute_map["sample_clk"] = self._set_sample_clk
+        self.attribute_map["start_trig"] = self._set_start_trig
+        self.attribute_map["max_samp_rate"] = self._set_max_sampling_rate
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
 
     def __repr__(self) -> str:
-        return f'DAQ(configuration: {self.initial_configuration_dict})'
+        return f"DAQ(configuration: {self.initial_configuration_dict})"
 
     def __str__(self) -> str:
-        return f'NI-DAQ sensor instance (nidaqmx): DAQ(configuration: {self.initial_configuration_dict})'
+        return f"NI-DAQ sensor instance (nidaqmx): DAQ(configuration: {self.initial_configuration_dict})"
 
     def open(self) -> None:
         """
@@ -908,14 +944,15 @@ class DAQ(Sensor):
             self._create_analog_input_channel()
             self._configure_sample_clock()
             self._configure_analog_input_trigger()
-            logging.info('DAQ opened and created read task'.ljust(65, '.'))
+            logging.info("DAQ opened and created read task".ljust(65, "."))
         except Exception:
             self.close()
-            logging.exception('An error occured while trying opening the DAQ')
+            logging.exception("An error occured while trying opening the DAQ")
             traceback.print_exc()
             raise Exception(
-                'An error Occured while opening and configureing the DAQ.\
-                        Please make sure the DAQ is connected and powered on')
+                "An error Occured while opening and configureing the DAQ.\
+                        Please make sure the DAQ is connected and powered on"
+            )
 
     def _create_analog_input_channel(self) -> None:
         # create analog channel to measure voltage
@@ -937,8 +974,7 @@ class DAQ(Sensor):
         read_start_trig = self.daq_task.triggers.start_trigger
         # Configures the task to start acquiring samples
         # on the active edge of a digital signal.
-        read_start_trig.cfg_dig_edge_start_trig(
-            self.daq_start_trig, Edge.RISING)
+        read_start_trig.cfg_dig_edge_start_trig(self.daq_start_trig, Edge.RISING)
 
     def _configure_sample_clock(self) -> None:
         # Configure sample clock : Sets the clock source, the clock rate,
@@ -959,9 +995,7 @@ class DAQ(Sensor):
         if synchroniser is not None:
             synchroniser.trigger()
         try:
-            samples = self.daq_task.read(
-                self.NsampsPerDAQread, self.daq_timeout
-            )
+            samples = self.daq_task.read(self.NsampsPerDAQread, self.daq_timeout)
         except Exception as excpt:
             print(
                 """Error: could not read DAQ.
@@ -997,7 +1031,7 @@ class DAQ(Sensor):
         See :meth:`Sensor.close`
         """
         self.daq_task.close()
-        logging.info('DAQ closed'.ljust(65, '.'))
+        logging.info("DAQ closed".ljust(65, "."))
 
 
 class MockCam(Sensor):
@@ -1029,16 +1063,16 @@ class MockCam(Sensor):
     def __init__(self, configuration: Dict[str, Any]) -> None:
         super().__init__(configuration)
         self.roi_shape = [200, 200]
-        self.attribute_map['image_roi'] = self._set_roi
+        self.attribute_map["image_roi"] = self._set_roi
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
 
     def __repr__(self) -> str:
-        return f'MockCam(configuration: {self.initial_configuration_dict})'
+        return f"MockCam(configuration: {self.initial_configuration_dict})"
 
     def __str__(self) -> str:
-        return f'MockCam sensor instance: DAQ(configuration: {self.initial_configuration_dict})'
+        return f"MockCam sensor instance: DAQ(configuration: {self.initial_configuration_dict})"
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
         self.roi_shape = roi_shape_and_offset[:2]
@@ -1058,8 +1092,10 @@ class MockCam(Sensor):
         """
         if synchroniser is not None:
             synchroniser.trigger()
-        noise = np.random.poisson(15_000, size=(
-            self.number_measurements, self.roi_shape[0], self.roi_shape[1]))
+        noise = np.random.poisson(
+            15_000,
+            size=(self.number_measurements, self.roi_shape[0], self.roi_shape[1]),
+        )
         return noise
 
     def close(self) -> None:

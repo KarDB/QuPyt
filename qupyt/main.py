@@ -17,17 +17,24 @@ from pathlib import Path
 
 import yaml
 from watchdog.observers import Observer
-from watchdog.events import PatternMatchingEventHandler, FileModifiedEvent, FileClosedEvent
+from watchdog.events import (
+    PatternMatchingEventHandler,
+    FileModifiedEvent,
+    FileClosedEvent,
+)
 
 from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
-from qupyt.pulse_sequences.pulse_sequence_handler import write_user_ps, update_params_dict
+from qupyt.pulse_sequences.pulse_sequence_handler import (
+    write_user_ps,
+    update_params_dict,
+)
 from qupyt.hardware.synchronisers import SynchroniserFactory
 from qupyt.hardware.sensors import SensorFactory
 from qupyt.measurement_logic.run_measurement import run_measurement
 from qupyt.hardware.signal_sources import SignalSource
 from qupyt.set_up import get_waiting_room, make_userdirs, get_log_dir, get_home_dir
 
-qupyt_logo_text = '''                                                                                                        
+qupyt_logo_text = """                                                                                                        
                                                                                                          
      QQQQQQQQQ                       PPPPPPPPPPPPPPPPP                                     tttt          
    QQ:::::::::QQ                     P::::::::::::::::P                                 ttt:::t          
@@ -51,28 +58,31 @@ Q:::::::QQ::::::::Qu:::::::::::::::uuPP::::::PP                  y:::::::y      
                                                             y:::::y                                      
                                                            yyyyyyy                                       
                                                                                                          
-'''
+"""
 
-print('\nWelcome to')
+print("\nWelcome to")
 print(qupyt_logo_text)
 
 make_userdirs()
-parser = argparse.ArgumentParser(description='Start QuPyt measurement')
-parser.add_argument('--verbose', action="store_true",
-                    help='deactivate logging output to screen')
+parser = argparse.ArgumentParser(description="Start QuPyt measurement")
+parser.add_argument(
+    "--verbose", action="store_true", help="deactivate logging output to screen"
+)
 args = parser.parse_args()
 
 logfile = get_log_dir() / f"log_{date.today()}.log"
 handlers: list[logging.Handler] = [logging.FileHandler(logfile)]
 if args.verbose:
     handlers.append(logging.StreamHandler())
-logging.basicConfig(handlers=handlers,
-                    # filename='logfile.log',
-                    format="%(levelname)s\t%(asctime)s %(message)s",
-                    datefmt='%Y/%m/%d %I:%M:%S %p',
-                    encoding='utf-8',
-                    level=logging.INFO,
-                    force=True)
+logging.basicConfig(
+    handlers=handlers,
+    # filename='logfile.log',
+    format="%(levelname)s\t%(asctime)s %(message)s",
+    datefmt="%Y/%m/%d %I:%M:%S %p",
+    encoding="utf-8",
+    level=logging.INFO,
+    force=True,
+)
 
 queue: Queue[str]
 event_thread: threading.Event
@@ -92,13 +102,13 @@ def _on_modified(event: FileModifiedEvent) -> None:
 
 
 def _set_busy() -> None:
-    with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
-        file.write('busy')
+    with open(get_home_dir() / "status.txt", "w", encoding="utf-8") as file:
+        file.write("busy")
 
 
 def _set_ready() -> None:
-    with open(get_home_dir() / 'status.txt', 'w', encoding='utf-8') as file:
-        file.write('ready')
+    with open(get_home_dir() / "status.txt", "w", encoding="utf-8") as file:
+        file.write("ready")
 
 
 def parse_input() -> None:
@@ -112,35 +122,33 @@ def parse_input() -> None:
             event_thread.wait()
         try:
             _set_busy()
-            logging.info('STARTED NEW MEASUREMENT'.ljust(65, '=') + '[START]')
+            logging.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
             instruction_file = queue.get()
-            with open(instruction_file, "r", encoding='utf-8') as file:
+            with open(instruction_file, "r", encoding="utf-8") as file:
                 params = yaml.safe_load(file)
             os.rename(instruction_file, instruction_file + "_running")
-            parameter_update = write_user_ps(Path(params['ps_path']),
-                                             params['pulse_sequence'])
+            parameter_update = write_user_ps(
+                Path(params["ps_path"]), params["pulse_sequence"]
+            )
             update_params_dict(params, parameter_update)
             synchroniser = SynchroniserFactory.create_synchroniser(
-                params['synchroniser']['type'],
-                params['synchroniser']['config'],
-                params['synchroniser']['channel_mapping']
+                params["synchroniser"]["type"],
+                params["synchroniser"]["config"],
+                params["synchroniser"]["channel_mapping"],
             )
             sensor = SensorFactory.create_sensor(
-                params['sensor']['type'],
-                params['sensor']['config']
+                params["sensor"]["type"], params["sensor"]["config"]
             )
-            static_devices.update_devices(params.get('static_devices', {}))
-            dynamic_devices.number_dynamic_steps = int(
-                params['number_dynamic_steps'])
-            dynamic_devices.update_devices(params.get('dynamic_devices', {}))
+            static_devices.update_devices(params.get("static_devices", {}))
+            dynamic_devices.number_dynamic_steps = int(params["number_dynamic_steps"])
+            dynamic_devices.update_devices(params.get("dynamic_devices", {}))
             success_status = run_measurement(
                 static_devices, dynamic_devices, sensor, synchroniser, params
             )
             if success_status == "success":
                 os.remove(instruction_file + "_running")
             elif success_status == "failed":
-                os.rename(instruction_file + "_running",
-                          instruction_file + "_failed")
+                os.rename(instruction_file + "_running", instruction_file + "_failed")
         except Exception:
             logging.exception("Excpetion in main measurement loop")
             traceback.print_exc()
@@ -154,7 +162,7 @@ def _get_observer_event_hanlder() -> PatternMatchingEventHandler:
     event_handler = PatternMatchingEventHandler(
         patterns, ignore_patterns, ignore_directories, case_sensitive
     )
-    if platform.system() == 'Windows':
+    if platform.system() == "Windows":
         event_handler.on_modified = _on_modified
     else:
         event_handler.on_closed = _on_closed
@@ -173,7 +181,7 @@ def main() -> None:
     """
     Start the main measurement loop.
     """
-    logging.info('Started Program')
+    logging.info("Started Program")
     global event_thread
     event_thread = threading.Event()
     global queue

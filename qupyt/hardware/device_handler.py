@@ -48,8 +48,7 @@ class DeviceHandler:
                 self.devices[key]["device"].close()
                 rem = self.devices.pop(key)
                 logging.info(
-                    f"Removed {rem} from active devices dict".ljust(
-                        65, ".") + "[done]"
+                    f"Removed {rem} from active devices dict".ljust(65, ".") + "[done]"
                 )
 
     def open_new_requested_devices(self) -> None:
@@ -133,8 +132,7 @@ class DynamicDeviceHandler(DeviceHandler):
                     + "[done]"
                 )
             else:
-                self.devices[key]["sweep_config"] = copy.deepcopy(
-                    value["config"])
+                self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
                 logging.info(
                     f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
                         65, "."
@@ -153,16 +151,18 @@ class DynamicDeviceHandler(DeviceHandler):
             current_config = {}
             for parameter, sweep_values in device["sweep_lists"]:
                 current_config[parameter] = (
-                    sweep_values['channel'],
-                    sweep_values['sweep_values'][self.current_dynamic_step]
+                    sweep_values["channel"],
+                    sweep_values["sweep_values"][self.current_dynamic_step],
                 )
-            device['config'] = current_config
+            device["config"] = current_config
             device.set_values()
         self.current_dynamic_step += 1
 
-    def _get_channel_and_sweeplist(self, value_list: Union[List[float], Tuple[str, List[float]]]) -> Tuple[str, List[float]]:
+    def _get_channel_and_sweeplist(
+        self, value_list: Union[List[float], Tuple[str, List[float]]]
+    ) -> Tuple[str, List[float]]:
         if not isinstance(value_list[1], list):
-            return 'channel_1', value_list
+            return "channel_1", value_list
         return value_list[0], value_list[1]
 
     def _reset_step_counter(self) -> None:
@@ -172,21 +172,20 @@ class DynamicDeviceHandler(DeviceHandler):
         """Contruct array / listof values to be sweeped"""
         for device in self.devices.values():
             for parameter, value_list in device["sweep_config"].values():
-                channel, value_list = self._get_channel_and_sweeplist(
-                    value_list)
+                channel, value_list = self._get_channel_and_sweeplist(value_list)
                 if all(isinstance(x, (int, float)) for x in value_list):
                     if len(value_list) == 2:
-                        device["sweep_lists"][parameter]['sweep_values'] = np.linspace(
+                        device["sweep_lists"][parameter]["sweep_values"] = np.linspace(
                             value_list[0], value_list[1], self.number_dynamic_steps
                         )
-                        device["sweep_lists"][parameter]['channel'] = channel
+                        device["sweep_lists"][parameter]["channel"] = channel
                     else:
                         if len(value_list) != self.number_dynamic_steps:
                             raise ValueError(
                                 "Trying to set manual sweep value list. Please make sure the number of dynamic_steps matches the length of the provided list"
                             )
-                        device["sweep_lists"][parameter]['sweep_values'] = value_list
-                        device["sweep_lists"][parameter]['channel'] = channel
+                        device["sweep_lists"][parameter]["sweep_values"] = value_list
+                        device["sweep_lists"][parameter]["channel"] = channel
                 else:
                     raise ValueError(
                         "Currently only numeric values are allowed for dynamic devices"

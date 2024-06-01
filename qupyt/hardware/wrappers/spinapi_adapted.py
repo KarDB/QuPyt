@@ -36,12 +36,11 @@ except:
     try:
         spinapi = ctypes.CDLL("spinapi")
     except Exception:
-        logging.warning(
-        "Falied to load spinapi DLL".ljust(65, '.')+'[failed]')
+        logging.warning("Falied to load spinapi DLL".ljust(65, ".") + "[failed]")
 
 
 def enum(**enums: Any) -> type:
-    return type('Enum', (), enums)
+    return type("Enum", (), enums)
 
 
 ns = 1.0
@@ -69,7 +68,7 @@ Inst = enum(
     BRANCH=6,
     LONG_DELAY=7,
     WAIT=8,
-    RTI=9
+    RTI=9,
 )
 
 CONTINUE = 0
@@ -214,8 +213,7 @@ spinapi.pb_get_data.argtype = (
 )
 spinapi.pb_get_data.restype = ctypes.c_int
 
-spinapi.pb_get_data_direct.argtype = (
-    ctypes.c_int, ctypes.POINTER(ctypes.c_short))
+spinapi.pb_get_data_direct.argtype = (ctypes.c_int, ctypes.POINTER(ctypes.c_short))
 spinapi.pb_get_data_direct.restype = ctypes.c_int
 
 spinapi.pb_unset_radio_control.argtype = ctypes.c_int
@@ -321,7 +319,7 @@ spinapi.pb_inst_radio_shape_cyclops.argtype = (
 spinapi.pb_inst_radio_shape_cyclops.restype = ctypes.c_int
 
 spinapi.pb_fft_find_resonance.argtypes = (
-    ctypes.c_int,                    # num_points: Number of complex data points
+    ctypes.c_int,  # num_points: Number of complex data points
     # SF: Spectrometer Frequency used for the experiment (in Hz)
     ctypes.c_double,
     # SW: Spectral Width used for data acquisition (in Hz)
@@ -329,36 +327,36 @@ spinapi.pb_fft_find_resonance.argtypes = (
     # real: Array of the real part of the complex data points
     ctypes.POINTER(ctypes.c_int),
     # imag: Array of the imaginary part of the complex data points
-    ctypes.POINTER(ctypes.c_int)
+    ctypes.POINTER(ctypes.c_int),
 )
 spinapi.pb_fft_find_resonance.restype = ctypes.c_double
 
 spinapi.pb_write_ascii.argtype = (
     ctypes.c_char_p,  # fname
-    ctypes.c_int,     # num_points
-    ctypes.c_float,   # SW
+    ctypes.c_int,  # num_points
+    ctypes.c_float,  # SW
     ctypes.POINTER(ctypes.c_int),  # real_data
-    ctypes.POINTER(ctypes.c_int)   # imag_data
+    ctypes.POINTER(ctypes.c_int),  # imag_data
 )
 spinapi.pb_write_ascii.restype = ctypes.c_int
 
 spinapi.pb_write_ascii_verbose.argtype = (
     ctypes.c_char_p,  # fname
-    ctypes.c_int,     # num_points
-    ctypes.c_float,   # SW
-    ctypes.c_float,    # SF
+    ctypes.c_int,  # num_points
+    ctypes.c_float,  # SW
+    ctypes.c_float,  # SF
     ctypes.POINTER(ctypes.c_int),  # real_data
-    ctypes.POINTER(ctypes.c_int)   # imag_data
+    ctypes.POINTER(ctypes.c_int),  # imag_data
 )
 spinapi.pb_write_ascii_verbose.restype = ctypes.c_int
 
 spinapi.pb_write_jcamp.argtypes = (
     ctypes.c_char_p,  # fname
-    ctypes.c_int,     # num_points
-    ctypes.c_float,   # SW
-    ctypes.c_float,   # SF
+    ctypes.c_int,  # num_points
+    ctypes.c_float,  # SW
+    ctypes.c_float,  # SF
     ctypes.POINTER(ctypes.c_int),  # real_data
-    ctypes.POINTER(ctypes.c_int)   # imag_data
+    ctypes.POINTER(ctypes.c_int),  # imag_data
 )
 spinapi.pb_write_jcamp.restype = ctypes.c_int
 
@@ -483,7 +481,9 @@ def pb_inst_radio(*args):
 
 
 def pb_inst_dds(FREQ, TX_PHASE, TX_ENABLE, PHASE_RESET, FLAGS, INST, INST_DATA, LENGTH):
-    return pb_inst_radio(FREQ, 0, 0, TX_PHASE, TX_ENABLE, PHASE_RESET, 0, FLAGS, INST, INST_DATA, LENGTH)
+    return pb_inst_radio(
+        FREQ, 0, 0, TX_PHASE, TX_ENABLE, PHASE_RESET, 0, FLAGS, INST, INST_DATA, LENGTH
+    )
 
 
 def pb_inst_radio_shape(*args):
@@ -494,8 +494,33 @@ def pb_inst_radio_shape(*args):
     return spinapi.pb_inst_radio_shape(*args)
 
 
-def pb_inst_dds_shape(FREQ, TX_PHASE, TX_ENABLE, PHASE_RESET, USESHAPE, AMP, FLAGS, INST, INST_DATA, LENGTH):
-    return pb_inst_radio_shape(FREQ, 0, 0, TX_PHASE, TX_ENABLE, PHASE_RESET, 0, USESHAPE, AMP, FLAGS, INST, INST_DATA, LENGTH)
+def pb_inst_dds_shape(
+    FREQ,
+    TX_PHASE,
+    TX_ENABLE,
+    PHASE_RESET,
+    USESHAPE,
+    AMP,
+    FLAGS,
+    INST,
+    INST_DATA,
+    LENGTH,
+):
+    return pb_inst_radio_shape(
+        FREQ,
+        0,
+        0,
+        TX_PHASE,
+        TX_ENABLE,
+        PHASE_RESET,
+        0,
+        USESHAPE,
+        AMP,
+        FLAGS,
+        INST,
+        INST_DATA,
+        LENGTH,
+    )
 
 
 def pb_inst_dds2(*args):
@@ -619,7 +644,8 @@ def pb_fft_find_resonance(num_points, SF, SW, real_data, imag_data):
 
     # Call the C function with the updated data pointers
     result = spinapi.pb_fft_find_resonance(
-        num_points, SF, SW, real_data_pointer, imag_data_pointer)
+        num_points, SF, SW, real_data_pointer, imag_data_pointer
+    )
 
     return result
 
@@ -633,8 +659,7 @@ def pb_write_ascii(fname, num_points, SW, real_data, imag_data):
     c_imag_data = (ctypes.c_int * num_points)(*imag_data)
 
     # Call the C function
-    result = spinapi.pb_write_ascii(
-        c_fname, num_points, SW, c_real_data, c_imag_data)
+    result = spinapi.pb_write_ascii(c_fname, num_points, SW, c_real_data, c_imag_data)
 
     return result
 
@@ -651,7 +676,8 @@ def pb_write_ascii_verbose(fname, num_points, SW, SF, real_data, imag_data):
     SW = ctypes.c_float(SW)
     SF = ctypes.c_float(SF)
     result = spinapi.pb_write_ascii_verbose(
-        c_fname, num_points, SW, SF, c_real_data, c_imag_data)
+        c_fname, num_points, SW, SF, c_real_data, c_imag_data
+    )
 
     return result
 
@@ -669,7 +695,8 @@ def pb_write_jcamp(fname, num_points, SW, SF, real_data, imag_data):
 
     # Call the C function
     result = spinapi.pb_write_jcamp(
-        c_fname, num_points, SW, SF, c_real_data, c_imag_data)
+        c_fname, num_points, SW, SF, c_real_data, c_imag_data
+    )
 
     return result
 

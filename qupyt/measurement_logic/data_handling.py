@@ -19,13 +19,13 @@ class Data(ConfigurationMixin):
         self.save_in_chunks: int = 0
         self.data: np.ndarray
         self.attribute_map = {
-            'dynamic_steps': self._set_number_dynamic_steps,
-            'averaging_mode': self._set_averaging_mode,
-            'number_measurements': self._set_number_measurements,
-            'roi_shape': self._set_roi_shape,
-            'compress': self._set_compress_mode,
-            'live_compression': self._set_live_compression,
-            'save_in_chunks': self._set_save_chunk_size
+            "dynamic_steps": self._set_number_dynamic_steps,
+            "averaging_mode": self._set_averaging_mode,
+            "number_measurements": self._set_number_measurements,
+            "roi_shape": self._set_roi_shape,
+            "compress": self._set_compress_mode,
+            "live_compression": self._set_live_compression,
+            "save_in_chunks": self._set_save_chunk_size,
         }
         self._update_from_configuration(configuration)
 
@@ -56,7 +56,7 @@ class Data(ConfigurationMixin):
     def set_dims_from_sensor(self, sensor: Sensor) -> None:
         self._set_ROI_from_sensor(sensor)
         self._set_number_measurements_from_sensor(sensor)
-        if hasattr(sensor, 'target_data_type'):
+        if hasattr(sensor, "target_data_type"):
             self._set_dtype_from_sensor(sensor)
 
     def _set_ROI_from_sensor(self, sensor: Sensor) -> None:
@@ -72,28 +72,30 @@ class Data(ConfigurationMixin):
         if self.live_compression:
             self.roi_shape = [1]
         if self.averaging_mode == "sum":
-            data_array_dim = [2, self.number_dynamic_steps,
-                              1, *self.roi_shape]
+            data_array_dim = [2, self.number_dynamic_steps, 1, *self.roi_shape]
         elif self.averaging_mode == "spread":
-            data_array_dim = [2, self.number_dynamic_steps,
-                              int(self.number_measurements / 2),
-                              *self.roi_shape]
+            data_array_dim = [
+                2,
+                self.number_dynamic_steps,
+                int(self.number_measurements / 2),
+                *self.roi_shape,
+            ]
         else:
-            logging.info(f'Failed to crearte dara array for mode {self.averaging_mode}'
-                         .ljust(65, '.') + '[failed]')
-            raise ValueError(
-                f'averaging_mode {self.averaging_mode} not available')
-        logging.info(f'Created data array of shape {data_array_dim}'
-                     .ljust(65, '.') + '[done]')
-        self.data = np.zeros(
-            data_array_dim, dtype=getattr(self, 'data_type', float))
+            logging.info(
+                f"Failed to crearte dara array for mode {self.averaging_mode}".ljust(
+                    65, "."
+                )
+                + "[failed]"
+            )
+            raise ValueError(f"averaging_mode {self.averaging_mode} not available")
+        logging.info(
+            f"Created data array of shape {data_array_dim}".ljust(65, ".") + "[done]"
+        )
+        self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
 
-    def update_data(self,
-                    data: np.ndarray,
-                    dynamic_step: int,
-                    avg_step: int) -> None:
+    def update_data(self, data: np.ndarray, dynamic_step: int, avg_step: int) -> None:
         if self.save_in_chunks != 0 and avg_step % self.save_in_chunks == 0:
-            self.save(f'save_chunk_{avg_step}.npy')
+            self.save(f"save_chunk_{avg_step}.npy")
             self.create_array()
         if self.live_compression:
             self._update_data_compressed(data, dynamic_step)
@@ -110,15 +112,11 @@ class Data(ConfigurationMixin):
 
     def _update_data_compressed(self, data: np.ndarray, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
-            self.data[0,
-                      dynamic_step] += data[::2].mean(axis=(1, 2)).sum(axis=0)
-            self.data[1,
-                      dynamic_step] += data[1::2].mean(axis=(1, 2)).sum(axis=0)
+            self.data[0, dynamic_step] += data[::2].mean(axis=(1, 2)).sum(axis=0)
+            self.data[1, dynamic_step] += data[1::2].mean(axis=(1, 2)).sum(axis=0)
         elif self.averaging_mode == "spread":
-            self.data[0,
-                      dynamic_step] += data[::2].mean(axis=(1, 2)).reshape(-1, 1)
-            self.data[1,
-                      dynamic_step] += data[1::2].mean(axis=(1, 2)).reshape(-1, 1)
+            self.data[0, dynamic_step] += data[::2].mean(axis=(1, 2)).reshape(-1, 1)
+            self.data[1, dynamic_step] += data[1::2].mean(axis=(1, 2)).reshape(-1, 1)
 
     def save(self, filename: str) -> None:
         """

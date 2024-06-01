@@ -27,7 +27,8 @@ class VisaObject:
         self.s_type = s_type
         if self.s_type not in self.known_s_types:
             raise ConfigurationError(
-                'the VISA device type', self.s_type, self.known_s_types)
+                "the VISA device type", self.s_type, self.known_s_types
+            )
         self.command: Dict[str, str]
         self._get_instructions()
         try:
@@ -35,23 +36,21 @@ class VisaObject:
             self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
             logging.info(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".")
-                + "[done]"
+                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[done]"
             )
         except Exception as exc:
             logging.exception(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".")
-                + "[failed]"
+                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[failed]"
             )
             resource_manager.close()
             resource_manager.visalib._registry.clear()
             raise exc
 
     def __repr__(self) -> str:
-        return f'VisaObject(handle: {self.handle}, s_type: {self.s_type})'
+        return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
 
     def __str__(self) -> str:
-        return f'VisaObject(handle: {self.handle}, s_type: {self.s_type})'
+        return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
 
     def _get_instructions(self) -> None:
         """
@@ -140,10 +139,11 @@ class VisaObject:
             self.instance.close()
             self.instance.visalib._registry.clear()
             logging.info(
-                f"Closing {self.s_type} at adress {self.handle}"
-                .ljust(65, ".")
+                f"Closing {self.s_type} at adress {self.handle}".ljust(65, ".")
                 + "[done]"
             )
         except Exception:
-            logging.exception('Closing {self.s_type} at adress {self.handle} failed'
-                              .ljust(65, '.') + '[failed]')
+            logging.exception(
+                "Closing {self.s_type} at adress {self.handle} failed".ljust(65, ".")
+                + "[failed]"
+            )

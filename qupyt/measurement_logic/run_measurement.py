@@ -16,18 +16,19 @@ from qupyt.hardware.synchronisers import Synchroniser
 from qupyt.hardware.sensors import Sensor
 
 
-def run_measurement(static_devices: DeviceHandler,
-                    dynamic_devices: DynamicDeviceHandler,
-                    sensor: Sensor,
-                    synchroniser: Synchroniser,
-                    params: Dict[str, Any]) -> str:
-
+def run_measurement(
+    static_devices: DeviceHandler,
+    dynamic_devices: DynamicDeviceHandler,
+    sensor: Sensor,
+    synchroniser: Synchroniser,
+    params: Dict[str, Any],
+) -> str:
     static_devices.set_all_params()
-    iterator_size = int(params.get('dynamic_steps', 1))
+    iterator_size = int(params.get("dynamic_steps", 1))
     mid = datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
-    return_status = 'all_fail'
+    return_status = "all_fail"
     try:
-        data_container = Data(params['data'])
+        data_container = Data(params["data"])
         data_container.set_dims_from_sensor(sensor)
         data_container.create_array()
 
@@ -41,25 +42,26 @@ def run_measurement(static_devices: DeviceHandler,
         for itervalue in tqdm(range(iterator_size)):
             dynamic_devices.next_dynamic_step()
             sleep(0.1)
-            for avg in tqdm(range(int(params["averages"])),
-                            leave=itervalue == (iterator_size - 1)):
-                sleep(float(params.get('sleep', 0)))
+            for avg in tqdm(
+                range(int(params["averages"])), leave=itervalue == (iterator_size - 1)
+            ):
+                sleep(float(params.get("sleep", 0)))
                 data = sensor.acquire_data(synchroniser)
                 data_container.update_data(data, itervalue, avg)
-        return_status = 'success'
+        return_status = "success"
     except Exception as e:
         print(f"exc {e}")
-        logging.exception('An error occured during the measurement!')
-        return_status = 'failed'
+        logging.exception("An error occured during the measurement!")
+        return_status = "failed"
     finally:
         sensor.close()
         synchroniser.close()
-        print('sensor closed')
-        params['filename'] = params['experiment_type'] + "_" + mid
-        params['measurement_status'] = return_status
+        print("sensor closed")
+        params["filename"] = params["experiment_type"] + "_" + mid
+        params["measurement_status"] = return_status
 
-        data_container.save(params['filename'])
-        with open(params['filename'] + '.yaml', 'w', encoding='utf-8') as file:
+        data_container.save(params["filename"])
+        with open(params["filename"] + ".yaml", "w", encoding="utf-8") as file:
             yaml.dump(params, file)
         del data_container
         gc.collect()

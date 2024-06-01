@@ -28,17 +28,15 @@ class UserPulseSeqProtocol(Protocol):
 
 
 def _load_module_from_path(path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location('user_pulse_seq', path)
+    spec = importlib.util.spec_from_file_location("user_pulse_seq", path)
     if spec is None or spec.loader is None:
-        raise ImportError(
-            f"Module user_pulse_seq cannot be loaded from path {path}")
+        raise ImportError(f"Module user_pulse_seq cannot be loaded from path {path}")
     module = importlib.util.module_from_spec(spec)
     # Ensure the loader can execute the module
-    if hasattr(spec.loader, 'exec_module'):
+    if hasattr(spec.loader, "exec_module"):
         spec.loader.exec_module(module)
     else:
-        raise ImportError(
-            "The loader for user_pulse_seq doesn't support execution")
+        raise ImportError("The loader for user_pulse_seq doesn't support execution")
     return module
 
 
@@ -52,7 +50,9 @@ def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]
     return dependent_parameters
 
 
-def update_params_dict(params: Dict[str, Any], update_params: Dict[str, Any]) -> Dict[str, Any]:
+def update_params_dict(
+    params: Dict[str, Any], update_params: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     Update the parameters dictonary. This is done via recursion to reach
     nested parameter dicts without overwriting the full config.

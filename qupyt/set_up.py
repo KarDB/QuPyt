@@ -14,7 +14,7 @@ def get_log_dir() -> Path:
     :return: Directory for logging output.
     :rtype: Path
     """
-    return _make_user_dir_list()['homepath_log']
+    return _make_user_dir_list()["homepath_log"]
 
 
 def get_seq_dir() -> Path:
@@ -23,7 +23,7 @@ def get_seq_dir() -> Path:
      will be written and read.
     :rtype: Path
     """
-    return _make_user_dir_list()['homepath_sequences']
+    return _make_user_dir_list()["homepath_sequences"]
 
 
 def get_waiting_room() -> Path:
@@ -32,7 +32,7 @@ def get_waiting_room() -> Path:
      files will be written and read.
     :rtype: Path
     """
-    return _make_user_dir_list()['homepath_waitingroom']
+    return _make_user_dir_list()["homepath_waitingroom"]
 
 
 def get_home_dir() -> Path:
@@ -41,18 +41,20 @@ def get_home_dir() -> Path:
      files will be written and read.
     :rtype: Path
     """
-    return _make_user_dir_list()['homepath']
+    return _make_user_dir_list()["homepath"]
 
 
 def _make_user_dir_list() -> Dict[str, Path]:
-    homepath = pathlib.Path.home() / '.qupyt'
-    homepath_log = pathlib.Path.home() / '.qupyt/log'
-    homepath_sequences = pathlib.Path.home() / '.qupyt/sequences'
-    homepath_waitingroom = pathlib.Path.home() / '.qupyt/waiting_room'
-    pathdict = {'homepath': homepath,
-                'homepath_log': homepath_log,
-                'homepath_sequences': homepath_sequences,
-                'homepath_waitingroom': homepath_waitingroom}
+    homepath = pathlib.Path.home() / ".qupyt"
+    homepath_log = pathlib.Path.home() / ".qupyt/log"
+    homepath_sequences = pathlib.Path.home() / ".qupyt/sequences"
+    homepath_waitingroom = pathlib.Path.home() / ".qupyt/waiting_room"
+    pathdict = {
+        "homepath": homepath,
+        "homepath_log": homepath_log,
+        "homepath_sequences": homepath_sequences,
+        "homepath_waitingroom": homepath_waitingroom,
+    }
     return pathdict
 
 

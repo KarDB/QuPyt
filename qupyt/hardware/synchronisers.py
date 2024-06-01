@@ -21,7 +21,10 @@ from tqdm import tqdm
 from termcolor import colored
 
 from qupyt.set_up import get_seq_dir
-from qupyt.pulse_sequences.SequenceDesigner import PulseSequenceYaml, PulseBlasterSequence
+from qupyt.pulse_sequences.SequenceDesigner import (
+    PulseSequenceYaml,
+    PulseBlasterSequence,
+)
 from pulsestreamer import PulseStreamer
 from pulsestreamer import findPulseStreamers
 from pulsestreamer import TriggerStart, TriggerRearm
@@ -29,12 +32,15 @@ from pulsestreamer import Sequence, OutputState
 from qupyt.hardware.visa_handler import VisaObject
 from qupyt import set_up
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType, PulseSequenceError
+
 try:
     import qupyt.hardware.wrappers.spinapi_adapted as spapi
 except (ImportError, NameError):
     spapi = None
     logging.warning(
-        "Could not load spinapi library".ljust(65, '.')+'[failed]\nIf you are not using a Pulse Streamer you do not need this!')
+        "Could not load spinapi library".ljust(65, ".")
+        + "[failed]\nIf you are not using a Pulse Streamer you do not need this!"
+    )
 
 
 class SynchroniserFactory:
@@ -58,10 +64,11 @@ class SynchroniserFactory:
                                                           {"LASER": 1,
                                                            "READ": 2})
     """
+
     @staticmethod
-    def create_synchroniser(sync_type: str,
-                            configuration: Dict[str, Any],
-                            channel_mapping: Dict[str, Any]) -> Synchroniser:
+    def create_synchroniser(
+        sync_type: str, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+    ) -> Synchroniser:
         """
         :param sync_type: Synchroniser model identifier e.g. 'TekAWG'.
          Current models include: SwabInstPS, TekAWG, MockSynchroniser, PulseBlaster.
@@ -76,22 +83,14 @@ class SynchroniserFactory:
         :rtype: Synchroniser
         :raises ValueError:
         """
-        if sync_type == 'SwabInstPS':
-            return PStreamer(
-                configuration, channel_mapping
-            )
-        if sync_type == 'TekAWG':
-            return AWGenerator(
-                configuration, channel_mapping
-            )
-        if sync_type == 'MockSynchroniser':
-            return MockGenerator(
-                configuration, channel_mapping
-            )
-        if sync_type == 'PulseBlaster':
-            return PulseBlaster(
-                configuration, channel_mapping
-            )
+        if sync_type == "SwabInstPS":
+            return PStreamer(configuration, channel_mapping)
+        if sync_type == "TekAWG":
+            return AWGenerator(configuration, channel_mapping)
+        if sync_type == "MockSynchroniser":
+            return MockGenerator(configuration, channel_mapping)
+        if sync_type == "PulseBlaster":
+            return PulseBlaster(configuration, channel_mapping)
         raise ValueError(f"Unknown synchroniser type {sync_type}")
 
 
@@ -124,12 +123,13 @@ class Synchroniser(ABC, ConfigurationMixin):
 
           Concrete sensor classes may have additional configuration values.
     """
+
     attribute_map: UpdateConfigurationType
 
     def __init__(self) -> None:
         self.address: str
         self.attribute_map = {
-            'address': self._set_address,
+            "address": self._set_address,
         }
 
     def _set_address(self, address: str) -> None:
@@ -188,9 +188,9 @@ class AWGenerator(VisaObject, Synchroniser):
     Synchroniser implementation for the Tektronix AWG 5000 series.
     """
 
-    def __init__(self,
-                 configuration: Dict[str, Any],
-                 channel_mapping: Dict[str, Any]) -> None:
+    def __init__(
+        self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+    ) -> None:
         self.device_type: str = "TekAWG"
         self.samprate: float = 5e9
         self.channel_mapping = channel_mapping
@@ -206,9 +206,9 @@ class AWGenerator(VisaObject, Synchroniser):
         self.marker_channels: list[int] = [1, 2, 3, 4]
 
         Synchroniser.__init__(self)
-        self.attribute_map['device_type'] = self._set_device_type
-        self.attribute_map['sampling_rate'] = self._set_sampling_rate_attribute
-        self.attribute_map['channels'] = self._set_channels_attribute
+        self.attribute_map["device_type"] = self._set_device_type
+        self.attribute_map["sampling_rate"] = self._set_sampling_rate_attribute
+        self.attribute_map["channels"] = self._set_channels_attribute
         if configuration is not None:
             self._update_from_configuration(configuration)
         VisaObject.__init__(self, self.address, self.device_type)
@@ -216,7 +216,9 @@ class AWGenerator(VisaObject, Synchroniser):
 
     def _extract_flags(self, channel_mapping: Dict[str, Union[int, str]]) -> list[str]:
         return [
-            channel_value for channel_value in channel_mapping.values() if not isinstance(channel_value, int)
+            channel_value
+            for channel_value in channel_mapping.values()
+            if not isinstance(channel_value, int)
         ]
 
     def open(self) -> None:
@@ -226,32 +228,32 @@ class AWGenerator(VisaObject, Synchroniser):
         """Passing"""
 
     def run(self) -> None:
-        self.instance.write('awgcontrol:run:immediate')
-        logging.info('Turned on AWG output to RUN immediate'.ljust(
-            65, '.') + '[done]')
+        self.instance.write("awgcontrol:run:immediate")
+        logging.info("Turned on AWG output to RUN immediate".ljust(65, ".") + "[done]")
         self.opc_wait()
 
     def stop(self) -> None:
-        self.instance.write('awgcontrol:stop:immediate')
-        logging.info('Turned on AWG output to STOP immediate'.ljust(
-            65, '.') + '[done]')
+        self.instance.write("awgcontrol:stop:immediate")
+        logging.info("Turned on AWG output to STOP immediate".ljust(65, ".") + "[done]")
         self.opc_wait()
 
     def trigger(self) -> None:
-        self.instance.write('SOUR1:JUMP:FORC 2')
-        logging.info('Sent trigger to AWG'.ljust(65, '.') + '[done]')
+        self.instance.write("SOUR1:JUMP:FORC 2")
+        logging.info("Sent trigger to AWG".ljust(65, ".") + "[done]")
 
     def load_sequence(self) -> None:
         self.stop()
         self._clear_awg()
         sequence_translator = PulseSequenceYaml(
-            self.channel_mapping, self.channels, samprate=self.samprate)
+            self.channel_mapping, self.channels, samprate=self.samprate
+        )
         sequence_translator.translate_yaml_to_numeric_instructions()
-        self._load_sequence_block(get_seq_dir() / 'sequence.npz')
+        self._load_sequence_block(get_seq_dir() / "sequence.npz")
         self._upload_waveforms()
-        self._sequence('autoseq', nongatereps=1)
-        logging.info('Loaded and sequenced current pulse sequence'.ljust(
-            65, '.') + '[done]')
+        self._sequence("autoseq", nongatereps=1)
+        logging.info(
+            "Loaded and sequenced current pulse sequence".ljust(65, ".") + "[done]"
+        )
         self.opc_wait()
 
     def _configure(self) -> None:
@@ -261,134 +263,157 @@ class AWGenerator(VisaObject, Synchroniser):
             self._set_analog_amplitude(channel, self.analog_amplitude)
             self._set_output_on(channel)
             for marker in self.marker_channels:
-                self._set_marker_amplitude(
-                    channel, marker, self.marker_amplitude)
-        print('Configuring AWG'.ljust(65, '.') + colored(' [done]', 'green'))
+                self._set_marker_amplitude(channel, marker, self.marker_amplitude)
+        print("Configuring AWG".ljust(65, ".") + colored(" [done]", "green"))
 
     def _upload_waveform(self, wavename: str, waveform: np.ndarray) -> None:
-        self.instance.write('wlist:waveform:delete "'+wavename+'"')
-        self.instance.write('wlist:waveform:new "'+wavename +
-                            '",'+str(waveform.shape[1])+',real')
+        self.instance.write('wlist:waveform:delete "' + wavename + '"')
+        self.instance.write(
+            'wlist:waveform:new "' + wavename + '",' + str(waveform.shape[1]) + ",real"
+        )
         self.instance.write_binary_values(
-            'wlist:waveform:data "'+wavename+'",', waveform[0, :])
+            'wlist:waveform:data "' + wavename + '",', waveform[0, :]
+        )
         self.instance.write_binary_values(
-            'wlist:waveform:marker:data "'+wavename+'",',
-            waveform.astype(np.uint8)[1, :], datatype='B')
-        logging.info(f'Uploaded waveform {wavename}'.ljust(65, '.') + '[done]')
+            'wlist:waveform:marker:data "' + wavename + '",',
+            waveform.astype(np.uint8)[1, :],
+            datatype="B",
+        )
+        logging.info(f"Uploaded waveform {wavename}".ljust(65, ".") + "[done]")
         self.opc_wait()
 
-    def _sequence(self,
-                  seqname: str,
-                  nongatereps: int = 1) -> None:
-        print('Setting up sequencer'.ljust(65, '.'), end='')
+    def _sequence(self, seqname: str, nongatereps: int = 1) -> None:
+        print("Setting up sequencer".ljust(65, "."), end="")
         for channel in self.channels:
             self.instance.write(f'slist:sequence:delete "sub_{channel}"')
             self.instance.write(
-                f'slist:sequence:new "sub_{channel}",{len(self.wavenames)},1')
+                f'slist:sequence:new "sub_{channel}",{len(self.wavenames)},1'
+            )
             self.instance.write(
-                f'slist:sequence:event:jtiming "sub_{channel}" immediate')
+                f'slist:sequence:event:jtiming "sub_{channel}" immediate'
+            )
             for i, wavename in enumerate(self.wavenames):
                 self.instance.write(
-                    f'slist:sequence:step{i+1}:rcount "sub_{channel}",{self.seqrepeats[i]}')
+                    f'slist:sequence:step{i+1}:rcount "sub_{channel}",{self.seqrepeats[i]}'
+                )
                 self.instance.write(
-                    f'slist:sequence:step{i+1}:tasset1:waveform "sub_{channel}","{wavename}_{channel}"')
+                    f'slist:sequence:step{i+1}:tasset1:waveform "sub_{channel}","{wavename}_{channel}"'
+                )
 
                 for flag_channel in self.flag_channels:
                     if flag_channel in self.flag_values[wavename]:
                         self.instance.write(
-                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",HIGH')
+                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",HIGH'
+                        )
                     else:
                         self.instance.write(
-                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",LOW')
+                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",LOW'
+                        )
 
             self.instance.write(f'slist:sequence:delete "{seqname}_{channel}"')
+            self.instance.write(f'slist:sequence:new "{seqname}_{channel}",2,1')
             self.instance.write(
-                f'slist:sequence:new "{seqname}_{channel}",2,1')
+                f'slist:sequence:step2:goto "{seqname}_{channel}",first'
+            )
             self.instance.write(
-                f'slist:sequence:step2:goto "{seqname}_{channel}",first')
-            self.instance.write(
-                f'slist:sequence:event:jtiming "{seqname}_{channel}" immediate')
+                f'slist:sequence:event:jtiming "{seqname}_{channel}" immediate'
+            )
 
             # for gating pulse
             self.instance.write(
-                f'slist:sequence:step1:rcount "{seqname}_{channel}", INF')
+                f'slist:sequence:step1:rcount "{seqname}_{channel}", INF'
+            )
             self.instance.write(
-                f'slist:sequence:step1:tasset1:waveform "{seqname}_{channel}","{self.wavenames[0]}_{channel}"')
+                f'slist:sequence:step1:tasset1:waveform "{seqname}_{channel}","{self.wavenames[0]}_{channel}"'
+            )
 
             # for actual seq
             self.instance.write(
-                f'slist:sequence:step2:rcount "{seqname}_{channel}", {nongatereps}')
+                f'slist:sequence:step2:rcount "{seqname}_{channel}", {nongatereps}'
+            )
             self.instance.write(
-                f'slist:sequence:step2:tasset1:sequence "{seqname}_{channel}","sub_{channel}"')
+                f'slist:sequence:step2:tasset1:sequence "{seqname}_{channel}","sub_{channel}"'
+            )
 
             self.instance.write(
-                f'source{channel}:casset:sequence "{seqname}_{channel}",1')
+                f'source{channel}:casset:sequence "{seqname}_{channel}",1'
+            )
         self.opc_wait()
-        print(colored(' [done]', 'green'))
+        print(colored(" [done]", "green"))
 
     def _load_sequence_block(self, seqname: Path) -> None:
         block = np.load(seqname)
-        self.waveform_block = block['arr_0']
-        self.seqrepeats = list(block['arr_1'])
-        self.wavenames = list(block['arr_2'])
-        self.flag_values = pickle.loads(block['arr_5'])
-        logging.info('loaded wave sequence from file'.ljust(
-            65, '.')+f'{seqname}')
+        self.waveform_block = block["arr_0"]
+        self.seqrepeats = list(block["arr_1"])
+        self.wavenames = list(block["arr_2"])
+        self.flag_values = pickle.loads(block["arr_5"])
+        logging.info("loaded wave sequence from file".ljust(65, ".") + f"{seqname}")
 
     def _clear_awg(self) -> None:
-        self.instance.write('slist:sequence:delete all')
-        self.instance.write('wlist:waveform:delete all')
-        logging.info('Clear all AWG slist and wlist'.ljust(65, '.') + '[done]')
+        self.instance.write("slist:sequence:delete all")
+        self.instance.write("wlist:waveform:delete all")
+        logging.info("Clear all AWG slist and wlist".ljust(65, ".") + "[done]")
         self.opc_wait()
 
     def _upload_waveforms(self) -> None:
         time_1 = time()
         sorted_wavenames = sorted(set(self.wavenames))
-        for i, wavename in tqdm(enumerate(sorted_wavenames),
-                                ascii=True,
-                                desc="uploading waveforms",
-                                ):
+        for i, wavename in tqdm(
+            enumerate(sorted_wavenames),
+            ascii=True,
+            desc="uploading waveforms",
+        ):
             for channel_index, channel in enumerate(self.channels):
                 self._upload_waveform(
-                    f'{wavename}_{channel}', self.waveform_block[i, channel_index*2:(channel_index*2)+2])
+                    f"{wavename}_{channel}",
+                    self.waveform_block[i, channel_index * 2 : (channel_index * 2) + 2],
+                )
                 self.opc_wait()
         logging.info(
-            f"Uploaded Tektronix AWG waveforms in {time() - time_1} seconds".ljust(65, ".") + '[done]')
+            f"Uploaded Tektronix AWG waveforms in {time() - time_1} seconds".ljust(
+                65, "."
+            )
+            + "[done]"
+        )
 
     def _set_output_on(self, channel: int) -> None:
-        self.instance.write(f'outp{channel} on')
-        logging.info(f'Set channel{channel} output to on'
-                     .ljust(65, '.') + '[done]')
+        self.instance.write(f"outp{channel} on")
+        logging.info(f"Set channel{channel} output to on".ljust(65, ".") + "[done]")
 
     def _set_daq_resolution(self, channel: int, dac_resolution: int) -> None:
-        self.instance.write(
-            f'source{channel}:dac:resolution {dac_resolution}')
-        logging.info(f'Set AWG channel{channel} resolution to bit'
-                     .ljust(65, '.')+'{dac_resolution}')
+        self.instance.write(f"source{channel}:dac:resolution {dac_resolution}")
+        logging.info(
+            f"Set AWG channel{channel} resolution to bit".ljust(65, ".")
+            + "{dac_resolution}"
+        )
 
     def _set_sampling_rate(self) -> None:
-        self.instance.write(f'source:frequency {self.samprate}')
-        logging.info('AWG sampling rate'.ljust(
-            65, '.')+f'{self.samprate}')
+        self.instance.write(f"source:frequency {self.samprate}")
+        logging.info("AWG sampling rate".ljust(65, ".") + f"{self.samprate}")
         self.opc_wait()
 
-    def _set_marker_amplitude(self, channel: int,
-                              marker: int, voltage: float = 1.75) -> None:
+    def _set_marker_amplitude(
+        self, channel: int, marker: int, voltage: float = 1.75
+    ) -> None:
         self.instance.write(
-            f'SOURCE{channel}:MARKER{marker}:VOLTAGE:LEVEL:IMMEDIATE:HIGH {voltage}')
+            f"SOURCE{channel}:MARKER{marker}:VOLTAGE:LEVEL:IMMEDIATE:HIGH {voltage}"
+        )
         self.opc_wait()
-        logging.info(f'Set AWG channel{channel} marker{marker} to / V'
-                     .ljust(65, '.') + f'{voltage}')
+        logging.info(
+            f"Set AWG channel{channel} marker{marker} to / V".ljust(65, ".")
+            + f"{voltage}"
+        )
 
-    def _set_analog_amplitude(self,
-                              channel: int,
-                              amplitude: float = 1.0) -> None:
+    def _set_analog_amplitude(self, channel: int, amplitude: float = 1.0) -> None:
         # amplitude is given in fractions of the max amplitude.
         self.instance.write(
-            f'source{channel}:voltage:level:immediate:amplitude {amplitude}')
+            f"source{channel}:voltage:level:immediate:amplitude {amplitude}"
+        )
         self.opc_wait()
-        logging.info(f'Set AWG channel{channel} analog amplitude to'
-                     .ljust(65, '.') + f'{amplitude}')
+        logging.info(
+            f"Set AWG channel{channel} analog amplitude to".ljust(65, ".")
+            + f"{amplitude}"
+        )
 
     def _set_device_type(self, device_type: str) -> None:
         self.device_type = device_type
@@ -410,9 +435,11 @@ class AWGenerator(VisaObject, Synchroniser):
         :type wavename: str
         """
         marker = self.instance.query_binary_values(
-            'wlist:waveform:marker:data? "' + wavename + '"', datatype='B')
+            'wlist:waveform:marker:data? "' + wavename + '"', datatype="B"
+        )
         analog = self.instance.query_binary_values(
-            'wlist:waveform:data? "' + wavename+'"')
+            'wlist:waveform:data? "' + wavename + '"'
+        )
         markers = np.zeros((4, len(marker)))
         print(np.shape(markers), np.shape(analog))
         for i, mark in enumerate(marker):
@@ -420,34 +447,34 @@ class AWGenerator(VisaObject, Synchroniser):
             if not len(num) < 5:
                 for j in range(1, 5):
                     try:
-                        markers[-j, i] = int(num[-(j+4)])
+                        markers[-j, i] = int(num[-(j + 4)])
                     except Exception:
                         break
 
-        plt.plot(np.asarray((analog))*0.5+4)
-        plt.plot(markers[0, :]*0.5+3)
-        plt.plot(markers[1, :]*0.5+2)
-        plt.plot(markers[2, :]*0.5+1)
-        plt.plot(markers[3, :]*0.5+0)
+        plt.plot(np.asarray((analog)) * 0.5 + 4)
+        plt.plot(markers[0, :] * 0.5 + 3)
+        plt.plot(markers[1, :] * 0.5 + 2)
+        plt.plot(markers[2, :] * 0.5 + 1)
+        plt.plot(markers[3, :] * 0.5 + 0)
         plt.show()
 
 
 class PStreamer(Synchroniser):
-    def __init__(self,
-                 configuration: Dict[str, Any],
-                 channel_mapping: Dict[str, Any]) -> None:
+    def __init__(
+        self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+    ) -> None:
         super().__init__()
         self.channel_mapping = channel_mapping
         self._update_from_configuration(configuration)
         self.initial_configuration_dict = configuration
-        if configuration['address'] == 'None':
+        if configuration["address"] == "None":
             self._find_pulse_streamers()
 
     def __repr__(self) -> str:
-        return f'PStreamer(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+        return f"PStreamer(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def __str__(self) -> str:
-        return f'Synchronizer of type PStreamer(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+        return f"Synchronizer of type PStreamer(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def _find_pulse_streamers(self) -> None:
         devices = findPulseStreamers()
@@ -457,11 +484,8 @@ class PStreamer(Synchroniser):
             print("----------------------------------------------------\n")
             self.address = devices[0][0]
         else:
-            print(
-                "No PulseStreamers found by autodetect.\n-------------------\n"
-            )
-            logging.info('Pulse Streamer not found'.ljust(
-                65, '.') + '[failed]')
+            print("No PulseStreamers found by autodetect.\n-------------------\n")
+            logging.info("Pulse Streamer not found".ljust(65, ".") + "[failed]")
 
     def open(self) -> None:
         """
@@ -472,12 +496,15 @@ class PStreamer(Synchroniser):
         # if no IP adress is provided, try to detect one:
         try:
             self.pulser = PulseStreamer(self.address)
-            logging.info(f'Pulse Streamer connected at {self.address}'
-                         .ljust(65, '.') + '[done]')
+            logging.info(
+                f"Pulse Streamer connected at {self.address}".ljust(65, ".") + "[done]"
+            )
             print("Connected.\n-------------------------------------------\n")
         except AssertionError:
-            logging.exception(f"No pulse streamer with the IP address {self.address}"
-                              .ljust(65, '.') + '[failed]')
+            logging.exception(
+                f"No pulse streamer with the IP address {self.address}".ljust(65, ".")
+                + "[failed]"
+            )
 
     def close(self) -> None:
         """
@@ -499,16 +526,24 @@ class PStreamer(Synchroniser):
             # print a text if the program has successfully ended
             if not self.pulser.isStreaming():
                 print("Stop PulseStreamer: The sequence has been stoped.")
-                logging.info('Pulse Streamer: stopped pulse sequence execution'
-                             .ljust(65, '.') + '[done]')
+                logging.info(
+                    "Pulse Streamer: stopped pulse sequence execution".ljust(65, ".")
+                    + "[done]"
+                )
             else:
                 logging.warning(
-                    'Warning full_pulse_listtreamer.stop(): The sequence could\
-                            not be stoped'.ljust(65, '.') + '[done]')
+                    "Warning full_pulse_listtreamer.stop(): The sequence could\
+                            not be stoped".ljust(
+                        65, "."
+                    )
+                    + "[done]"
+                )
 
         except AttributeError:
-            logging.exception('Pulse Streamer: error stopping pulse sequence'
-                              .ljust(65, '.') + '[done]')
+            logging.exception(
+                "Pulse Streamer: error stopping pulse sequence".ljust(65, ".")
+                + "[done]"
+            )
 
     def writeDigSeq(self, channel_key: str) -> List[Tuple[int, int]]:
         """
@@ -525,8 +560,7 @@ class PStreamer(Synchroniser):
         pointer_i = 0  # pointer in time
         # Check if the asked channel_key exists in the file
         if self.channel_key not in list(self.pulse_list.keys()):
-            logging.error("KeyError: No element named " +
-                          str(self.channel_key) + ".")
+            logging.error("KeyError: No element named " + str(self.channel_key) + ".")
             raise KeyError
 
         for i in range(len(self.pulse_list[self.channel_key])):
@@ -570,8 +604,8 @@ class PStreamer(Synchroniser):
                 raise PulseSequenceError
 
             ampl_pulse_i = (
-                self.pulse_list.get(self.channel_key) .get(
-                    "pulse" + str(i + 1))
+                self.pulse_list.get(self.channel_key)
+                .get("pulse" + str(i + 1))
                 .get("amplitude")
             )
             if ampl_pulse_i != 1 or ampl_pulse_i is None:
@@ -596,7 +630,8 @@ class PStreamer(Synchroniser):
                 len_pulse_i - round(len_pulse_i) != 0
             ):
                 logging.warning(
-                    "Warning: Sampling unit is 1ns. Time values are being rounded.")
+                    "Warning: Sampling unit is 1ns. Time values are being rounded."
+                )
                 # Round the values and turn into integers
                 start_pulse_i = int(round(start_pulse_i))
                 len_pulse_i = int(round(len_pulse_i))
@@ -617,9 +652,10 @@ class PStreamer(Synchroniser):
                 pointer_i = start_pulse_i + len_pulse_i
 
         # Check if the sequence is longer than the defined total time.
-        if (pointer_i > self.total_duration and self.total_duration_unparsed != "ignore"):
+        if pointer_i > self.total_duration and self.total_duration_unparsed != "ignore":
             logging.error(
-                f"Error: {self.channel_key} duration exceeds the defined total time.")
+                f"Error: {self.channel_key} duration exceeds the defined total time."
+            )
             raise PulseSequenceError
         # Add the final low to make the sequence last its length
         if self.total_duration_unparsed != "ignore":
@@ -646,23 +682,24 @@ class PStreamer(Synchroniser):
         try:
             # Selected folder:
             self.yaml_file = set_up.get_seq_dir() / "sequence.yaml"
-            with open(self.yaml_file, "r", encoding='utf-8') as file:
+            with open(self.yaml_file, "r", encoding="utf-8") as file:
                 full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
-            sequence_order = full_pulse_list['sequencing_order']
-            sequencing_repeats = full_pulse_list['sequencing_repeats']
+            sequence_order = full_pulse_list["sequencing_order"]
+            sequencing_repeats = full_pulse_list["sequencing_repeats"]
 
-            total_duration_unparsed = full_pulse_list['total_duration']
+            total_duration_unparsed = full_pulse_list["total_duration"]
             self.total_duration_unparsed = total_duration_unparsed
-            if total_duration_unparsed == 'ignore':
+            if total_duration_unparsed == "ignore":
                 self.total_duration = np.inf
-            if total_duration_unparsed != 'ignore':
-                total_duration = float(
-                    total_duration_unparsed) * 1e3  # convert to ns
+            if total_duration_unparsed != "ignore":
+                total_duration = float(total_duration_unparsed) * 1e3  # convert to ns
                 if total_duration - round(total_duration) != 0:
                     logging.warning(
                         "Warning: The total duration is not multiple of the\
-                                sampling time and is being rounded!".ljust(65, '.')
-                        + '[WARNING]'
+                                sampling time and is being rounded!".ljust(
+                            65, "."
+                        )
+                        + "[WARNING]"
                     )
                     self.total_duration = int(round(total_duration))
                 else:
@@ -677,7 +714,8 @@ class PStreamer(Synchroniser):
                 self.check_types(self.pulse_list)
                 for channel in self.pulse_list:
                     sequences_to_write[block].setDigital(
-                        self.channel_mapping[channel], self.writeDigSeq(channel))
+                        self.channel_mapping[channel], self.writeDigSeq(channel)
+                    )
             self.sequence = Sequence()
             for block, repetitions in zip(sequence_order, sequencing_repeats):
                 self.sequence += repetitions * sequences_to_write[block]
@@ -717,12 +755,12 @@ class PStreamer(Synchroniser):
             while self.pulser.isStreaming():
                 pass
             # check if the sequence has been started correctly.
-            logging.info('Pulse Strearmer: sent run signal'.ljust(
-                65, '.') + '[done]')
+            logging.info("Pulse Strearmer: sent run signal".ljust(65, ".") + "[done]")
 
         except AttributeError:
-            logging.exception('Pulse Strearmer: problem setting to run'.ljust(
-                65, '.') + '[done]')
+            logging.exception(
+                "Pulse Strearmer: problem setting to run".ljust(65, ".") + "[done]"
+            )
 
     def trigger(self) -> None:
         """
@@ -732,14 +770,13 @@ class PStreamer(Synchroniser):
         """
         self.pulser.rearm()
         self.pulser.startNow()
-        logging.info('Pulse Strearmer: Sent signal to play sequence'.ljust(
-            65, '.') + '[done]')
+        logging.info(
+            "Pulse Strearmer: Sent signal to play sequence".ljust(65, ".") + "[done]"
+        )
 
 
 class MockGenerator(Synchroniser):
-    def __init__(self,
-                 configuration: Dict[str, Any],
-                 channel_mapping: Dict[str, Any]):
+    def __init__(self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]):
         self.channel_mapping = channel_mapping
         self.device_type: str = "MockGenerator"
 
@@ -747,28 +784,27 @@ class MockGenerator(Synchroniser):
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
-        logging.info('MockSynchroniser instance created'.ljust(
-            65, '.') + '[done]')
+        logging.info("MockSynchroniser instance created".ljust(65, ".") + "[done]")
 
     def __repr__(self) -> str:
-        return f'MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+        return f"MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def __str__(self) -> str:
-        return f'Synchronizer of type MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+        return f"Synchronizer of type MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def open(self) -> None:
-        logging.info('Opened MockSynchroniser'.ljust(
-            65, '.') + '[done]')
+        logging.info("Opened MockSynchroniser".ljust(65, ".") + "[done]")
 
     def load_sequence(self) -> None:
         try:
             self.yaml_file = set_up.get_seq_dir() / "sequence.yaml"
-            with open(self.yaml_file, "r", encoding='utf-8') as file:
+            with open(self.yaml_file, "r", encoding="utf-8") as file:
                 full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
-            total_duration = float(
-                full_pulse_list['total_duration']) * 1e3  # convert to ns
-            _ = full_pulse_list['sequencing_order']
-            _ = full_pulse_list['sequencing_repeats']
+            total_duration = (
+                float(full_pulse_list["total_duration"]) * 1e3
+            )  # convert to ns
+            _ = full_pulse_list["sequencing_order"]
+            _ = full_pulse_list["sequencing_repeats"]
             if total_duration - round(total_duration) != 0:
                 logging.warning(
                     "Warning: The total duration is not multiple of the sampling time and is being rounded!"
@@ -777,114 +813,113 @@ class MockGenerator(Synchroniser):
             else:
                 self.total_duration = int(total_duration)
 
-            logging.info('Loaded sequence for MockSynchroniser'.ljust(
-                65, '.') + '[done]')
+            logging.info(
+                "Loaded sequence for MockSynchroniser".ljust(65, ".") + "[done]"
+            )
 
         except AttributeError:
             logging.exception(
-                "Caught attribute error when writing loading from yaml pulse sequence")
+                "Caught attribute error when writing loading from yaml pulse sequence"
+            )
 
     def run(self) -> None:
-        logging.info('Sent run to MockSynchroniser'.ljust(
-            65, '.') + '[done]')
+        logging.info("Sent run to MockSynchroniser".ljust(65, ".") + "[done]")
 
     def trigger(self) -> None:
-        logging.info('Sent trigger from MockSynchroniser'.ljust(
-            65, '.') + '[done]')
+        logging.info("Sent trigger from MockSynchroniser".ljust(65, ".") + "[done]")
 
     def stop(self) -> None:
-        logging.info('Stopped MockSynchroniser'.ljust(
-            65, '.') + '[done]')
+        logging.info("Stopped MockSynchroniser".ljust(65, ".") + "[done]")
 
     def close(self) -> None:
-        logging.info('Closed MockSynchroniser'.ljust(
-            65, '.') + '[done]')
+        logging.info("Closed MockSynchroniser".ljust(65, ".") + "[done]")
 
 
 class PulseBlaster(Synchroniser):
     """
-        Class to represent PulseBlaster card.
+    Class to represent PulseBlaster card.
 
-        Attributes
-        ----------
-        int PBclk :
-            PulseBlaster clock frequency (in MHz)
-        int PB_min_instr_clk_cycles:
-            minimum instruction time, in clock periods
-        int PB_STARTtrig:
-            PB channel bit to DAQ start trigger
-        int PB_DAQ:
-            PB channel bit to DAQ gate/ sample clock
-        int PB_AOM:
-            PB channel bit to TTL of AOM driver
-        int PB_MW:
-            PB channel bit to TTL of microwave switch
+    Attributes
+    ----------
+    int PBclk :
+        PulseBlaster clock frequency (in MHz)
+    int PB_min_instr_clk_cycles:
+        minimum instruction time, in clock periods
+    int PB_STARTtrig:
+        PB channel bit to DAQ start trigger
+    int PB_DAQ:
+        PB channel bit to DAQ gate/ sample clock
+    int PB_AOM:
+        PB channel bit to TTL of AOM driver
+    int PB_MW:
+        PB channel bit to TTL of microwave switch
 
-        Methods
-        -------
-        error_catcher(int status): Catches error in PB board status
-        configure_pb():
-            Configures PB board
-        int status pb_inst_pbonly(int bit flags, int instruction,
-            int instruction_data, int pulse_length):
-            Create single instruction for the pulse program
-        create_json_sequence(pulseseq_file_name):
-            Loads sequence array from npz file and save the decomposed
-            data (PB channel bit masks and pulse durations) into json file
-        decompose_sequence_array(seq_array, pulseseq_file_name):
-            Decomposes seq_array into PB channel bit masks
-            and corresponding pulse durations
-        decompose_sequence(sequence):
-            Decompose single sequence into PB channel
-            bit masks and its pulse durations
-        get_int_powers_of_two(sequence):
-            Finds integer list of powers of 2 for each bit sequence
-        load_sequence(pulseseq_file_name):
-            Loads Pb channel bit masks and pulse durations from json file
-            to pulse program memory
-        start_programming():
-            Starts the programming of PB pulse program
-        stop_programming():
-            Stops the programming of PB pulse program
-        program_pb(channel_bit_masks, pulse_duration_list):
-            Program pulse program memory using
-            PB channel bits and pulse durations
-        run():
-            Triggers/starts the execution of the Pulse Program
-        close():
-            Closes the communication with the PB board
-        stop():
-            Stops the execution of the Pulse Program and closes
-            the communication. TTL outputs will return to zero.
+    Methods
+    -------
+    error_catcher(int status): Catches error in PB board status
+    configure_pb():
+        Configures PB board
+    int status pb_inst_pbonly(int bit flags, int instruction,
+        int instruction_data, int pulse_length):
+        Create single instruction for the pulse program
+    create_json_sequence(pulseseq_file_name):
+        Loads sequence array from npz file and save the decomposed
+        data (PB channel bit masks and pulse durations) into json file
+    decompose_sequence_array(seq_array, pulseseq_file_name):
+        Decomposes seq_array into PB channel bit masks
+        and corresponding pulse durations
+    decompose_sequence(sequence):
+        Decompose single sequence into PB channel
+        bit masks and its pulse durations
+    get_int_powers_of_two(sequence):
+        Finds integer list of powers of 2 for each bit sequence
+    load_sequence(pulseseq_file_name):
+        Loads Pb channel bit masks and pulse durations from json file
+        to pulse program memory
+    start_programming():
+        Starts the programming of PB pulse program
+    stop_programming():
+        Stops the programming of PB pulse program
+    program_pb(channel_bit_masks, pulse_duration_list):
+        Program pulse program memory using
+        PB channel bits and pulse durations
+    run():
+        Triggers/starts the execution of the Pulse Program
+    close():
+        Closes the communication with the PB board
+    stop():
+        Stops the execution of the Pulse Program and closes
+        the communication. TTL outputs will return to zero.
     """
 
-    def __init__(self,
-                 configuration: Dict[str, Any],
-                 channel_mapping: Dict[str, Any]) -> None:
-        '''
+    def __init__(
+        self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+    ) -> None:
+        """
         Configure the PB board core clock frequency,
         minimum instruction clock cycle and PB channel connections.
 
-        '''
+        """
         if spapi is None:
             raise RuntimeError(
-                "This class requires 'spinapi' by SpinCore to be installed and functional")
+                "This class requires 'spinapi' by SpinCore to be installed and functional"
+            )
         self.device_type: str = "PulseBlaster"
         self.samprate: float = 500  # MHz
         self.pb_min_instr_clk_cycles = 5
         self.channel_mapping = channel_mapping
         Synchroniser.__init__(self)
-        self.attribute_map['sampling_rate'] = self._set_sampling_rate_attribute
-        self.attribute_map['min_instr_clk_cycles'] = self._set_min_instr_clk_cycles
+        self.attribute_map["sampling_rate"] = self._set_sampling_rate_attribute
+        self.attribute_map["min_instr_clk_cycles"] = self._set_min_instr_clk_cycles
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
 
     def __repr__(self) -> str:
-        return f'PulseBlaster(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+        return f"PulseBlaster(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def __str__(self) -> str:
-        return f'Synchronizer of type PulseBlaster(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})'
+        return f"Synchronizer of type PulseBlaster(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
 
     def open(self) -> None:
         self.configure_pb()
@@ -893,64 +928,61 @@ class PulseBlaster(Synchroniser):
         yaml_sequence_transpiler = PulseBlasterSequence(self.channel_mapping)
         yaml_sequence_transpiler.parse_pulse_sequence_file()
         channel_bit_mask, pulse_duration_list = yaml_sequence_transpiler.compile()
-        self.program_pb(channel_bit_mask,
-                        pulse_duration_list)
+        self.program_pb(channel_bit_mask, pulse_duration_list)
 
     def close(self) -> None:
-        '''
+        """
         Releases the PulseBlasterESR-PRO board
         and check the current status of PB board.
-        '''
+        """
         # Close the communication with the PB board
         status = spapi.pb_close()
         self.error_catcher(status)
 
     def run(self) -> None:
-        '''
+        """
         Triggers/starts the execution of the Pulse Program
         and closes communication with the board.
         However, Pulse Program execution will continue.
-        '''
+        """
         # Returns a 0 on success or a negative number on an error.
         status = spapi.pb_start()
         self.error_catcher(status)
-        print(colored('Started execution of Pulseblaster card pulse program!',
-                      'green'))
+        print(colored("Started execution of Pulseblaster card pulse program!", "green"))
 
     def trigger(self) -> None:
         status = spapi.pb_start()
         self.error_catcher(status)
-        print(colored('Started execution of Pulseblaster card pulse program!',
-                      'green'))
+        print(colored("Started execution of Pulseblaster card pulse program!", "green"))
 
     def stop(self) -> None:
-        '''
-            Stops the execution of the Pulse Program and closes the
-            communication. TTL outputs will return to zero.
-        '''
+        """
+        Stops the execution of the Pulse Program and closes the
+        communication. TTL outputs will return to zero.
+        """
         # Returns a 0 on success or a negative number on an error.
         status = spapi.pb_stop()
         self.error_catcher(status)
-        print(colored('Stopped execution of Pulseblaster card pulse program!', 'green'))
+        print(colored("Stopped execution of Pulseblaster card pulse program!", "green"))
 
     def error_catcher(self, status: int) -> None:
-        '''
-            Checks the status of the PulseBlasterESR.
-            PB returns a negative number on an error,
-            and 0 or the instruction number on success.
-            If error, prints the error message.
-            Parameters:
-                int status: current status of PB board
-        '''
+        """
+        Checks the status of the PulseBlasterESR.
+        PB returns a negative number on an error,
+        and 0 or the instruction number on success.
+        If error, prints the error message.
+        Parameters:
+            int status: current status of PB board
+        """
         if status < 0:
-            print('Error: ', spapi.pb_get_error())
+            print("Error: ", spapi.pb_get_error())
             sys.exit()
 
     def configure_pb(self) -> None:
-        '''
+        """
         Initializes the PulseBlasterESR-PRO board and set
         the core clock frequency of the board.
-        '''
+        """
         # 1 - Enable the spincore log file, appears as log.txt in current working directory
         spapi.pb_set_debug(0)
         # Initializing communication with the PulseBlasterESR-PRO board
@@ -961,8 +993,8 @@ class PulseBlaster(Synchroniser):
         spapi.pb_core_clock(self.samprate)
 
     def pb_inst_pbonly(flags, instruction, instruction_data, pulse_length):
-        '''
-        Create single instruction to send to the pulse program. It returns a negative number on an error, or the instruction number upon success. 
+        """
+        Create single instruction to send to the pulse program. It returns a negative number on an error, or the instruction number upon success.
         If the function returns -99, an invalid parameter was passed to the function.
         Instruction format:
             int status pb_inst_pbonly(int bit flags, int instruction, int instruction_data, int pulse_length)
@@ -973,35 +1005,42 @@ class PulseBlaster(Synchroniser):
             int pulse_length: duration of this pulse program instruction
         Returns:
             int status: current PB board status
-    '''
-        return spapi.spinapi.pb_inst_pbonly(ct.c_uint(flags),
-                                            ct.c_int(instruction),
-                                            ct.c_int(instruction_data),
-                                            ct.c_double(pulse_length))
+        """
+        return spapi.spinapi.pb_inst_pbonly(
+            ct.c_uint(flags),
+            ct.c_int(instruction),
+            ct.c_int(instruction_data),
+            ct.c_double(pulse_length),
+        )
 
-    def check_pulse_length_short(self, pulse_duration: float, current_option: float) -> float:
+    def check_pulse_length_short(
+        self, pulse_duration: float, current_option: float
+    ) -> float:
         if pulse_duration != current_option:
             logging.warning(
-                f"pulse duration of {pulse_duration} not possible with PB card. Setting to {current_option}")
+                f"pulse duration of {pulse_duration} not possible with PB card. Setting to {current_option}"
+            )
             pulse_duration = current_option
             return pulse_duration
         return pulse_duration
 
-    def program_pb(self, channel_bit_masks: List[int],
-                   pulse_duration_list: List[float]) -> None:
-        '''
+    def program_pb(
+        self, channel_bit_masks: List[int], pulse_duration_list: List[float]
+    ) -> None:
+        """
         Program the PB pulse program memory by sending instructions
         for each channel bit mask and corresponding pulse duration.
         Channel bit mask can be a decimal, hexadecimal or binary.
-        '''
+        """
         self.start_programming()
 
         # Send instructions to the pulse program
         # Instruction format:
         # int status pb_inst_pbonly(int bit flags, int instruction,
         # int instruction_data, int pulse_length)
-        for i, pulse_duration in zip(range(len(channel_bit_masks)),
-                                     pulse_duration_list):
+        for i, pulse_duration in zip(
+            range(len(channel_bit_masks)), pulse_duration_list
+        ):
             # All pulse duration checks in mus.
             if pulse_duration >= 0.01:
                 channel_bit_mask = channel_bit_masks[i]
@@ -1011,27 +1050,30 @@ class PulseBlaster(Synchroniser):
                 if 0 < pulse_duration <= 0.003:
                     # 001 for 1 clock period, 2ns for 500 MHz
                     pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.002)
+                        pulse_duration, 0.002
+                    )
                     channel_bit_mask = channel_bit_masks[i] + 2**21
                 elif 0.003 < pulse_duration <= 0.005:
                     # 010 for 2 clock periods
                     pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.004)
+                        pulse_duration, 0.004
+                    )
                     channel_bit_mask = channel_bit_masks[i] + 2**22
                 elif 0.005 < pulse_duration <= 0.007:
                     # 011 for 3 clock periods
                     pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.006)
+                        pulse_duration, 0.006
+                    )
                     channel_bit_mask = channel_bit_masks[i] + 2**21 + 2**22
                 elif 0.007 < pulse_duration <= 0.009:
                     # 100 for 4 clock periods
                     pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.008)
+                        pulse_duration, 0.008
+                    )
                     channel_bit_mask = channel_bit_masks[i] + 2**23
                 elif 0.009 < pulse_duration < 0.01:
                     # 100 for 4 clock periods
-                    pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.01)
+                    pulse_duration = self.check_pulse_length_short(pulse_duration, 0.01)
                     channel_bit_mask = channel_bit_masks[i]
 
                 # Shortest minimum instruction time is 5 clock periods
@@ -1046,38 +1088,51 @@ class PulseBlaster(Synchroniser):
             # Instructions for pulse sequence
             if i == 0:
                 start_instr_num = spapi.pb_inst_pbonly(
-                    channel_bit_mask, spapi.Inst.CONTINUE, 0, pulse_duration * t_min * spapi.us)
+                    channel_bit_mask,
+                    spapi.Inst.CONTINUE,
+                    0,
+                    pulse_duration * t_min * spapi.us,
+                )
                 self.error_catcher(start_instr_num)
-            elif i != len(channel_bit_masks)-1:
+            elif i != len(channel_bit_masks) - 1:
                 status = spapi.pb_inst_pbonly(
-                    channel_bit_mask, spapi.Inst.CONTINUE, 0, pulse_duration * t_min * spapi.us)
+                    channel_bit_mask,
+                    spapi.Inst.CONTINUE,
+                    0,
+                    pulse_duration * t_min * spapi.us,
+                )
                 self.error_catcher(status)
             else:
                 status = spapi.pb_inst_pbonly(
-                    channel_bit_mask, spapi.Inst.BRANCH, start_instr_num, pulse_duration * t_min * spapi.us)
+                    channel_bit_mask,
+                    spapi.Inst.BRANCH,
+                    start_instr_num,
+                    pulse_duration * t_min * spapi.us,
+                )
                 self.error_catcher(status)
 
         status = spapi.pb_inst_pbonly(
-            0, spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * spapi.us)
+            0, spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * spapi.us
+        )
         self.error_catcher(status)
 
         self.stop_programming()
-        print(colored('Pulse sequence is loaded to Pulseblaster card!', 'green'))
+        print(colored("Pulse sequence is loaded to Pulseblaster card!", "green"))
 
     def start_programming(self) -> None:
-        '''
-            Starts the programming of PB pulse program
-        '''
+        """
+        Starts the programming of PB pulse program
+        """
         # Returns a 0 on success or a negative number on an error.
-        status = spapi.pb_start_programming(
-            spapi.PULSE_PROGRAM)
+        status = spapi.pb_start_programming(spapi.PULSE_PROGRAM)
         self.error_catcher(status)
 
     def stop_programming(self) -> None:
-        '''
-            Stops the programming of PB pulse program
-        '''
-        status = spapi.pb_stop_programming(
+        """
+        Stops the programming of PB pulse program
+        """
+        status = (
+            spapi.pb_stop_programming()
         )  # Returns a 0 on success or a negative number on an error.
         self.error_catcher(status)
 

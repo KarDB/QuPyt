@@ -13,6 +13,7 @@ class UpdateConfigurationProtocol(Protocol):
     Protocoll defining structure of the attribute_map
     for the mixin class.
     """
+
     attribute_map: Dict[str, Callable[[Any], None]]
 
 
@@ -27,8 +28,9 @@ class ConfigurationMixin:
     dictionary.
     """
 
-    def _update_from_configuration(self: UpdateConfigurationProtocol,
-                                   configuration: Dict[str, Any]) -> None:
+    def _update_from_configuration(
+        self: UpdateConfigurationProtocol, configuration: Dict[str, Any]
+    ) -> None:
         for attr, value in configuration.items():
             try:
                 self.attribute_map[attr](value)
@@ -57,5 +59,4 @@ class ConfigurationError(Exception):
             f"Try using one of the following configuration options instead:\n\n"
             " ===>   "
             f"{self.valids}\n\n"
-
         )
