@@ -139,16 +139,17 @@ def parse_input() -> None:
             sensor = SensorFactory.create_sensor(
                 params["sensor"]["type"], params["sensor"]["config"]
             )
-            static_devices.update_devices(params.get("static_devices", {}))
-            dynamic_devices.number_dynamic_steps = int(params["number_dynamic_steps"])
-            dynamic_devices.update_devices(params.get("dynamic_devices", {}))
+            static_devices.update_devices(params["static_devices"])
+            dynamic_devices.number_dynamic_steps = int(params["dynamic_steps"])
+            dynamic_devices.update_devices(params["dynamic_devices"])
             success_status = run_measurement(
                 static_devices, dynamic_devices, sensor, synchroniser, params
             )
             if success_status == "success":
                 os.remove(instruction_file + "_running")
             elif success_status == "failed":
-                os.rename(instruction_file + "_running", instruction_file + "_failed")
+                os.rename(instruction_file + "_running",
+                          instruction_file + "_failed")
         except Exception:
             logging.exception("Excpetion in main measurement loop")
             traceback.print_exc()

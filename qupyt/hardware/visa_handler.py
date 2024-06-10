@@ -37,11 +37,13 @@ class VisaObject:
             self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
             logging.info(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[done]"
+                f"Opening {s_type} at adress {handle}".ljust(
+                    65, ".") + "[done]"
             )
         except Exception as exc:
             logging.exception(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[failed]"
+                f"Opening {s_type} at adress {handle}".ljust(
+                    65, ".") + "[failed]"
             )
             resource_manager.close()
             resource_manager.visalib._registry.clear()
@@ -88,6 +90,7 @@ class VisaObject:
                 "GetNCycles1": "BURS:NCYC?",
                 "SetNCycles1": "BURS:NCYC ",
                 "SetBurstMode1": "BURS:MODE ",
+                "SetBurstState1": "BURS:STAT ",
                 "GetBurstMode1": "BURS:MODE?",
                 "Outp1": "OUTP ",
                 "GetOutp1": "OUTP?",
@@ -100,6 +103,7 @@ class VisaObject:
                 "GetNCycles2": "SOUR2:BURS:NCYC?",
                 "SetNCycles2": "SOUR2:BURS:NCYC ",
                 "SetBurstMode2": "SOUR2:BURS:MODE ",
+                "SetBurstState2": "SOUR2:BURS:STAT ",
                 "GetBurstMode2": "SOUR2:BURS:MODE?",
                 "Outp2": "OUTP2 ",
                 "GetOutp2": "OUTP2?",
@@ -145,6 +149,7 @@ class VisaObject:
             )
         except Exception:
             logging.exception(
-                "Closing {self.s_type} at adress {self.handle} failed".ljust(65, ".")
+                "Closing {self.s_type} at adress {self.handle} failed".ljust(
+                    65, ".")
                 + "[failed]"
             )

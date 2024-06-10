@@ -30,7 +30,10 @@ class DeviceHandler:
         superfluous devices and subsequently opening
         newly requested devices.
         """
-        self.requested_devices = copy.deepcopy(requested_devices)
+        if requested_devices is None:
+            self.requested_devices = {}
+        else:
+            self.requested_devices = copy.deepcopy(requested_devices)
         self.close_superfluous_devices()
         self.open_new_requested_devices()
 
@@ -48,7 +51,8 @@ class DeviceHandler:
                 self.devices[key]["device"].close()
                 rem = self.devices.pop(key)
                 logging.info(
-                    f"Removed {rem} from active devices dict".ljust(65, ".") + "[done]"
+                    f"Removed {rem} from active devices dict".ljust(
+                        65, ".") + "[done]"
                 )
 
     def open_new_requested_devices(self) -> None:
@@ -120,11 +124,12 @@ class DynamicDeviceHandler(DeviceHandler):
                 # Remove config dicts.
                 # These will be updated for every new value.
                 creation_dict = copy.deepcopy(value)
-                creation_dict["sweep_config"] = creation_dict["config"]
                 creation_dict["config"] = {}
                 device = DeviceFactory.create_device(creation_dict)
                 self.devices[key] = value
                 self.devices[key]["device"] = device
+                self.devices[key]['sweep_config'] = copy.deepcopy(
+                    value['config'])
                 logging.info(
                     f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
                         65, "."
@@ -132,7 +137,8 @@ class DynamicDeviceHandler(DeviceHandler):
                     + "[done]"
                 )
             else:
-                self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
+                self.devices[key]["sweep_config"] = copy.deepcopy(
+                    value["config"])
                 logging.info(
                     f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
                         65, "."
@@ -149,13 +155,14 @@ class DynamicDeviceHandler(DeviceHandler):
         """
         for device in self.devices.values():
             current_config = {}
-            for parameter, sweep_values in device["sweep_lists"]:
-                current_config[parameter] = (
-                    sweep_values["channel"],
-                    sweep_values["sweep_values"][self.current_dynamic_step],
-                )
-            device["config"] = current_config
-            device.set_values()
+            for parameter, channel_config in device["sweep_lists"].items():
+                current_config[parameter] = [
+                    channel_config["channel"],
+                    channel_config["sweep_values"][self.current_dynamic_step],
+                ]
+            print(current_config)
+            device["device"].update_configuration(current_config)
+            device["device"].set_values()
         self.current_dynamic_step += 1
 
     def _get_channel_and_sweeplist(
@@ -171,9 +178,20 @@ class DynamicDeviceHandler(DeviceHandler):
     def _make_sweep_lists(self) -> None:
         """Contruct array / listof values to be sweeped"""
         for device in self.devices.values():
-            for parameter, value_list in device["sweep_config"].values():
-                channel, value_list = self._get_channel_and_sweeplist(value_list)
-                if all(isinstance(x, (int, float)) for x in value_list):
+            for parameter, value_list in device["sweep_config"].items():
+                channel, value_list = self._get_channel_and_sweeplist(
+                    value_list)
+                if all(isinstance(x, (int, float, str)) for x in value_list):
+                    try:
+                        value_list = [float(x) for x in value_list]
+                    except ValueError as exc:
+                        logging.exception(
+                            'Failed to parse dynamic device range as floats.')
+                        raise exc
+
+                    device.setdefault(
+                        'sweep_lists', {}).setdefault(parameter, {})
+
                     if len(value_list) == 2:
                         device["sweep_lists"][parameter]["sweep_values"] = np.linspace(
                             value_list[0], value_list[1], self.number_dynamic_steps
@@ -188,5 +206,5 @@ class DynamicDeviceHandler(DeviceHandler):
                         device["sweep_lists"][parameter]["channel"] = channel
                 else:
                     raise ValueError(
-                        "Currently only numeric values are allowed for dynamic devices"
+                        "Failed to parse dynamic device range."
                     )

@@ -83,6 +83,12 @@ class DeviceFactory:
                     device_info["device_type"],
                     device_info["config"],
                 )
+            if device_info["device_type"] == "Rigol":
+                return RigolSignalSource(
+                    device_info["address"],
+                    device_info["device_type"],
+                    device_info["config"],
+                )
             return VisaSignalSource(
                 device_info["address"],
                 device_info["device_type"],
@@ -130,15 +136,23 @@ class SignalSource(ABC, ConfigurationMixin):
         if self.configuration is not None:
             self._update_from_configuration(self.configuration)
 
+    def update_configuration(self, config: Dict[str, Any]) -> None:
+        setattr(self, 'configuration', config)
+
     def _parse_tuple_float_input(
         self, input_param: ParameterInput
     ) -> Tuple[int, float]:
-        if isinstance(input_param, tuple):
+        if isinstance(input_param, list):
             channel, value = input_param
             channel = channel.split("_")[-1]
             return (int(channel), value)
         if isinstance(input_param, (int, float)):
             return (1, input_param)
+        if isinstance(input_param, (str)):
+            try:
+                return (1, float(input_param))
+            except ValueError:
+                return (1, input_param)
         raise ConfigurationError(
             "the configuration dictionary",
             input_param,
@@ -161,14 +175,16 @@ class MockSignalSource(SignalSource):
         channel, freq = self._parse_tuple_float_input(freq)
         sleep(0.1)
         logging.info(
-            f"MOCKING! -> set frequency channel {channel} to".ljust(65, ".") + f"{freq}"
+            f"MOCKING! -> set frequency channel {channel} to".ljust(
+                65, ".") + f"{freq}"
         )
 
     def set_amplitude(self, ampl: ParameterInput) -> None:
         channel, ampl = self._parse_tuple_float_input(ampl)
         sleep(0.1)
         logging.info(
-            f"MOCKING! -> set amplitued channel {channel} to".ljust(65, ".") + f"{ampl}"
+            f"MOCKING! -> set amplitued channel {channel} to".ljust(
+                65, ".") + f"{ampl}"
         )
 
     def close(self) -> None:
@@ -205,6 +221,30 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
             f"{self.s_type} set frequency channel {channel} to".ljust(65, ".")
             + f"{freq}"
         )
+
+
+class RigolSignalSource(VisaSignalSource):
+    """Special class for Rigol DG1022 to enable gating"""
+
+    def __init__(
+        self, address: str, device_type: str, configuration: Dict[str, Any]
+    ) -> None:
+        super().__init__(address, device_type, configuration)
+        self.attribute_map['gating'] = self._set_gate_mode
+
+    def _set_gate_mode(self, mode):
+        valids = ['off', 'gate']
+        channel, mode = self._parse_tuple_float_input(mode)
+        if mode.lower() not in valids:
+            raise ConfigurationError('Burst mode', mode, valids)
+        if mode.lower() == 'off':
+            self.instance.write(
+                self.command[f'SetBurstState{channel}'] + "OFF")
+        if mode.lower() == 'gate':
+            self.instance.write(
+                self.command[f'SetBurstState{channel}'] + "ON")
+            self.instance.write(
+                self.command[f'SetBurstMode{channel}'] + "GAT")
 
 
 class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
@@ -301,7 +341,8 @@ class WindFreak(SignalSource):
         try:
             self.instance = serial.Serial(self.address, timeout=1)
             logging.info(
-                f"Connected to WindFreak on {address}".ljust(65, ".") + "[done]"
+                f"Connected to WindFreak on {address}".ljust(
+                    65, ".") + "[done]"
             )
         except Exception:
             logging.error(
@@ -328,13 +369,15 @@ class WindFreak(SignalSource):
         _channel, freq = self._parse_tuple_float_input(freq)
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 1)}".encode())
-        logging.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
+        logging.info("Windfreak set frequency to [MHz]".ljust(
+            65, ".") + f"{freq}")
 
     def _set_power_level(self, power_level: ParameterInput) -> None:
         # High - 1, Low - 0
         _channel, power_level = self._parse_tuple_float_input(power_level)
         self.instance.write(f"h{power_level}".encode())
-        logging.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
+        logging.info("Windfreak power level set to".ljust(
+            65, ".") + f"{power_level}")
 
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
         _channel, on_off = self._parse_tuple_float_input(on_off)
@@ -373,13 +416,15 @@ class WindFreakHDM(SignalSource):
         self.instance.write(f"C{channel}".encode())
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 8)}".encode())
-        logging.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
+        logging.info("Windfreak set frequency to [MHz]".ljust(
+            65, ".") + f"{freq}")
 
     def _set_power_level(self, power_level: ParameterInput) -> None:
         # High - 1, Low - 0
         _channel, power_level = self._parse_tuple_float_input(power_level)
         self.instance.write(f"h{power_level}".encode())
-        logging.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
+        logging.info("Windfreak power level set to".ljust(
+            65, ".") + f"{power_level}")
 
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
         _channel, on_off = self._parse_tuple_float_input(on_off)
