@@ -1,6 +1,7 @@
 .. _rabi:
-ESR Configuration File
-======================
+
+Rabi Configuration File
+=======================
 
 Below you find an example Configuration file for an ESR measurement:
 

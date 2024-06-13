@@ -57,12 +57,7 @@ class SynchroniserFactory:
           instance to call it.
 
     Example:
-        ::
-
-            cam = SynchroniserFactory.create_synchroniser('TekAWG',
-                                                          {'address': 'TCPIP::ipaddress::INSTR'},
-                                                          {"LASER": 1,
-                                                           "READ": 2})
+        >>> cam = SynchroniserFactory.create_synchroniser('TekAWG', {'address': 'TCPIP::ipaddress::INSTR'}, {'LASER': 1, 'READ': 2})
     """
 
     @staticmethod
@@ -95,8 +90,7 @@ class SynchroniserFactory:
 
 
 class Synchroniser(ABC, ConfigurationMixin):
-    """
-    Abstract Base Class for all synchronisers. All synchronisers implemented in QuPyt
+    """Abstract Base Class for all synchronisers. All synchronisers implemented in QuPyt
     should inherit from this class. This helps ensure compliance with the
     synchroniser API.
 
@@ -841,7 +835,7 @@ class PulseBlaster(Synchroniser):
 
     Attributes
     ----------
-    int PBclk :
+    int PBclk:
         PulseBlaster clock frequency (in MHz)
     int PB_min_instr_clk_cycles:
         minimum instruction time, in clock periods
@@ -856,7 +850,8 @@ class PulseBlaster(Synchroniser):
 
     Methods
     -------
-    error_catcher(int status): Catches error in PB board status
+    error_catcher(int status):
+        Catches error in PB board status
     configure_pb():
         Configures PB board
     int status pb_inst_pbonly(int bit flags, int instruction,
@@ -971,6 +966,7 @@ class PulseBlaster(Synchroniser):
         PB returns a negative number on an error,
         and 0 or the instruction number on success.
         If error, prints the error message.
+
         Parameters:
             int status: current status of PB board
         """
@@ -996,13 +992,16 @@ class PulseBlaster(Synchroniser):
         """
         Create single instruction to send to the pulse program. It returns a negative number on an error, or the instruction number upon success.
         If the function returns -99, an invalid parameter was passed to the function.
+
         Instruction format:
             int status pb_inst_pbonly(int bit flags, int instruction, int instruction_data, int pulse_length)
+
         Parameters:
             int bit flags: state of each TTL output bit.
             int instruction: type of instruction is to be executed.
             int instruction_data: data to be used with the instruction field.
             int pulse_length: duration of this pulse program instruction
+
         Returns:
             int status: current PB board status
         """

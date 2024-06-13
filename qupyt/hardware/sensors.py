@@ -134,8 +134,9 @@ class Sensor(ABC, ConfigurationMixin):
     should inherit from this class. This helps ensure compliance with the
     sensor API.
 
-    **Note**: The attributes listed below are never explicitly set by the user.
-    Please use the ``configuration`` constructor argument to configure the sensor.
+    Note:
+        The attributes listed below are never explicitly set by the user.
+        Please use the ``configuration`` constructor argument to configure the sensor.
 
     Arguments:
         - **configuration** (dict): Configuration dictionary. Keys will be used
@@ -152,8 +153,11 @@ class Sensor(ABC, ConfigurationMixin):
         - **roi_shape** (list[int]): Specifies the shape (Region Of Interest)
           thats read out from the sensor. This attribute is present to
           communicate the sensor dimensions to other parts of the code.
-          It is never actively set by the user.
+          It should not be actively set by the user.
           Check the configuration options for the individual sensors.
+        - **target_data_type** (int): Datatype returned by the sensor.
+          It should match or at least be compatible with the datatype of the
+          data container. Not settable for all sensors.
         - **number_measurements** (int): Set by the number_measurements
           attribute in the configuration dict.
     """
@@ -209,6 +213,10 @@ class GenICamPhantom(Sensor):
     It builds on the EGrabber library provided by Euresys.
     Therefore, it will only work with the Framegrabber / Camera combination.
 
+    Note:
+        You will need to install the egrabber software and the egrabber python
+        wheel provided on the Euresys website for this class to work.
+
     Arguments:
         - **configuration** (dict): Configuration dictionary. Keys will be used
           to select setter methods from an attribute map dicionary to set
@@ -216,15 +224,20 @@ class GenICamPhantom(Sensor):
 
           Possible configuration values:
             - **exposure_time** (int, µs)
-            - **image_roi** (list[int]): THIS SETTER IS NOT FULLY IMPEMENTED FOR THIS CAMERA!
+            - **image_roi** (list[int]):
+              **This setter is not fully implemented for this sensor. Please
+              configure the full sensor size with no x or y offset until furhter notice.**
               Region Of Interest of the sensor in
               the following format: [height, width, x_offset, y_offset].
               The roi_shape attribute of the :class:`Sensor` base class will
               be derived from this.
-            - **pixel_bits** (string): Sets number of bits per pixel. E.g. 'Mono8', 'Mono12' or 'Mono16'.
+            - **pixel_bits** (string): Sets number of bits per pixel.
+              E.g. 'Mono8', 'Mono12' or 'Mono16'.
               Note that we currently do not support the "bayer" pixel format.
-            - **trigger_mode** (string): Sets camera in triggered mode. ['On', 'on', 'ON', 'Off', 'off', "OFF"]
-            - **trigger_source** (string): Sets input for the camera trigger. E.g. 'GPIO0', 'GPIO1'
+            - **trigger_mode** (string): Sets camera in triggered mode.
+              ['On', 'on', 'ON', 'Off', 'off', "OFF"]
+            - **trigger_source** (string): Sets input for the camera trigger.
+              E.g. 'GPIO0', 'GPIO1'
 
           Note that these configuration attributes extend those from the
           :class:`Sensor` base class.
@@ -406,7 +419,7 @@ class GenICamPhantom(Sensor):
 
 class GenICamHarvester(Sensor):
     """
-    Sensor class implementation for all GenICam compliant cameras.
+    Sensor class implementation for all simple GenICam compliant cameras.
     This class relies on the excellent
     `harvesters <https://github.com/genicam/harvesters>`_ library.
     You will need to provide your own GenTL producer file for this to work.
@@ -429,6 +442,14 @@ class GenICamHarvester(Sensor):
 
           Note that these configuration attributes extend those from the
           :class:`Sensor` base class.
+
+    Note:
+        Currently this class preconfigures the following:
+          - **CXP link configuration**: CXP12_X4. This means the frame grabber expects
+            to communicate via CoaXPress 12 on 4 lanes.
+          - **pixel_format**: Mono10
+          - **trigger_source**: Line0
+          - **trigger_mode**: FrameStart
 
     Raises (__init__):
         - **FileNotFoundError**

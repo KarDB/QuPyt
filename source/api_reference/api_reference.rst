@@ -13,3 +13,4 @@ Here you will find documentation on how to use the different classes.
    visa_handler
    signal_sources
    device_handler
+   power_supplies
