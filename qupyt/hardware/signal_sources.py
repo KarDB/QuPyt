@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from time import sleep
 from typing import Dict, Any, Union, Tuple, List
 import serial
+from windfreak import SynthHD
 from qupyt.hardware import visa_handler
 from qupyt.mixins import UpdateConfigurationType, ConfigurationMixin, ConfigurationError
 
@@ -435,3 +436,51 @@ class WindFreakHDM(SignalSource):
     def close(self) -> None:
         self.instance.close()
         logging.info("WindFreak instance closed".ljust(65, ".") + "[done]")
+
+
+class WindFreakMini(SignalSource):
+    def __init__(self, address: str, configuration: Dict[str, Any]) -> None:
+        self.address = address
+        super().__init__(configuration)
+        self.instance = SynthHD(self.address)
+        self.instance.init()
+        # self._set_power_level(1)
+        # self.attribute_map["power_level"] = self._set_power_level
+        self.attribute_map["output_on_off"] = self._set_output_on_off
+
+    def __repr__(self) -> str:
+        return f"WindFreakMini(address: {self.address})"
+
+    def __str__(self) -> str:
+        return f"Signal source of type (synth-mini) WindFreakMini(address: {self.address})"
+
+    def set_amplitude(self, ampl: ParameterInput) -> None:
+        channel, ampl = self._parse_tuple_float_input(ampl)
+        self.instance[channel].power = ampl
+        logging.info(f"Windfreak set amplitude channel{channel} to".ljust(
+            65, ".") + f"{ampl}")
+
+    def set_frequency(self, freq: ParameterInput) -> None:
+        channel, freq = self._parse_tuple_float_input(freq)
+        # might need rouding
+        self.instance[channel].frequency = freq
+        logging.info(f"Windfreak set channel {channel} frequency to [Hz]".ljust(
+            65, ".") + f"{freq}")
+
+    # def _set_power_level(self, power_level: ParameterInput) -> None:
+    #     # High - 1, Low - 0
+    #     _channel, power_level = self._parse_tuple_float_input(power_level)
+    #     self.instance.write(f"h{power_level}".encode())
+    #     logging.info("Windfreak power level set to".ljust(
+    #         65, ".") + f"{power_level}")
+
+    def _set_output_on_off(self, on_off: ParameterInput) -> None:
+        channel, on_off = self._parse_tuple_float_input(on_off)
+        self.instance[channel].enable = on_off
+        logparam = "[ON]" if on_off == 1 else "[OFF]"
+        logging.info("WindFreak output set".ljust(65, ".") + logparam)
+
+    def close(self) -> None:
+        # self.instance.close()
+        logging.info("WindFreak instance closed".ljust(65, ".") + "[done]")
+        pass

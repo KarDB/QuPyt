@@ -23,6 +23,7 @@ dependencies = [
     'termcolor',
     'tqdm',
     'watchdog',
+    'windfreak',
 ]
 #author = 'Karl Briegel'
 #author_email = 'karl.briegel@tum.de'
