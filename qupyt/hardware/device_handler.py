@@ -218,7 +218,6 @@ class DynamicDeviceHandler(DeviceHandler):
                     current_config[parameter].append(
                         (channel, sweep_values[self.current_dynamic_step])
                     )
-                print(current_config)
             device["device"].update_configuration(current_config)
             device["device"].set_values()
         self.current_dynamic_step += 1
@@ -241,7 +240,6 @@ class DynamicDeviceHandler(DeviceHandler):
                 value_list = self.coerce_input_shape_dynamic(value_list)
                 device.setdefault("sweep_lists", {}).setdefault(parameter, {})
                 for channel, value_range in value_list:
-                    print("hello")
                     if len(value_range) == 2:
                         device["sweep_lists"][parameter][channel] = np.linspace(
                             value_range[0], value_range[1], self.number_dynamic_steps
