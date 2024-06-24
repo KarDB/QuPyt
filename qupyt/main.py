@@ -12,7 +12,7 @@ import platform
 from datetime import date
 from time import sleep
 from queue import Queue
-from typing import Dict
+from typing import Optional
 from pathlib import Path
 
 import yaml
@@ -88,19 +88,6 @@ queue: Queue[str]
 event_thread: threading.Event
 
 
-def _on_closed(event: FileClosedEvent) -> None:
-    queue.put(event.src_path)
-    event_thread.set()
-    event_thread.clear()
-
-
-def _on_modified(event: FileModifiedEvent) -> None:
-    queue.put(event.src_path)
-    sleep(0.1)
-    event_thread.set()
-    event_thread.clear()
-
-
 def _set_busy() -> None:
     with open(get_home_dir() / "status.txt", "w", encoding="utf-8") as file:
         file.write("busy")
@@ -148,29 +135,91 @@ def parse_input() -> None:
             if success_status == "success":
                 os.remove(instruction_file + "_running")
             elif success_status == "failed":
-                os.rename(instruction_file + "_running",
-                          instruction_file + "_failed")
+                os.rename(instruction_file + "_running", instruction_file + "_failed")
         except Exception:
             logging.exception("Excpetion in main measurement loop")
             traceback.print_exc()
 
 
-def _get_observer_event_hanlder() -> PatternMatchingEventHandler:
+class WaitingRoomEventHandler(PatternMatchingEventHandler):
+    """
+    A custom event handler for monitoring changes in specific files.
+
+    This handler extends PatternMatchingEventHandler to react to file modifications
+    and closures. It uses different methods based on the operating system:
+    - On Windows, it handles file modifications.
+    - On other systems, it handles file closures.
+
+    Attributes:
+        patterns (list): List of file patterns to include in monitoring.
+        ignore_patterns (list): List of file patterns to exclude from monitoring.
+        ignore_directories (bool): Whether to ignore changes in directories.
+        case_sensitive (bool): Whether file pattern matching is case sensitive.
+    """
+
+    def __init__(
+        self,
+        patterns: Optional[list[str]] = None,
+        ignore_patterns: Optional[list[str]] = None,
+        ignore_directories: bool = False,
+        case_sensitive: bool = False,
+    ):
+        """
+        Initialize the event handler with the specified parameters.
+
+        Args:
+            patterns (list, optional): List of file patterns to include in monitoring.
+            ignore_patterns (list, optional): List of file patterns to exclude from monitoring.
+            ignore_directories (bool, optional): Whether to ignore changes in directories. Defaults to False.
+            case_sensitive (bool, optional): Whether file pattern matching is case sensitive. Defaults to False.
+        """
+        super().__init__(patterns, ignore_patterns, ignore_directories, case_sensitive)
+        if platform.system() == "Windows":
+            self.on_modified = self._on_modified
+        else:
+            self.on_closed = self._on_closed
+
+    def _on_closed(self, event: FileClosedEvent) -> None:
+        """
+        Handle the event when a monitored file is closed.
+
+        This method is called when a file matching the specified patterns is closed.
+        It puts the file path in a queue and triggers the event thread.
+
+        Args:
+            event (FileClosedEvent): The event object containing information about the closed file.
+        """
+        queue.put(event.src_path)
+        event_thread.set()
+        event_thread.clear()
+
+    def _on_modified(self, event: FileModifiedEvent) -> None:
+        """
+        Handle the event when a monitored file is modified.
+
+        This method is called when a file matching the specified patterns is modified.
+        It puts the file path in a queue, waits briefly, and triggers the event thread.
+
+        Args:
+            event (FileModifiedEvent): The event object containing information about the modified file.
+        """
+        queue.put(event.src_path)
+        sleep(0.1)
+        event_thread.set()
+        event_thread.clear()
+
+
+def _get_observer_event_hanlder() -> WaitingRoomEventHandler:
     patterns = ["*.yaml"]
     ignore_patterns = None
     ignore_directories = True
     case_sensitive = True
-    event_handler = PatternMatchingEventHandler(
+    return WaitingRoomEventHandler(
         patterns, ignore_patterns, ignore_directories, case_sensitive
     )
-    if platform.system() == "Windows":
-        event_handler.on_modified = _on_modified
-    else:
-        event_handler.on_closed = _on_closed
-    return event_handler
 
 
-def _get_observer(event_handler: PatternMatchingEventHandler) -> Observer:
+def _get_observer(event_handler: WaitingRoomEventHandler) -> Observer:
     path = get_waiting_room()
     go_recursively = False
     my_observer = Observer()

@@ -508,6 +508,28 @@ class GenICamHarvester(Sensor):
         self.cam.remote_device.node_map.Gain.value = gain
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
+        """
+        Set the region of interest (ROI) on the camera sensor.
+
+        This method configures the ROI on the camera sensor by setting the height, width,
+        and the X and Y offsets. The ROI shape and offsets are specified in a list.
+
+        Args:
+            roi_shape_and_offset (List[int]): A list containing four integers:
+                - The first two integers specify the height and width of the ROI.
+                - The last two integers specify the X and Y offsets of the ROI.
+
+        Raises:
+            Exception: If setting any of the ROI parameters on the camera fails, an exception is logged and raised.
+
+        Example:
+            roi_shape_and_offset = [height, width, offsetX, offsetY]
+            _set_roi(roi_shape_and_offset)
+
+        The method logs the outcome of setting the ROI:
+            - On success: Logs the height, width, and offsets along with a "[done]" status.
+            - On failure: Logs the height, width, and offsets along with a "[failed]" status and raises the exception.
+        """
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         roi_offset_x_and_y = roi_shape_and_offset[2:]
         try:
@@ -607,7 +629,7 @@ class BaslerCam(Sensor):
               the following format: [height, width, x_offset, y_offset].
               The roi_shape attribute of the :class:`Sensor` base class will
               be derived from this.
-            - **binning_horizontal** (string): Options are typically 1, 2, 3 or 4.
+            - **binning_horizontal** (string): Options typically are 1, 2, 3 or 4.
               However, this might depend on your specific camera model.
             - **binning_vertical** (string): Options are typically 1, 2, 3 or 4.
               However, this might depend on your specific camera model.
@@ -705,6 +727,28 @@ class BaslerCam(Sensor):
         self.cam.BinningVerticalMode.SetValue(mode_binning_vertical)
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
+        """
+        Set the region of interest (ROI) on the camera sensor.
+
+        This method configures the ROI on the camera sensor by setting the height, width,
+        and the X and Y offsets. The ROI shape and offsets are specified in a list.
+
+        Args:
+            roi_shape_and_offset (List[int]): A list containing four integers:
+                - The first two integers specify the height and width of the ROI.
+                - The last two integers specify the X and Y offsets of the ROI.
+
+        Raises:
+            Exception: If setting any of the ROI parameters on the camera fails, an exception is logged and raised.
+
+        Example:
+            roi_shape_and_offset = [height, width, offsetX, offsetY]
+            _set_roi(roi_shape_and_offset)
+
+        The method logs the outcome of setting the ROI:
+            - On success: Logs the height, width, and offsets along with a "[done]" status.
+            - On failure: Logs the height, width, and offsets along with a "[failed]" status and raises the exception.
+        """
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         roi_offset_x_and_y = roi_shape_and_offset[2:]
         try:
@@ -852,6 +896,8 @@ class HeliCam(Sensor):
         Reads frames from the camera and reshuffels from the
         heliCam specific format to the structure
         we expect from other sensors.
+
+        See :meth:`Sensor.acquire_data`.
         """
         time_1 = time()
         if synchroniser is not None:
@@ -1012,6 +1058,8 @@ class DAQ(Sensor):
     def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
         """
         Reads all samples at onec from the configure sensor.
+
+        See :meth:`Sensor.acquire_data`.
         """
         if synchroniser is not None:
             synchroniser.trigger()
@@ -1059,7 +1107,7 @@ class MockCam(Sensor):
     """
     To ensure users can test their code and the general logic without having
     to buy expensive lab equipment, most devices in QuPyt implement
-    movking behoviour. Mock devices do not talk to any real hardware.
+    mocking behoviour. Mock devices do not talk to any real hardware.
     They implement a dummy interface, where API functions either pass,
     sleep or return noise.
     This is the mock variant of a sensor.
@@ -1110,6 +1158,8 @@ class MockCam(Sensor):
         Returns an array of shape ``[number_measrurements, height, witdh]``
         as specified in configuration. Array contains Poisson distributed values
         with k=15000
+
+        See :meth:`Sensor.acquire_data`.
         """
         if synchroniser is not None:
             synchroniser.trigger()

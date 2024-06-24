@@ -12,7 +12,14 @@ import copy
 import logging
 from typing import Dict, Any, List, Union, Tuple
 import numpy as np
+from pydantic import validate_call
 from qupyt.hardware.signal_sources import DeviceFactory
+
+DynamicParameterInput = Union[
+    List[Union[float, int]],
+    Tuple[str, List[Union[float, int]]],
+    List[Tuple[str, List[Union[float, int]]]],
+]
 
 
 class DeviceHandler:
@@ -206,30 +213,15 @@ class DynamicDeviceHandler(DeviceHandler):
         for device in self.devices.values():
             current_config = {}
             for parameter, channel_config in device["sweep_lists"].items():
-                current_config[parameter] = [
-                    channel_config["channel"],
-                    channel_config["sweep_values"][self.current_dynamic_step],
-                ]
-            print(current_config)
+                current_config[parameter] = []
+                for channel, sweep_values in channel_config.items():
+                    current_config[parameter].append(
+                        (channel, sweep_values[self.current_dynamic_step])
+                    )
+                print(current_config)
             device["device"].update_configuration(current_config)
             device["device"].set_values()
         self.current_dynamic_step += 1
-
-    def _get_channel_and_sweeplist(
-        self, value_list: Union[List[float], Tuple[str, List[float]]]
-    ) -> Tuple[str, List[float]]:
-        """
-        Get the channel and sweep list from a given value list.
-
-        :param value_list: A list of values or a tuple containing a channel and
-                           a list of values.
-        :type value_list: Union[List[float], Tuple[str, List[float]]]
-        :return: A tuple containing the channel and the list of sweep values.
-        :rtype: Tuple[str, List[float]]
-        """
-        if not isinstance(value_list[1], list):
-            return "channel_1", value_list
-        return value_list[0], value_list[1]
 
     def _reset_step_counter(self) -> None:
         """
@@ -246,29 +238,27 @@ class DynamicDeviceHandler(DeviceHandler):
         """
         for device in self.devices.values():
             for parameter, value_list in device["sweep_config"].items():
-                channel, value_list = self._get_channel_and_sweeplist(value_list)
-                if all(isinstance(x, (int, float, str)) for x in value_list):
-                    try:
-                        value_list = [float(x) for x in value_list]
-                    except ValueError as exc:
-                        logging.exception(
-                            "Failed to parse dynamic device range as floats."
+                value_list = self.coerce_input_shape_dynamic(value_list)
+                device.setdefault("sweep_lists", {}).setdefault(parameter, {})
+                for channel, value_range in value_list:
+                    print("hello")
+                    if len(value_range) == 2:
+                        device["sweep_lists"][parameter][channel] = np.linspace(
+                            value_range[0], value_range[1], self.number_dynamic_steps
                         )
-                        raise exc
-
-                    device.setdefault("sweep_lists", {}).setdefault(parameter, {})
-
-                    if len(value_list) == 2:
-                        device["sweep_lists"][parameter]["sweep_values"] = np.linspace(
-                            value_list[0], value_list[1], self.number_dynamic_steps
-                        )
-                        device["sweep_lists"][parameter]["channel"] = channel
                     else:
-                        if len(value_list) != self.number_dynamic_steps:
+                        if len(value_range) != self.number_dynamic_steps:
                             raise ValueError(
                                 "Trying to set manual sweep value list. Please make sure the number of dynamic_steps matches the length of the provided list"
                             )
-                        device["sweep_lists"][parameter]["sweep_values"] = value_list
-                        device["sweep_lists"][parameter]["channel"] = channel
-                else:
-                    raise ValueError("Failed to parse dynamic device range.")
+                        device["sweep_lists"][parameter][channel] = value_range
+
+    @validate_call
+    def coerce_input_shape_dynamic(self, arg: DynamicParameterInput):
+        if isinstance(arg, list) and all(isinstance(item, tuple) for item in arg):
+            return arg
+        if isinstance(arg, tuple):
+            return [arg]
+        if isinstance(arg, list):
+            return [("channel_1", arg)]
+        raise ValueError("Dynamic parameter coercion failed")

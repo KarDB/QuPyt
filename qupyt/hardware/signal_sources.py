@@ -10,13 +10,20 @@ from time import sleep
 from typing import Dict, Any, Union, Tuple, List
 import serial
 from windfreak import SynthHD
+from pydantic import validate_call
 from qupyt.hardware import visa_handler
 from qupyt.mixins import UpdateConfigurationType, ConfigurationMixin, ConfigurationError
+from qupyt.utils.decorators import coerce_device_config_shape, loop_inputs
 
-ParameterInput = Union[Union[float, int], Tuple[str, Union[float, int]]]
-
+ParameterInput = Union[
+    Union[float, int, str],
+    Tuple[str, Union[float, int, str]],
+    List[Tuple[str, Union[float, int, str]]],
+]
 
 # pylint: disable=too-few-public-methods
+
+
 class DeviceFactory:
     """
     Device Factory responsible for creating and returning an instance of the
@@ -72,11 +79,13 @@ class DeviceFactory:
                 "the device type", device_info["device_type"], known_devices
             )
         try:
-            if device_info["device_type"] == "WindFreak":
-                return WindFreak(device_info["address"], device_info["config"])
+            if device_info["device_type"] == "WindFreakSNV":
+                return WindFreakSNV(device_info["address"], device_info["config"])
             if device_info["device_type"] == "WindFreakHDM":
                 return WindFreakHDM(device_info["address"], device_info["config"])
-            if device_info["device_type"] == "mock":
+            if device_info["device_type"] == "WindFreak":
+                return WindFreakOfficial(device_info["address"], device_info["config"])
+            if device_info["device_type"] == "Mock":
                 return MockSignalSource(device_info["address"], device_info["config"])
             if device_info["device_type"] == "SMB":
                 return SMBVisaSignalSource(
@@ -138,27 +147,7 @@ class SignalSource(ABC, ConfigurationMixin):
             self._update_from_configuration(self.configuration)
 
     def update_configuration(self, config: Dict[str, Any]) -> None:
-        setattr(self, 'configuration', config)
-
-    def _parse_tuple_float_input(
-        self, input_param: ParameterInput
-    ) -> Tuple[int, float]:
-        if isinstance(input_param, list):
-            channel, value = input_param
-            channel = channel.split("_")[-1]
-            return (int(channel), value)
-        if isinstance(input_param, (int, float)):
-            return (1, input_param)
-        if isinstance(input_param, (str)):
-            try:
-                return (1, float(input_param))
-            except ValueError:
-                return (1, input_param)
-        raise ConfigurationError(
-            "the configuration dictionary",
-            input_param,
-            f"Should be of shape {ParameterInput}",
-        )
+        setattr(self, "configuration", config)
 
 
 class MockSignalSource(SignalSource):
@@ -172,20 +161,24 @@ class MockSignalSource(SignalSource):
     def __str__(self) -> str:
         return f"Signal source of type MockSignalSource(address: {self.address})"
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
-        channel, freq = self._parse_tuple_float_input(freq)
+        channel, freq = freq
         sleep(0.1)
         logging.info(
-            f"MOCKING! -> set frequency channel {channel} to".ljust(
-                65, ".") + f"{freq}"
+            f"MOCKING! -> set frequency channel {channel} to".ljust(65, ".") + f"{freq}"
         )
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        channel, ampl = self._parse_tuple_float_input(ampl)
+        channel, ampl = ampl
         sleep(0.1)
         logging.info(
-            f"MOCKING! -> set amplitued channel {channel} to".ljust(
-                65, ".") + f"{ampl}"
+            f"MOCKING! -> set amplitued channel {channel} to".ljust(65, ".") + f"{ampl}"
         )
 
     def close(self) -> None:
@@ -205,8 +198,11 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
         visa_handler.VisaObject.__init__(self, address, device_type)
         SignalSource.__init__(self, configuration)
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        channel, ampl = self._parse_tuple_float_input(ampl)
+        channel, ampl = ampl
         self.instance.write(self.command[f"SetAmpl{channel}"] + str(ampl))
         self.opc_wait()
         logging.info(
@@ -214,8 +210,11 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
             + f"{ampl}"
         )
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
-        channel, freq = self._parse_tuple_float_input(freq)
+        channel, freq = freq
         self.instance.write(self.command[f"SetFreq{channel}"] + str(freq))
         self.opc_wait()
         logging.info(
@@ -231,21 +230,21 @@ class RigolSignalSource(VisaSignalSource):
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
         super().__init__(address, device_type, configuration)
-        self.attribute_map['gating'] = self._set_gate_mode
+        self.attribute_map["gating"] = self._set_gate_mode
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def _set_gate_mode(self, mode):
-        valids = ['off', 'gate']
-        channel, mode = self._parse_tuple_float_input(mode)
+        valids = ["off", "gate"]
+        channel, mode = mode
         if mode.lower() not in valids:
-            raise ConfigurationError('Burst mode', mode, valids)
-        if mode.lower() == 'off':
-            self.instance.write(
-                self.command[f'SetBurstState{channel}'] + "OFF")
-        if mode.lower() == 'gate':
-            self.instance.write(
-                self.command[f'SetBurstState{channel}'] + "ON")
-            self.instance.write(
-                self.command[f'SetBurstMode{channel}'] + "GAT")
+            raise ConfigurationError("Burst mode", mode, valids)
+        if mode.lower() == "off":
+            self.instance.write(self.command[f"SetBurstState{channel}"] + "OFF")
+        if mode.lower() == "gate":
+            self.instance.write(self.command[f"SetBurstState{channel}"] + "ON")
+            self.instance.write(self.command[f"SetBurstMode{channel}"] + "GAT")
 
 
 class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
@@ -316,8 +315,11 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
         self.opc_wait()
         logging.info("%s[done]", "SMB set slist values.".ljust(65, "."))
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        channel, ampl = self._parse_tuple_float_input(ampl)
+        channel, ampl = ampl
         self.instance.write(self.command[f"SetAmpl{channel}"] + str(ampl))
         self.opc_wait()
         logging.info(
@@ -325,8 +327,11 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
             + f"{ampl}"
         )
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
-        channel, freq = self._parse_tuple_float_input(freq)
+        channel, freq = freq
         self.instance.write(self.command[f"SetFreq{channel}"] + str(freq))
         self.opc_wait()
         logging.info(
@@ -335,15 +340,14 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
         )
 
 
-class WindFreak(SignalSource):
+class WindFreakSNV(SignalSource):
     def __init__(self, address: str, configuration: Dict[str, Any]) -> None:
         self.address = address
         super().__init__(configuration)
         try:
             self.instance = serial.Serial(self.address, timeout=1)
             logging.info(
-                f"Connected to WindFreak on {address}".ljust(
-                    65, ".") + "[done]"
+                f"Connected to WindFreak on {address}".ljust(65, ".") + "[done]"
             )
         except Exception:
             logging.error(
@@ -361,27 +365,37 @@ class WindFreak(SignalSource):
     def __str__(self) -> str:
         return f"Signal source of type (synth-nv) WindFreak(address: {self.address})"
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        _channel, ampl = self._parse_tuple_float_input(ampl)
+        _channel, ampl = ampl
         self.instance.write(f"a{ampl}".encode())  # min 0 , max 63
         logging.info("Windfreak set amplitude to".ljust(65, ".") + f"{ampl}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
-        _channel, freq = self._parse_tuple_float_input(freq)
+        _channel, freq = freq
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 1)}".encode())
-        logging.info("Windfreak set frequency to [MHz]".ljust(
-            65, ".") + f"{freq}")
+        logging.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def _set_power_level(self, power_level: ParameterInput) -> None:
         # High - 1, Low - 0
-        _channel, power_level = self._parse_tuple_float_input(power_level)
+        _channel, power_level = power_level
         self.instance.write(f"h{power_level}".encode())
-        logging.info("Windfreak power level set to".ljust(
-            65, ".") + f"{power_level}")
+        logging.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
-        _channel, on_off = self._parse_tuple_float_input(on_off)
+        _channel, on_off = on_off
         self.instance.write(f"o{on_off}".encode())
         logparam = "[ON]" if on_off == 1 else "[OFF]"
         logging.info("WindFreak output set".ljust(65, ".") + logparam)
@@ -406,29 +420,39 @@ class WindFreakHDM(SignalSource):
     def __str__(self) -> str:
         return f"Signal source of type (synth-hd) WindFreakHDM(address: {self.address})"
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        channel, ampl = self._parse_tuple_float_input(ampl)
+        channel, ampl = ampl
         self.instance.write(f"C{channel}".encode())
         self.instance.write(f"W{ampl}".encode())  # min 0 , max 63
         logging.info("Windfreak set amplitude to".ljust(65, ".") + f"{ampl}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
-        channel, freq = self._parse_tuple_float_input(freq)
+        channel, freq = freq
         self.instance.write(f"C{channel}".encode())
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 8)}".encode())
-        logging.info("Windfreak set frequency to [MHz]".ljust(
-            65, ".") + f"{freq}")
+        logging.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def _set_power_level(self, power_level: ParameterInput) -> None:
         # High - 1, Low - 0
-        _channel, power_level = self._parse_tuple_float_input(power_level)
+        _channel, power_level = power_level
         self.instance.write(f"h{power_level}".encode())
-        logging.info("Windfreak power level set to".ljust(
-            65, ".") + f"{power_level}")
+        logging.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
-        _channel, on_off = self._parse_tuple_float_input(on_off)
+        _channel, on_off = on_off
         self.instance.write(f"o{on_off}".encode())
         logparam = "[ON]" if on_off == 1 else "[OFF]"
         logging.info("WindFreak output set".ljust(65, ".") + logparam)
@@ -438,7 +462,7 @@ class WindFreakHDM(SignalSource):
         logging.info("WindFreak instance closed".ljust(65, ".") + "[done]")
 
 
-class WindFreakMini(SignalSource):
+class WindFreakOfficial(SignalSource):
     def __init__(self, address: str, configuration: Dict[str, Any]) -> None:
         self.address = address
         super().__init__(configuration)
@@ -452,35 +476,47 @@ class WindFreakMini(SignalSource):
         return f"WindFreakMini(address: {self.address})"
 
     def __str__(self) -> str:
-        return f"Signal source of type (synth-mini) WindFreakMini(address: {self.address})"
+        return (
+            f"Signal source of type (synth-mini) WindFreakMini(address: {self.address})"
+        )
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        channel, ampl = self._parse_tuple_float_input(ampl)
+        channel, ampl = ampl
         self.instance[channel].power = ampl
-        logging.info(f"Windfreak set amplitude channel{channel} to".ljust(
-            65, ".") + f"{ampl}")
+        logging.info(
+            f"Windfreak set amplitude channel{channel} to".ljust(65, ".") + f"{ampl}"
+        )
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
-        channel, freq = self._parse_tuple_float_input(freq)
+        channel, freq = freq
         # might need rouding
         self.instance[channel].frequency = freq
-        logging.info(f"Windfreak set channel {channel} frequency to [Hz]".ljust(
-            65, ".") + f"{freq}")
+        logging.info(
+            f"Windfreak set channel {channel} frequency to [Hz]".ljust(65, ".")
+            + f"{freq}"
+        )
 
     # def _set_power_level(self, power_level: ParameterInput) -> None:
     #     # High - 1, Low - 0
-    #     _channel, power_level = self._parse_tuple_float_input(power_level)
+    #     _channel, power_level = power_level
     #     self.instance.write(f"h{power_level}".encode())
     #     logging.info("Windfreak power level set to".ljust(
     #         65, ".") + f"{power_level}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
-        channel, on_off = self._parse_tuple_float_input(on_off)
+        channel, on_off = on_off
         self.instance[channel].enable = on_off
         logparam = "[ON]" if on_off == 1 else "[OFF]"
         logging.info("WindFreak output set".ljust(65, ".") + logparam)
 
     def close(self) -> None:
-        # self.instance.close()
         logging.info("WindFreak instance closed".ljust(65, ".") + "[done]")
-        pass

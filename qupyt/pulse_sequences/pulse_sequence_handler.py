@@ -52,7 +52,7 @@ def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]
 
 
 def update_params_dict(
-    params: Dict[str, Any], update_params: Dict[str, Any]
+    params: Dict[str, Any], update_params: Optional[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """
     Update the parameters dictonary. This is done via recursion to reach
@@ -63,11 +63,11 @@ def update_params_dict(
     :param update_params: Dictionary with the values to be updated.
     :type update_params: Dict[str, Any]
     """
-
+    if update_params is None:
+        return params
     for key, value in update_params.items():
         if isinstance(value, dict):
             params[key] = update_params_dict(params.get(key, {}), value)
         else:
             params[key] = value
-
     return params
