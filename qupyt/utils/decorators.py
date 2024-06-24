@@ -22,7 +22,7 @@ def coerce_device_config_shape(func):
             return func(self, arg)
         if isinstance(arg, tuple):
             return func(self, [arg])
-        if isinstance(arg, (float, int)):
+        if isinstance(arg, (float, int, str)):
             return func(self, [("channel_1", arg)])
         raise ValueError
 
