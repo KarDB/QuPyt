@@ -471,6 +471,8 @@ class WindFreakOfficial(SignalSource):
         # self._set_power_level(1)
         # self.attribute_map["power_level"] = self._set_power_level
         self.attribute_map["output_on_off"] = self._set_output_on_off
+        self._set_output_on_off(["channel_0", True])
+        self._set_output_on_off(["channel_1", True])
 
     def __repr__(self) -> str:
         return f"WindFreakMini(address: {self.address})"
@@ -517,6 +519,7 @@ class WindFreakOfficial(SignalSource):
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
         channel, on_off = on_off
         channel = int(channel)
+        on_off = True if on_off == 1 else False
         self.instance[channel].enable = on_off
         logparam = "[ON]" if on_off == 1 else "[OFF]"
         logging.info("WindFreak output set".ljust(65, ".") + logparam)
