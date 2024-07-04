@@ -24,6 +24,7 @@ dependencies = [
     'tqdm',
     'watchdog',
     'windfreak',
+    'pydantic',
 ]
 #author = 'Karl Briegel'
 #author_email = 'karl.briegel@tum.de'

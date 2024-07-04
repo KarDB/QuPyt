@@ -1,5 +1,12 @@
 # pylint: disable=logging-format-interpolation
 # pylint: disable=logging-not-lazy
+"""
+Power Supply remote control.
+Currently only the Konrad KD300/6000 are supported.
+
+Configuration and use through a YAML config file
+is not currently supported but will be added soon.
+"""
 import traceback
 import logging
 import serial

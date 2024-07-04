@@ -485,6 +485,7 @@ class WindFreakOfficial(SignalSource):
     @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
         channel, ampl = ampl
+        channel = int(channel)
         self.instance[channel].power = ampl
         logging.info(
             f"Windfreak set amplitude channel{channel} to".ljust(65, ".") + f"{ampl}"
@@ -495,6 +496,7 @@ class WindFreakOfficial(SignalSource):
     @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
         channel, freq = freq
+        channel = int(channel)
         # might need rouding
         self.instance[channel].frequency = freq
         logging.info(
@@ -514,6 +516,7 @@ class WindFreakOfficial(SignalSource):
     @loop_inputs
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
         channel, on_off = on_off
+        channel = int(channel)
         self.instance[channel].enable = on_off
         logparam = "[ON]" if on_off == 1 else "[OFF]"
         logging.info("WindFreak output set".ljust(65, ".") + logparam)

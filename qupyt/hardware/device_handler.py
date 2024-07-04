@@ -3,9 +3,11 @@
 """
 This file handles all aspect of the various signal sources in
 active use. Newly requested devices are opened and added
-to dict of used devices, while no longer needed ones are close
+to a dictionary of used devices, while no longer needed ones are close
 and deleted.
-Edge cases like no requested devices as well as values to be set
+Edge cases like no requested devices are handeled.
+
+Device configuration and various output values to be set
 or sweeped are handled here as well.
 """
 import copy
@@ -29,6 +31,9 @@ class DeviceHandler:
     This class provides methods to update the list of requested devices,
     close superfluous devices, open new requested devices, and set parameters
     for all active devices.
+
+    From the point of view of this class, all devices are static for the
+    duration of one measurement.
     """
 
     def __init__(
@@ -143,6 +148,9 @@ class DynamicDeviceHandler(DeviceHandler):
 
     This class extends the DeviceHandler to support dynamic device configurations
     that change over a series of steps.
+
+    The devices are still treated as static. This class updates their
+    configuration for every dynamic step.
     """
 
     def __init__(
@@ -169,7 +177,9 @@ class DynamicDeviceHandler(DeviceHandler):
         current active dictionary.
 
         This method compares the dictionaries of requested and existing devices,
-        and opens and adds devices that are newly requested. It also prepares the
+        and opens and adds devices that are newly requested.
+
+        Furhter, it prepares the
         devices for dynamic configuration changes.
         """
         current_name_address_tuples = [
@@ -204,8 +214,8 @@ class DynamicDeviceHandler(DeviceHandler):
 
     def next_dynamic_step(self) -> None:
         """
-        Set all values requested for dynamic devices based on the current dynamic
-        step.
+        Apply next dynamic values for dynamic devices based on the current
+        dynamic step and increment the step counter.
 
         This method updates the configuration of each device to the values
         corresponding to the current dynamic step and applies these values.
@@ -237,7 +247,7 @@ class DynamicDeviceHandler(DeviceHandler):
         """
         for device in self.devices.values():
             for parameter, value_list in device["sweep_config"].items():
-                value_list = self.coerce_input_shape_dynamic(value_list)
+                value_list = self._coerce_input_shape_dynamic(value_list)
                 device.setdefault("sweep_lists", {}).setdefault(parameter, {})
                 for channel, value_range in value_list:
                     if len(value_range) == 2:
@@ -252,7 +262,15 @@ class DynamicDeviceHandler(DeviceHandler):
                         device["sweep_lists"][parameter][channel] = value_range
 
     @validate_call
-    def coerce_input_shape_dynamic(self, arg: DynamicParameterInput):
+    def _coerce_input_shape_dynamic(self, arg: DynamicParameterInput):
+        """
+        Use pydantic to enforce correct type.
+        Based on this parse the input into a defined type of:
+
+        List[Tuple[str, List[Union[float, int]]]]
+
+        This makes further handling very easy.
+        """
         if isinstance(arg, list) and all(isinstance(item, tuple) for item in arg):
             return arg
         if isinstance(arg, tuple):
