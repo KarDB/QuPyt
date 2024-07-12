@@ -73,6 +73,7 @@ class DeviceFactory:
             "Rigol",
             "TekAWG",
             "TekAFG",
+            "WindFreakSNV",
         ]
         if device_info["device_type"] not in known_devices:
             raise ConfigurationError(
@@ -525,4 +526,5 @@ class WindFreakOfficial(SignalSource):
         logging.info("WindFreak output set".ljust(65, ".") + logparam)
 
     def close(self) -> None:
+        self.instance.close()
         logging.info("WindFreak instance closed".ljust(65, ".") + "[done]")
