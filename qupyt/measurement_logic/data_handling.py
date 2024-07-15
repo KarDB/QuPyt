@@ -114,7 +114,7 @@ class Data(ConfigurationMixin):
             np.save("C:/Users/ge54vec/.qupyt/data", self.data)
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
-                self.data[i, dynamic_step] += data [i::self.referende_channels]
+                self.data[i, dynamic_step] += data [i::self.reference_channels]
                 np.save("C:/Users/ge54vec/.qupyt/data", self.data)
 
 
