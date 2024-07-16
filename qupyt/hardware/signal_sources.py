@@ -489,6 +489,7 @@ class WindFreakOfficial(SignalSource):
     def set_amplitude(self, ampl: ParameterInput) -> None:
         channel, ampl = ampl
         channel = int(channel)
+        ampl = float(ampl)
         self.instance[channel].power = ampl
         logging.info(
             f"Windfreak set amplitude channel{channel} to".ljust(65, ".") + f"{ampl}"
@@ -500,6 +501,7 @@ class WindFreakOfficial(SignalSource):
     def set_frequency(self, freq: ParameterInput) -> None:
         channel, freq = freq
         channel = int(channel)
+        freq = float(freq)
         # might need rouding
         self.instance[channel].frequency = freq
         logging.info(
