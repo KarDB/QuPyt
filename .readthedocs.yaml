@@ -1,4 +1,9 @@
 version: 2
+python:
+  - method: pip
+    path: .
+  - requirements: source/requirements.txt
+
 build:
   os: ubuntu-22.04
   tools:
