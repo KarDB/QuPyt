@@ -4,42 +4,56 @@ For different microwave sources or visa devices, the commands to set e.g.
 an output power are unified by storing the device speicif commands in a
 dictionary for each device.
 """
+
 from time import sleep
 import logging
 from typing import Dict
 import pyvisa
+from qupyt.mixins import ConfigurationError
 
 
 class VisaObject:
-    """Visa class acting as parent for all devices intended to connet via the VISA protocol."""
+    """
+    Visa class acting as parent for all devices intended
+    to connect via the VISA protocol.
+    """
 
     def __init__(self, handle: str, s_type: str) -> None:
         """
         handle: visa adress of signal source
         s_type: source type (SRS, RS)...
         """
+        self.known_s_types = ["SRS", "SMB", "Rigol", "TekAWG", "TekAFG"]
         self.handle = handle
         self.s_type = s_type
+        if self.s_type not in self.known_s_types:
+            raise ConfigurationError(
+                "the VISA device type", self.s_type, self.known_s_types
+            )
         self.command: Dict[str, str]
         self._get_instructions()
         try:
-            rm = pyvisa.ResourceManager()
-            self.instance = rm.open_resource(handle)
+            resource_manager = pyvisa.ResourceManager()
+            self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
             logging.info(
-                "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
-                + "[done]"
+                f"Opening {s_type} at adress {handle}".ljust(
+                    65, ".") + "[done]"
             )
-        except Exception:
-            print('Opening VISA Object Failed')
+        except Exception as exc:
             logging.exception(
-                "Opening {} at adress {}".format(s_type, handle).ljust(65, ".")
-                + "[failed]"
+                f"Opening {s_type} at adress {handle}".ljust(
+                    65, ".") + "[failed]"
             )
-            raise
-        finally:
-            rm.close()
-            rm.visalib._registry.clear()
+            resource_manager.close()
+            resource_manager.visalib._registry.clear()
+            raise exc
+
+    def __repr__(self) -> str:
+        return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
+
+    def __str__(self) -> str:
+        return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
 
     def _get_instructions(self) -> None:
         """
@@ -76,6 +90,7 @@ class VisaObject:
                 "GetNCycles1": "BURS:NCYC?",
                 "SetNCycles1": "BURS:NCYC ",
                 "SetBurstMode1": "BURS:MODE ",
+                "SetBurstState1": "BURS:STAT ",
                 "GetBurstMode1": "BURS:MODE?",
                 "Outp1": "OUTP ",
                 "GetOutp1": "OUTP?",
@@ -88,6 +103,7 @@ class VisaObject:
                 "GetNCycles2": "SOUR2:BURS:NCYC?",
                 "SetNCycles2": "SOUR2:BURS:NCYC ",
                 "SetBurstMode2": "SOUR2:BURS:MODE ",
+                "SetBurstState2": "SOUR2:BURS:STAT ",
                 "GetBurstMode2": "SOUR2:BURS:MODE?",
                 "Outp2": "OUTP2 ",
                 "GetOutp2": "OUTP2?",
@@ -110,10 +126,15 @@ class VisaObject:
             }
 
     def opc_wait(self) -> None:
-        opcVal = 0
-        while opcVal == 0:
+        """
+        Check if the device has finished all tasks and is
+        ready to execute the next command.
+        Pauses execution until the device is ready.
+        """
+        opc_val = 0
+        while opc_val == 0:
             opc = self.instance.query(self.command["OPC"])
-            opcVal = int(opc)
+            opc_val = int(opc)
 
     def close(self) -> None:
         if self.s_type == "TekAWG":
@@ -123,11 +144,12 @@ class VisaObject:
             self.instance.close()
             self.instance.visalib._registry.clear()
             logging.info(
-                "Closing {} at adress {}"
-                .format(self.s_type, self.handle)
-                .ljust(65, ".")
+                f"Closing {self.s_type} at adress {self.handle}".ljust(65, ".")
                 + "[done]"
             )
         except Exception:
-            logging.exception('Closing {} at adress {} failed'.format(
-                self.s_type, self.handle).ljust(65, '.') + '[failed]')
+            logging.exception(
+                "Closing {self.s_type} at adress {self.handle} failed".ljust(
+                    65, ".")
+                + "[failed]"
+            )
