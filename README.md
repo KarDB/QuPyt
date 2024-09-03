@@ -2,9 +2,15 @@
 
 <img alt="qupyt logo" src="./assets/images/logo.png" width="50%" height="50%">
 
+<h1> QuPyt </h1>
+
+<p>
+[Documentation](https://qupyt.readthedocs.com) | [Group Homepage](https://www.ch.nat.tum.de/en/qsense/home/)
+</p>
+
 </div>
 
-# QuPyt
+--- 
 
 Welcome to QuPyt! We love Quantum Sensing and Python. 
 
@@ -25,6 +31,8 @@ If you want to start contributing of using QuPyt for your own research of applic
 Please expect breaking changes to the API in the coming months. We plan to make the API stable until April 2024.
 
 ## Installation
+
+We recommended you use python3.11 or below.
 
 ### Install a release
 
