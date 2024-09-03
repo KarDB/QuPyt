@@ -2,7 +2,7 @@
 
 <img alt="qupyt logo" src="./assets/images/logo.png" width="50%" height="50%">
 
-<h1> QuPyt </h1>
+<h1> QuPyt - The Quantum Sensing Framework </h1>
 
 [Documentation](https://qupyt.readthedocs.com) | [Group Homepage](https://www.ch.nat.tum.de/en/qsense/home/)
 
@@ -10,7 +10,7 @@
 
 --- 
 
-Welcome to QuPyt! We love Quantum Sensing and Python. 
+**Welcome to QuPyt!** We love Quantum Sensing and Python. 
 
 
 
