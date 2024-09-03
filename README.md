@@ -4,9 +4,7 @@
 
 <h1> QuPyt </h1>
 
-<p>
 [Documentation](https://qupyt.readthedocs.com) | [Group Homepage](https://www.ch.nat.tum.de/en/qsense/home/)
-</p>
 
 </div>
 
