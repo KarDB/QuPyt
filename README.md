@@ -31,7 +31,7 @@ Please expect breaking changes to the API in the coming months. We plan to make 
 To install a release of QuPyt, go to the Releases tab on the right, select a build suitable for your distro (currently only Debian based Linux distros are supported) and install using pip and the link assoziated witht the resource.
 You can find the command for the latest release below.
 
-```python3 -m pip install https://github.com/KarDB/QuPyt/releases/download/v0.1.0/qupyt-0.1.0-py3-none-any.whl```
+<pre><code>python3 -m pip install https://github.com/KarDB/QuPyt/releases/download/v0.1.0/qupyt-0.1.0-py3-none-any.whl</code></pre>
 
 There is no extensive testing performed on the releases.
 
@@ -39,17 +39,24 @@ There is no extensive testing performed on the releases.
 
 1) Clone the GitHub repo.
 
-<pre><code>```$ git clone https://github.com/KarDB/QuPyt.git $ cd QuPyt```</code></pre>
+<pre><code>
+$ git clone https://github.com/KarDB/QuPyt.git
+$ cd QuPyt
+</code></pre>
 
 2) Build and install QuPyt.
 
 If you don't have build installed, install it with:
 
-<pre><code>```$ python3 -m pip install build```</code></pre>
+<pre><code>
+$ python3 -m pip install build
+</code></pre>
 
 Now build and install
 
-<pre><code>```$ python3 -m build $ python3 -m pip install dost/<releasename>.whl ```</code></pre>
+<pre><code>
+$ python3 -m build $ python3 -m pip install dost/<releasename>.whl 
+</code></pre>
 
 ## Documentation
 
