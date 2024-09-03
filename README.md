@@ -4,7 +4,7 @@
 
 <h1> QuPyt - The Quantum Sensing Framework </h1>
 
-[Documentation](https://qupyt.readthedocs.com) | [Group Homepage](https://www.ch.nat.tum.de/en/qsense/home/)
+[Documentation](https://qupyt.readthedocs.io) | [Group Homepage](https://www.ch.nat.tum.de/en/qsens/home/)
 
 </div>
 
