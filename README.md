@@ -1,8 +1,6 @@
 <div align="center">
 
-<picture>
-  <img alt="qupyt logo" src="./assets/images/logo.png" width="50%" height="50%">
-</picture>
+<img alt="qupyt logo" src="./assets/images/logo.png" width="50%" height="50%">
 
 </div>
 
