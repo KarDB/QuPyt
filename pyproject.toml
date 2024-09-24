@@ -22,7 +22,7 @@ dependencies = [
     'PyYAML',
     'termcolor',
     'tqdm',
-    'watchdog',
+    'watchdog==3.0.0',
     'windfreak',
     'pydantic',
 ]
