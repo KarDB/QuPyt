@@ -549,13 +549,15 @@ class WindFreakSHDMini(SignalSource):
     @coerce_device_config_shape
     @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
-        self.instance.write(f"W{ampl}".encode())  # min -13.000 , max 20.000
+        channel, ampl = ampl
+        self.instance.write(f"W{ampl}".encode()) # min -13.000, max 20.000
         logging.info("Windfreak set amplitude to".ljust(65, ".") + f"{ampl}")
 
     @validate_call
     @coerce_device_config_shape
     @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
+        channel, freq = freq
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 8)}".encode())
         logging.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
@@ -565,6 +567,7 @@ class WindFreakSHDMini(SignalSource):
     @coerce_device_config_shape
     @loop_inputs
     def _set_power_level(self, power_level: ParameterInput) -> None:
+        _channel, power_level = power_level
         # High - 1, Low - 0;  only in high power mode the output actually changes with the assigned dBm
         self.instance.write(f"h{power_level}".encode())
         logging.info("Windfreak power level set to".ljust(65, ".") + f"{power_level}")
@@ -573,6 +576,7 @@ class WindFreakSHDMini(SignalSource):
     @coerce_device_config_shape
     @loop_inputs
     def _set_output_on_off(self, on_off: ParameterInput) -> None:
+        _channel, on_off = on_off
         self.instance.write(f"E{on_off}".encode())
         logparam = "[ON]" if on_off == 1 else "[OFF]"
         logging.info("WindFreak output set".ljust(65, ".") + logparam)
