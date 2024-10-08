@@ -17,7 +17,7 @@ class Data(ConfigurationMixin):
         self.compress: bool = False
         self.live_compression: bool = False
         self.save_in_chunks: int = 0
-        self.reference_channels: int=2
+        self.reference_channels: int = 2
         self.data: np.ndarray
         self.attribute_map = {
             "dynamic_steps": self._set_number_dynamic_steps,
@@ -27,13 +27,13 @@ class Data(ConfigurationMixin):
             "compress": self._set_compress_mode,
             "live_compression": self._set_live_compression,
             "save_in_chunks": self._set_save_chunk_size,
-            "reference_channels": self._set_reference_channels
+            "reference_channels": self._set_reference_channels,
         }
         self._update_from_configuration(configuration)
 
     def _set_save_chunk_size(self, save_in_chunks: int) -> None:
         self.save_in_chunks = save_in_chunks
-    
+
     def _set_reference_channels(self, reference_channels: int) -> None:
         self.reference_channels = int(reference_channels)
 
@@ -77,12 +77,17 @@ class Data(ConfigurationMixin):
         if self.live_compression:
             self.roi_shape = [1]
         if self.averaging_mode == "sum":
-            data_array_dim = [self.reference_channels, self.number_dynamic_steps, 1, *self.roi_shape]
+            data_array_dim = [
+                self.reference_channels,
+                self.number_dynamic_steps,
+                1,
+                *self.roi_shape,
+            ]
         elif self.averaging_mode == "spread":
             data_array_dim = [
                 self.reference_channels,
                 self.number_dynamic_steps,
-                int(self.number_measurements / 2),
+                int(self.number_measurements / self.reference_channels),
                 *self.roi_shape,
             ]
         else:
@@ -110,21 +115,26 @@ class Data(ConfigurationMixin):
     def _update_data_full(self, data: np.ndarray, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
-                self.data[i, dynamic_step] += data[i::self.reference_channels].sum(axis=0)
-            np.save("C:/Users/ge54vec/.qupyt/data", self.data)
+                self.data[i, dynamic_step] += data[i :: self.reference_channels].sum(
+                    axis=0
+                )
+            # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
-                self.data[i, dynamic_step] += data [i::self.reference_channels]
-                np.save("C:/Users/ge54vec/.qupyt/data", self.data)
-
+                self.data[i, dynamic_step] += data[i :: self.reference_channels]
+                # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
 
     def _update_data_compressed(self, data: np.ndarray, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
-            self.data[0, dynamic_step] += data[::2].mean(axis=(1, 2)).sum(axis=0)
-            self.data[1, dynamic_step] += data[1::2].mean(axis=(1, 2)).sum(axis=0)
+            for i in range(self.reference_channels):
+                self.data[i, dynamic_step] += (
+                    data[i :: self.reference_channels].mean(axis=(1, 2)).sum(axis=0)
+                )
         elif self.averaging_mode == "spread":
-            self.data[0, dynamic_step] += data[::2].mean(axis=(1, 2)).reshape(-1, 1)
-            self.data[1, dynamic_step] += data[1::2].mean(axis=(1, 2)).reshape(-1, 1)
+            for i in range(self.reference_channels):
+                self.data[i, dynamic_step] += (
+                    data[i :: self.reference_channels].mean(axis=(1, 2)).reshape(-1, 1)
+                )
 
     def save(self, filename: str) -> None:
         """
