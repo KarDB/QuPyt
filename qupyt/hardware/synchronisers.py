@@ -223,16 +223,18 @@ class AWGenerator(VisaObject, Synchroniser):
 
     def run(self) -> None:
         self.instance.write("awgcontrol:run:immediate")
-        logging.info("Turned on AWG output to RUN immediate".ljust(65, ".") + "[done]")
+        logging.info("Turned on AWG output to RUN immediate".ljust(
+            65, ".") + "[done]")
         self.opc_wait()
 
     def stop(self) -> None:
         self.instance.write("awgcontrol:stop:immediate")
-        logging.info("Turned on AWG output to STOP immediate".ljust(65, ".") + "[done]")
+        logging.info("Turned on AWG output to STOP immediate".ljust(
+            65, ".") + "[done]")
         self.opc_wait()
 
     def trigger(self) -> None:
-        self.instance.write("SOUR1:JUMP:FORC 2")
+        self.instance.write("trigger:immediate atrigger")
         logging.info("Sent trigger to AWG".ljust(65, ".") + "[done]")
 
     def load_sequence(self) -> None:
@@ -246,7 +248,8 @@ class AWGenerator(VisaObject, Synchroniser):
         self._upload_waveforms()
         self._sequence("autoseq", nongatereps=1)
         logging.info(
-            "Loaded and sequenced current pulse sequence".ljust(65, ".") + "[done]"
+            "Loaded and sequenced current pulse sequence".ljust(
+                65, ".") + "[done]"
         )
         self.opc_wait()
 
@@ -257,13 +260,15 @@ class AWGenerator(VisaObject, Synchroniser):
             self._set_analog_amplitude(channel, self.analog_amplitude)
             self._set_output_on(channel)
             for marker in self.marker_channels:
-                self._set_marker_amplitude(channel, marker, self.marker_amplitude)
+                self._set_marker_amplitude(
+                    channel, marker, self.marker_amplitude)
         print("Configuring AWG".ljust(65, ".") + colored(" [done]", "green"))
 
     def _upload_waveform(self, wavename: str, waveform: np.ndarray) -> None:
         self.instance.write('wlist:waveform:delete "' + wavename + '"')
         self.instance.write(
-            'wlist:waveform:new "' + wavename + '",' + str(waveform.shape[1]) + ",real"
+            'wlist:waveform:new "' + wavename +
+            '",' + str(waveform.shape[1]) + ",real"
         )
         self.instance.write_binary_values(
             'wlist:waveform:data "' + wavename + '",', waveform[0, :]
@@ -305,7 +310,8 @@ class AWGenerator(VisaObject, Synchroniser):
                         )
 
             self.instance.write(f'slist:sequence:delete "{seqname}_{channel}"')
-            self.instance.write(f'slist:sequence:new "{seqname}_{channel}",2,1')
+            self.instance.write(
+                f'slist:sequence:new "{seqname}_{channel}",2,1')
             self.instance.write(
                 f'slist:sequence:step2:goto "{seqname}_{channel}",first'
             )
@@ -315,7 +321,13 @@ class AWGenerator(VisaObject, Synchroniser):
 
             # for gating pulse
             self.instance.write(
-                f'slist:sequence:step1:rcount "{seqname}_{channel}", INF'
+                f'slist:sequence:step1:goto "{seqname}_{channel}", first'
+            )
+            self.instance.write(
+                f'slist:sequence:step1:ejinput "{seqname}_{channel}", ATR'
+            )
+            self.instance.write(
+                f'slist:sequence:step1:ejump "{seqname}_{channel}", 2'
             )
             self.instance.write(
                 f'slist:sequence:step1:tasset1:waveform "{seqname}_{channel}","{self.wavenames[0]}_{channel}"'
@@ -341,7 +353,8 @@ class AWGenerator(VisaObject, Synchroniser):
         self.seqrepeats = list(block["arr_1"])
         self.wavenames = list(block["arr_2"])
         self.flag_values = pickle.loads(block["arr_5"])
-        logging.info("loaded wave sequence from file".ljust(65, ".") + f"{seqname}")
+        logging.info("loaded wave sequence from file".ljust(
+            65, ".") + f"{seqname}")
 
     def _clear_awg(self) -> None:
         self.instance.write("slist:sequence:delete all")
@@ -354,13 +367,15 @@ class AWGenerator(VisaObject, Synchroniser):
         sorted_wavenames = sorted(set(self.wavenames))
         for i, wavename in tqdm(
             enumerate(sorted_wavenames),
+            total=len(sorted_wavenames),
             ascii=True,
             desc="uploading waveforms",
         ):
             for channel_index, channel in enumerate(self.channels):
                 self._upload_waveform(
                     f"{wavename}_{channel}",
-                    self.waveform_block[i, channel_index * 2 : (channel_index * 2) + 2],
+                    self.waveform_block[i, channel_index *
+                                        2: (channel_index * 2) + 2],
                 )
                 self.opc_wait()
         logging.info(
@@ -372,7 +387,8 @@ class AWGenerator(VisaObject, Synchroniser):
 
     def _set_output_on(self, channel: int) -> None:
         self.instance.write(f"outp{channel} on")
-        logging.info(f"Set channel{channel} output to on".ljust(65, ".") + "[done]")
+        logging.info(f"Set channel{channel} output to on".ljust(
+            65, ".") + "[done]")
 
     def _set_daq_resolution(self, channel: int, dac_resolution: int) -> None:
         self.instance.write(f"source{channel}:dac:resolution {dac_resolution}")
@@ -479,7 +495,8 @@ class PStreamer(Synchroniser):
             self.address = devices[0][0]
         else:
             print("No PulseStreamers found by autodetect.\n-------------------\n")
-            logging.info("Pulse Streamer not found".ljust(65, ".") + "[failed]")
+            logging.info("Pulse Streamer not found".ljust(
+                65, ".") + "[failed]")
 
     def open(self) -> None:
         """
@@ -491,12 +508,14 @@ class PStreamer(Synchroniser):
         try:
             self.pulser = PulseStreamer(self.address)
             logging.info(
-                f"Pulse Streamer connected at {self.address}".ljust(65, ".") + "[done]"
+                f"Pulse Streamer connected at {self.address}".ljust(
+                    65, ".") + "[done]"
             )
             print("Connected.\n-------------------------------------------\n")
         except AssertionError:
             logging.exception(
-                f"No pulse streamer with the IP address {self.address}".ljust(65, ".")
+                f"No pulse streamer with the IP address {self.address}".ljust(
+                    65, ".")
                 + "[failed]"
             )
 
@@ -521,7 +540,8 @@ class PStreamer(Synchroniser):
             if not self.pulser.isStreaming():
                 print("Stop PulseStreamer: The sequence has been stoped.")
                 logging.info(
-                    "Pulse Streamer: stopped pulse sequence execution".ljust(65, ".")
+                    "Pulse Streamer: stopped pulse sequence execution".ljust(
+                        65, ".")
                     + "[done]"
                 )
             else:
@@ -554,7 +574,8 @@ class PStreamer(Synchroniser):
         pointer_i = 0  # pointer in time
         # Check if the asked channel_key exists in the file
         if self.channel_key not in list(self.pulse_list.keys()):
-            logging.error("KeyError: No element named " + str(self.channel_key) + ".")
+            logging.error("KeyError: No element named " +
+                          str(self.channel_key) + ".")
             raise KeyError
 
         for i in range(len(self.pulse_list[self.channel_key])):
@@ -686,7 +707,8 @@ class PStreamer(Synchroniser):
             if total_duration_unparsed == "ignore":
                 self.total_duration = np.inf
             if total_duration_unparsed != "ignore":
-                total_duration = float(total_duration_unparsed) * 1e3  # convert to ns
+                total_duration = float(
+                    total_duration_unparsed) * 1e3  # convert to ns
                 if total_duration - round(total_duration) != 0:
                     logging.warning(
                         "Warning: The total duration is not multiple of the\
@@ -708,7 +730,8 @@ class PStreamer(Synchroniser):
                 self.check_types(self.pulse_list)
                 for channel in self.pulse_list:
                     sequences_to_write[block].setDigital(
-                        self.channel_mapping[channel], self.writeDigSeq(channel)
+                        self.channel_mapping[channel], self.writeDigSeq(
+                            channel)
                     )
             self.sequence = Sequence()
             for block, repetitions in zip(sequence_order, sequencing_repeats):
@@ -749,11 +772,13 @@ class PStreamer(Synchroniser):
             while self.pulser.isStreaming():
                 pass
             # check if the sequence has been started correctly.
-            logging.info("Pulse Strearmer: sent run signal".ljust(65, ".") + "[done]")
+            logging.info("Pulse Strearmer: sent run signal".ljust(
+                65, ".") + "[done]")
 
         except AttributeError:
             logging.exception(
-                "Pulse Strearmer: problem setting to run".ljust(65, ".") + "[done]"
+                "Pulse Strearmer: problem setting to run".ljust(
+                    65, ".") + "[done]"
             )
 
     def trigger(self) -> None:
@@ -765,7 +790,8 @@ class PStreamer(Synchroniser):
         self.pulser.rearm()
         self.pulser.startNow()
         logging.info(
-            "Pulse Strearmer: Sent signal to play sequence".ljust(65, ".") + "[done]"
+            "Pulse Strearmer: Sent signal to play sequence".ljust(
+                65, ".") + "[done]"
         )
 
 
@@ -778,7 +804,8 @@ class MockGenerator(Synchroniser):
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
-        logging.info("MockSynchroniser instance created".ljust(65, ".") + "[done]")
+        logging.info("MockSynchroniser instance created".ljust(
+            65, ".") + "[done]")
 
     def __repr__(self) -> str:
         return f"MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
@@ -808,7 +835,8 @@ class MockGenerator(Synchroniser):
                 self.total_duration = int(total_duration)
 
             logging.info(
-                "Loaded sequence for MockSynchroniser".ljust(65, ".") + "[done]"
+                "Loaded sequence for MockSynchroniser".ljust(
+                    65, ".") + "[done]"
             )
 
         except AttributeError:
@@ -820,7 +848,8 @@ class MockGenerator(Synchroniser):
         logging.info("Sent run to MockSynchroniser".ljust(65, ".") + "[done]")
 
     def trigger(self) -> None:
-        logging.info("Sent trigger from MockSynchroniser".ljust(65, ".") + "[done]")
+        logging.info("Sent trigger from MockSynchroniser".ljust(
+            65, ".") + "[done]")
 
     def stop(self) -> None:
         logging.info("Stopped MockSynchroniser".ljust(65, ".") + "[done]")
@@ -1072,7 +1101,8 @@ class PulseBlaster(Synchroniser):
                     channel_bit_mask = channel_bit_masks[i] + 2**23
                 elif 0.009 < pulse_duration < 0.01:
                     # 100 for 4 clock periods
-                    pulse_duration = self.check_pulse_length_short(pulse_duration, 0.01)
+                    pulse_duration = self.check_pulse_length_short(
+                        pulse_duration, 0.01)
                     channel_bit_mask = channel_bit_masks[i]
 
                 # Shortest minimum instruction time is 5 clock periods
