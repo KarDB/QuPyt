@@ -176,8 +176,12 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
         super().__init__(patterns, ignore_patterns, ignore_directories, case_sensitive)
         if platform.system() == "Windows":
             self.on_modified = self._on_modified
-        else:
+        if platform.system() == "Linux":
             self.on_closed = self._on_closed
+        else:  # macOS or other
+            self.on_created = self._on_created
+            self.on_modified = self._on_modified
+            self.on_moved = self._on_moved
 
     def _on_closed(self, event: FileClosedEvent) -> None:
         """
@@ -202,6 +206,36 @@ class WaitingRoomEventHandler(PatternMatchingEventHandler):
 
         Args:
             event (FileModifiedEvent): The event object containing information about the modified file.
+        """
+        queue.put(event.src_path)
+        sleep(0.1)
+        event_thread.set()
+        event_thread.clear()
+
+    def _on_created(self, event) -> None:
+        """
+        Handle the event when a monitored file is created.
+
+        This method is called when a file matching the specified patterns is created.
+        It puts the file path in a queue, waits briefly, and triggers the event thread.
+
+        Args:
+            event: The event object containing information about the modified file.
+        """
+        queue.put(event.src_path)
+        sleep(0.1)
+        event_thread.set()
+        event_thread.clear()
+
+    def _on_moved(self, event) -> None:
+        """
+        Handle the event when a monitored file is moved.
+
+        This method is called when a file matching the specified patterns is moved.
+        It puts the file path in a queue, waits briefly, and triggers the event thread.
+
+        Args:
+            event: The event object containing information about the modified file.
         """
         queue.put(event.src_path)
         sleep(0.1)
