@@ -1,27 +1,21 @@
-__pychache__/
-**/__pycache__/
-*.npz
-*.gpg
+# Ignore Python-related files
+__pycache__/
 *.pyc
-*.log
-*.svg
-*.png
-*.npy
-*.gif
-*.mp4
-*test.py
-*test.sqlite
-pylab/scripts/prewritten_sequences/*
-measurements/ESR/*
-measurements/Rabi/*
-measurements/Sync/*
-measurements/logfile_and_database/*
-.ipynb_checkpoints/
-.idea/
-pylab/.venv/*
-build/
-dist/
-UNKNOWN.egg-info/
-.mypy_cache/
-qupyt.egg-info/
-sample_yamls/
+*.pyo
+
+# Ignore virtual environment and dependency directories
+env/
+venv/
+Lib/
+Scripts/
+bin/
+include/
+libs/
+
+# Ignore system files and executables
+*.exe
+*.dll
+*.pdb
+*.dat
+*.msg
+
