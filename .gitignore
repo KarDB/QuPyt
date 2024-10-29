@@ -11,6 +11,8 @@ Scripts/
 bin/
 include/
 libs/
+dist/
+qupyt.egg-info/
 
 # Ignore system files and executables
 *.exe
@@ -18,4 +20,17 @@ libs/
 *.pdb
 *.dat
 *.msg
+LICENSE.txt
+NEWS.txt
+ReleaseNotes.html
 
+# Ignore other specific folders
+DLLs/
+Doc/
+Tools/
+cmd/
+dev/
+mingw64/
+share/
+tcl/
+usr/
