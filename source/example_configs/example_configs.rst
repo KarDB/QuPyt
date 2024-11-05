@@ -3,12 +3,10 @@ Example Configuration Files
 
 Below you find example configuration files:
 
-.. - Rabi :ref:`rabi`
-.. - ESR :ref:`esr`
+.. - ODMR :ref:`ODMR`
 
 .. toctree::
    :maxdepth: 1
    :caption: Contents:
   
-   esr
-   rabi
+   ODMR

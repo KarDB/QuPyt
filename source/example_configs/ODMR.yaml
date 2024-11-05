@@ -1,0 +1,93 @@
+experiment_type: ODMR  # This is just an identifier. It does not directly affect the measurement.
+
+# Defines the overall number of repetitions of the experiment.
+# You will only rarely need this. Typically it is beneficial to
+# set the number of averages using the number_measurements parameter.
+averages: 1
+
+# Defines the sensor used in the experiment.
+# (Basler camera, DAQ/photo diode, ...)
+# Here we mock or simulate the camera in software. 
+sensor:
+  # change this to the correct identifier for the
+  # sensor you want to use.
+  type: "MockCam"
+  config:
+    # Please adjust these depening on the sensor used.
+    number_measurements: &nframes 20
+    target_data_type: int64
+    image_roi:
+    - 100  # height
+    - 100  # width
+    - 0    # xoffs
+    - 0    # yoffs
+
+# This defines the synchronising device for our experiment.
+# (Pulse Streamer, Taktronix AWG, ...)
+synchroniser:
+  # Adjust the device identifier
+  type: 'MockSynchroniser'
+  config:
+    # Enter the VISA adress of your device.
+    address: 'TCPIP::some::INSTR'
+  channel_mapping:
+    # There map the channels defined in the pulse sequence file
+    # to the output of your synchroniser.
+    MW: 0
+    LASER: 8
+    READ: 1
+
+dynamic_steps: &n_dynamic_steps 10
+
+# List devices that are supposed to update their
+# ouput values for each dynamic step.
+dynamic_devices:
+  mw_source: # This can be chosen freely. Make sure its unique.
+    # Enter the (VISA) adress of your device.
+    address: 'TCPIP::some::INSTR'
+    # Adjust the device identifier.
+    device_type: 'Mock'
+    # Configure available parameters
+    config:
+      amplitude: 
+      # Specify the channel, as well as starting and stopping value
+      - ['channel_2', [1, 10]]
+      - ['channel_3', [1, 10]]
+      # The default channel, if omitted, is channel_1
+      frequency: [2.0e9, 3.7e9]
+# List devices that will output the same value
+# for the duration of the measurement.
+static_devices:
+  # This device is not necessary for ODMR.
+  unnecessary_source: 
+    # Enter the (VISA) adress of your device.
+    address: 'TCPIP::some::INSTR'
+    # Adjust the device identifier.
+    device_type: 'Mock'
+    # Configure available parameters
+    config:
+      amplitude: 
+      # Specify the channel, as well as the desired value.
+      - ['channel_2', 1]
+      - ['channel_3', 3]
+      # The default channel, if omitted, is channel_1
+      frequency: ['channel_1', 3.7e9]
+
+data:
+  # avalialbe modes are 'spread' and 'sum'
+  # spread: retains all indiviudal number_measurements recorded for each dynamic step.
+  # This is relevant for e.g. Rabi, XY8, ...
+  # sum: Summs up all indiviudal number_measurements for each dynamic step.
+  # See docs for more details.
+  averaging_mode: 'spread'
+  dynamic_steps: *n_dynamic_steps
+  compress: false
+  reference_channels: 2
+
+ps_path: './odmr_sample_pulse_sequence.py'
+pulse_sequence:
+  mw_duration: 20
+  laserduration: 50
+  readout_time: 8
+  referenced_measurements: *nframes
+  max_framerate: 10000
