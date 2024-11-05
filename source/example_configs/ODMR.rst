@@ -1,8 +1,8 @@
-.. _rabi:
+.. _odmr:
 
-Rabi Configuration File
+ODMR Configuration File
 =======================
 
 Below you find an example Configuration file for an ESR measurement:
 
-.. literalinclude:: rabi.yaml
+.. literalinclude:: ODMR.yaml

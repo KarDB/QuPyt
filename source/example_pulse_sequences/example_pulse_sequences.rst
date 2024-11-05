@@ -7,5 +7,4 @@ Below you find example pulse sequence files:
    :maxdepth: 1
    :caption: Contents:
   
-   esr_ps
-   rabi_ps
+   odmr
