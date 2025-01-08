@@ -135,7 +135,7 @@ class ComplexSequence:
             self.phases = initial_phase + xy8_phases * n + final_phase
             return None
 
-    def write_sequence(self, start: float = 0) -> None:
+    def write_sequence(self, start: float = 0, ts_start: int = 1, ts_end: int = 1) -> None:
         """Iterates over phases attibute and appends
         pulses to sequece instance.
         """
@@ -144,18 +144,18 @@ class ComplexSequence:
             start,
             self.pi_half_pulse_dur,
             self.phases[0],
-            hard_delay=self.pi_half_pulse_dur,
-            taushift=0,
+            taushift=0,  # Apply ts to first pi/2 pulse,
+            hard_delay=0
         )
         for i, phase in enumerate(self.phases[1:-1]):
             if i == 0:
                 self.append_pulse(
-                    self.channel, start, self.pi_pulse_dur, phase, taushift=1
+                    self.channel, start, self.pi_pulse_dur, phase, taushift=ts_start
                 )
             else:
                 self.append_pulse(self.channel, start, self.pi_pulse_dur, phase)
         self.append_pulse(
-            self.channel, start, self.pi_half_pulse_dur, self.phases[-1], taushift=1
+            self.channel, start, self.pi_half_pulse_dur, self.phases[-1], taushift=ts_end, hard_delay = self.pi_half_pulse_dur
         )
 
 
