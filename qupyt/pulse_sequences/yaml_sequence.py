@@ -148,7 +148,7 @@ class ComplexSequence:
             start,
             self.pi_half_pulse_dur,
             self.phases[0],
-            taushift=0,  # Apply ts to first pi/2 pulse,
+            taushift=0,
             hard_delay=0
         )
         for i, phase in enumerate(self.phases[1:-1]):
