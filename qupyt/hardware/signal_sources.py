@@ -535,6 +535,7 @@ class WindFreakOfficial(SignalSource):
         logging.info("WindFreak instance closed".ljust(65, ".") + "[done]")
 
 
+
 class WindFreakSHDMini(SignalSource):
 
     def __init__(self, address: str, configuration: Dict[str, Any]) -> None:
@@ -550,6 +551,8 @@ class WindFreakSHDMini(SignalSource):
     @loop_inputs
     def set_amplitude(self, ampl: ParameterInput) -> None:
         channel, ampl = ampl
+        channel = int(channel)
+        ampl = float(ampl)
         self.instance.write(f"W{ampl}".encode()) # min -13.000, max 20.000
         logging.info("Windfreak set amplitude to".ljust(65, ".") + f"{ampl}")
 
@@ -558,6 +561,8 @@ class WindFreakSHDMini(SignalSource):
     @loop_inputs
     def set_frequency(self, freq: ParameterInput) -> None:
         channel, freq = freq
+        channel = int(channel)
+        freq = float(freq)
         freq = freq / 1.0e6  # convert to MHz
         self.instance.write(f"f{round(freq, 8)}".encode())
         logging.info("Windfreak set frequency to [MHz]".ljust(65, ".") + f"{freq}")
@@ -591,3 +596,4 @@ class WindFreakSHDMini(SignalSource):
     def close(self) -> None:
         self.instance.close()
         logging.info("WindFreak SynthHD Mini instance closed".ljust(65, ".") + "[done]")
+
