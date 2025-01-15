@@ -70,6 +70,8 @@ class ComplexSequence:
         mixing_freq: float = 0,
         blocks: list[str] = ["block_0"],
         global_phase: float = 0,
+        ts_start: float = 1,
+        ts_end: float = 1
     ) -> None:
         self.sequence = sequence_instance
         self.channel: str = channel
@@ -82,6 +84,8 @@ class ComplexSequence:
         self.global_phase: float = global_phase
         self.tau_counter: int = 0
         self.phases: list[float] = []
+        self.ts_start: float = ts_start
+        self.ts_end: float = ts_end
 
     def append_pulse(
         self,
@@ -92,16 +96,16 @@ class ComplexSequence:
         taushift: int = 2,
         hard_delay: float = 0,
     ) -> None:
+        self.tau_counter += taushift
         self.sequence.add_pulse(
             channel,
-            start + (self.tau_counter + taushift) * self.tau + hard_delay,
+            start + self.tau_counter * self.tau + hard_delay,
             duration,
             amplitude=self.amplitude,
             frequency=self.mixing_freq,
             phase=phase + self.global_phase,
             sequence_blocks=self.blocks,
         )
-        self.tau_counter += taushift
 
     def gen_phases(
         self,
@@ -144,18 +148,17 @@ class ComplexSequence:
             start,
             self.pi_half_pulse_dur,
             self.phases[0],
-            hard_delay=self.pi_half_pulse_dur,
             taushift=0,
         )
         for i, phase in enumerate(self.phases[1:-1]):
             if i == 0:
                 self.append_pulse(
-                    self.channel, start, self.pi_pulse_dur, phase, taushift=1
+                    self.channel, start, self.pi_pulse_dur, phase, taushift=self.ts_start
                 )
             else:
                 self.append_pulse(self.channel, start, self.pi_pulse_dur, phase)
         self.append_pulse(
-            self.channel, start, self.pi_half_pulse_dur, self.phases[-1], taushift=1
+            self.channel, start, self.pi_half_pulse_dur, self.phases[-1], taushift=self.ts_end, hard_delay = self.pi_half_pulse_dur
         )
 
 
