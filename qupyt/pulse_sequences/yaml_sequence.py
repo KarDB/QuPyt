@@ -96,16 +96,16 @@ class ComplexSequence:
         taushift: int = 2,
         hard_delay: float = 0,
     ) -> None:
+        self.tau_counter += taushift
         self.sequence.add_pulse(
             channel,
-            start + (self.tau_counter + taushift) * self.tau + hard_delay,
+            start + self.tau_counter * self.tau + hard_delay,
             duration,
             amplitude=self.amplitude,
             frequency=self.mixing_freq,
             phase=phase + self.global_phase,
             sequence_blocks=self.blocks,
         )
-        self.tau_counter += taushift
 
     def gen_phases(
         self,
@@ -149,7 +149,6 @@ class ComplexSequence:
             self.pi_half_pulse_dur,
             self.phases[0],
             taushift=0,
-            hard_delay=0
         )
         for i, phase in enumerate(self.phases[1:-1]):
             if i == 0:
