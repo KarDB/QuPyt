@@ -265,20 +265,20 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
         self.slist_amplitudes: List[float] = []
         visa_handler.VisaObject.__init__(self, address, device_type)
         SignalSource.__init__(self, configuration)
-        self.attribute_map["slits_frequencies"] = self._set_slist_frequencies
-        self.attribute_map["slits_amplitudes"] = self._set_slist_amplitudes
+        self.attribute_map["slist_frequencies"] = self._set_slist_frequencies
+        self.attribute_map["slist_amplitudes"] = self._set_slist_amplitudes
 
     def _set_slist_frequencies(self, slist_frequencies: List[float]) -> None:
         self.slist_frequencies = slist_frequencies
         if len(self.slist_frequencies) != 0 and (
-            len(self.slist_amplitudes) == len(self.slist_amplitudes)
+            len(self.slist_amplitudes) == len(self.slist_frequencies)
         ):
             self._configure_slist()
 
     def _set_slist_amplitudes(self, slist_amplitudes: List[float]) -> None:
         self.slist_amplitudes = slist_amplitudes
         if len(self.slist_amplitudes) != 0 and (
-            len(self.slist_amplitudes) == len(self.slist_amplitudes)
+            len(self.slist_amplitudes) == len(self.slist_frequencies)
         ):
             self._configure_slist()
 
@@ -289,14 +289,17 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
         self.opc_wait()
         self.instance.write("SOURce1:FREQ:MODE CW")
         self.opc_wait()
-        # select/create list
+        # Delete list if exists.
+        if "SyncList" in self.instance.query('SOURce1:LIST:CAT?'):
+            self.instance.write('SOURce1:LIST:DEL "SyncList"')
+        # create list
         self.instance.write('SOURce1:LIST:SEL "SyncList"')
         self.opc_wait()
 
         # write frequency to list first row in arg first one being the NV
         # second one the overhauser-frequency
         set_slist_frequencies = f"SOURce1:LIST:FREQ {self.slist_frequencies[0]} Hz"
-        for slist_freq in self.slist_frequencies:
+        for slist_freq in self.slist_frequencies[1:]:
             set_slist_frequencies += f", {slist_freq} Hz"
         self.instance.write(set_slist_frequencies)
         self.opc_wait()
@@ -304,7 +307,7 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
         # write amp to list first row in arg first one being the NV
         # second one the overhauser-amp
         set_slist_amplitudes = f"SOURce1:LIST:POW {self.slist_amplitudes[0]} dBm"
-        for slist_ampl in self.slist_amplitudes:
+        for slist_ampl in self.slist_amplitudes[1:]:
             set_slist_amplitudes += f", {slist_ampl} dBm"
         self.instance.write(set_slist_amplitudes)
         self.opc_wait()
