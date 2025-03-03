@@ -650,6 +650,8 @@ class BaslerCam(Sensor):
         super().__init__(configuration)
         self.attribute_map["exposure_time"] = self._set_exposure_time
         self.attribute_map["binning_horizontal"] = self._set_binning_horizontal
+        self.attribute_map["trigger_line"] = self._set_trigger_line
+        self.attribute_map["trigger_mode"] = self._set_trigger_mode
         self.attribute_map["binning_vertical"] = self._set_binning_vertical
         self.attribute_map["binning_mode_horizontal"] = (
             self._set_mode_binning_horizontal
@@ -711,6 +713,23 @@ class BaslerCam(Sensor):
         )
         return arr
 
+    def _set_trigger_line(self, trigger_line):
+        self.cam.TriggerSelector.SetValue("FrameStart")
+        self.cam.TriggerMode.SetValue("On")
+        self.cam.TriggerSource.SetValue(trigger_line)
+        self.cam.LineSelector.SetValue(trigger_line)
+        self.cam.LineInverter.SetValue(False)
+        self.cam.LineMode.SetValue("Input")
+    
+    def _set_trigger_mode(self, trigger_mode: str) -> None:
+        if trigger_mode.lower() == "on":
+            self.cam.TriggerMode.SetValue("On")
+        elif trigger_mode.lower() == "off":
+            self.cam.TriggerMode.SetValue("Off")
+        else:
+            raise ConfigurationError("trigger_mode", trigger_mode, ["on", "off"])
+
+    
     def _set_exposure_time(self, exposure_time: int) -> None:
         self.cam.ExposureTime.SetValue(exposure_time)
 
