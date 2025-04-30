@@ -1163,6 +1163,10 @@ class MockCam(Sensor):
         return f"MockCam sensor instance: DAQ(configuration: {self.initial_configuration_dict})"
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
+        """
+        This function emulates the current behaviour of the GenICam and Basler camera sensor.
+        ROI values are extracted from combined input of the ROI and offset values.
+        """
         self.roi_shape = roi_shape_and_offset[:2]
         _ = roi_shape_and_offset[2:]
 
@@ -1184,7 +1188,7 @@ class MockCam(Sensor):
             synchroniser.trigger()
         noise = np.random.poisson(
             15_000,
-            size=(self.number_measurements, self.roi_shape[0], self.roi_shape[1]),
+            size=(self.number_measurements, *self.roi_shape),
         )
         return noise
 
