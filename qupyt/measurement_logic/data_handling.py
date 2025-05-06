@@ -79,6 +79,7 @@ class Data(ConfigurationMixin):
         # Specifics have then to be dealt with in each class.
         if self.live_compression:
             self.roi_shape = [1]
+            self.data_type = float
         if self.averaging_mode == "sum":
             data_array_dim = [
                 self.reference_channels,
