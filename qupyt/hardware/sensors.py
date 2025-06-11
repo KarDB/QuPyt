@@ -119,7 +119,8 @@ class SensorFactory:
                 return DAQ(configuration)
             if sensor_type == "MockCam":
                 return MockCam(configuration)
-            raise ValueError(f"Requested sensor type {sensor_type} does not exists")
+            raise ValueError(
+                f"Requested sensor type {sensor_type} does not exists")
         except Exception as exc:
             logging.exception(
                 "Could not open desired camera".ljust(65, ".") + "[failed]"
@@ -306,7 +307,8 @@ class GenICamPhantom(Sensor):
         elif trigger_mode.lower() == "off":
             self.cam.remote.set("TriggerMode", "TriggerModeOff")
         else:
-            raise ConfigurationError("trigger_mode", trigger_mode, ["on", "off"])
+            raise ConfigurationError(
+                "trigger_mode", trigger_mode, ["on", "off"])
 
     def _set_pixel_bits(self, pixel_bits: str) -> None:
         """
@@ -367,26 +369,33 @@ class GenICamPhantom(Sensor):
         width = self.cam.remote.get("Width")
         self.cam.realloc_buffers(self.number_measurements)
         self.cam.start()
-        data = np.zeros((self.number_measurements, height * 4, width), dtype=np.uint32)
+        data = np.zeros((self.number_measurements,
+                        height * 4, width), dtype=np.uint32)
         if synchroniser is not None:
             synchroniser.trigger()
         for i in range(self.number_measurements):
             with Buffer(self.cam) as buffer:
-                buffer_ptr, image_size, part_num, _ = self._grab_frame_info(buffer)
-                raw_frame = self._move_frame_from_pool(buffer_ptr, image_size, part_num)
+                buffer_ptr, image_size, part_num, _ = self._grab_frame_info(
+                    buffer)
+                raw_frame = self._move_frame_from_pool(
+                    buffer_ptr, image_size, part_num)
                 data[i] += raw_frame
         self.cam.stop()
         time_2 = time()
         logging.info(
-            f"Data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+            f"Data acquisition took {time_2-time_1} s".ljust(
+                65, ".") + "[done]"
         )
         return data
 
     def _grab_frame_info(self, buffer: Buffer):
         buffer_ptr = buffer.get_info(BUFFER_INFO_BASE, INFO_DATATYPE_PTR)
-        image_size = buffer.get_info(BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
-        part_num = buffer.get_info(BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
-        time_stamp = buffer.get_info(BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
+        image_size = buffer.get_info(
+            BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
+        part_num = buffer.get_info(
+            BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
+        time_stamp = buffer.get_info(
+            BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
 
         return buffer_ptr, image_size, part_num, time_stamp
 
@@ -414,7 +423,8 @@ class GenICamPhantom(Sensor):
         self.cam_instance = None
         self.grabber = None
         gc.collect()
-        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
+        logging.info("Closed GenICam camera connection".ljust(
+            65, ".") + "[done]")
 
 
 class GenICamHarvester(Sensor):
@@ -462,7 +472,8 @@ class GenICamHarvester(Sensor):
             self.harvester.add_file(self.cti_file)
         except (FileNotFoundError, OSError) as err:
             logging.exception(
-                "Could not find GenTL producer file (.cti)".ljust(65, ".") + "[failed]"
+                "Could not find GenTL producer file (.cti)".ljust(
+                    65, ".") + "[failed]"
             )
             logging.exception(f"Tried to locate file at {self.cti_file}")
             raise err
@@ -573,12 +584,10 @@ class GenICamHarvester(Sensor):
         height = self.cam.remote_device.node_map.Height.value
         width = self.cam.remote_device.node_map.Width.value
         self.cam.start()
-        data = np.zeros((self.number_measurements, height * width), dtype=np.uint32)
+        data = np.zeros((self.number_measurements,
+                        height * width), dtype=np.uint32)
         if synchroniser is not None:
             synchroniser.trigger()
-        for _i in range(20):
-            with self.cam.fetch() as buffer:
-                continue
         for i in range(self.number_measurements):
             with self.cam.fetch() as buffer:
                 component = buffer.payload.components[0]
@@ -586,7 +595,8 @@ class GenICamHarvester(Sensor):
         self.cam.stop()
         time_2 = time()
         logging.info(
-            f"Data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+            f"Data acquisition took {time_2-time_1} s".ljust(
+                65, ".") + "[done]"
         )
         return data.reshape((self.number_measurements, height, width))
 
@@ -604,7 +614,8 @@ class GenICamHarvester(Sensor):
         """
         self.cam.destroy()
         self.harvester.reset()
-        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
+        logging.info("Closed GenICam camera connection".ljust(
+            65, ".") + "[done]")
 
 
 class BaslerCam(Sensor):
@@ -650,6 +661,8 @@ class BaslerCam(Sensor):
         super().__init__(configuration)
         self.attribute_map["exposure_time"] = self._set_exposure_time
         self.attribute_map["binning_horizontal"] = self._set_binning_horizontal
+        self.attribute_map["trigger_line"] = self._set_trigger_line
+        self.attribute_map["trigger_mode"] = self._set_trigger_mode
         self.attribute_map["binning_vertical"] = self._set_binning_vertical
         self.attribute_map["binning_mode_horizontal"] = (
             self._set_mode_binning_horizontal
@@ -707,9 +720,27 @@ class BaslerCam(Sensor):
             grab_result.Release()
         time_2 = time()
         logging.info(
-            f"Basler data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+            f"Basler data acquisition took {time_2-time_1} s".ljust(
+                65, ".") + "[done]"
         )
         return arr
+
+    def _set_trigger_line(self, trigger_line):
+        self.cam.TriggerSelector.SetValue("FrameStart")
+        self.cam.TriggerMode.SetValue("On")
+        self.cam.TriggerSource.SetValue(trigger_line)
+        self.cam.LineSelector.SetValue(trigger_line)
+        self.cam.LineInverter.SetValue(False)
+        self.cam.LineMode.SetValue("Input")
+
+    def _set_trigger_mode(self, trigger_mode: str) -> None:
+        if trigger_mode.lower() == "on":
+            self.cam.TriggerMode.SetValue("On")
+        elif trigger_mode.lower() == "off":
+            self.cam.TriggerMode.SetValue("Off")
+        else:
+            raise ConfigurationError(
+                "trigger_mode", trigger_mode, ["on", "off"])
 
     def _set_exposure_time(self, exposure_time: int) -> None:
         self.cam.ExposureTime.SetValue(exposure_time)
@@ -798,7 +829,8 @@ class BaslerCam(Sensor):
         """Closes the the camera.
         A new camera instance may now be created."""
         self.cam.Close()
-        logging.info("Closed Basler camera connection".ljust(65, ".") + "[done]")
+        logging.info("Closed Basler camera connection".ljust(
+            65, ".") + "[done]")
 
 
 class HeliCam(Sensor):
@@ -887,7 +919,8 @@ class HeliCam(Sensor):
             res = self.he_sys.Acquire()
         for key, value in self.settings.items():
             setattr(self.he_sys.map, key, value)
-        self.he_sys.AllocCamData(1, heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
+        self.he_sys.AllocCamData(
+            1, heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
         self.he_sys.SetTimeout(10000)
         logging.info("Heli C3 opened".ljust(65, ".") + "[done]")
 
@@ -905,7 +938,8 @@ class HeliCam(Sensor):
         res = self.he_sys.Acquire()
         if res < 0:
             logging.warning(
-                "Your camera appears to have timed out".ljust(65, ",") + "[done]"
+                "Your camera appears to have timed out".ljust(
+                    65, ",") + "[done]"
             )
         _ = self.he_sys.ProcessCamData(1, 0, 0)
         meta = self.he_sys.CamDataMeta()
@@ -920,7 +954,8 @@ class HeliCam(Sensor):
         return_frames[1::2] = raw_frames[:, :, :, 1]
         time_2 = time()
         logging.info(
-            f"HeliCam C3 data acquisition took {time_2-time_1} s".ljust(65, ".")
+            f"HeliCam C3 data acquisition took {time_2-time_1} s".ljust(
+                65, ".")
             + "[done]"
         )
         return return_frames
@@ -1041,7 +1076,8 @@ class DAQ(Sensor):
         read_start_trig = self.daq_task.triggers.start_trigger
         # Configures the task to start acquiring samples
         # on the active edge of a digital signal.
-        read_start_trig.cfg_dig_edge_start_trig(self.daq_start_trig, Edge.RISING)
+        read_start_trig.cfg_dig_edge_start_trig(
+            self.daq_start_trig, Edge.RISING)
 
     def _configure_sample_clock(self) -> None:
         # Configure sample clock : Sets the clock source, the clock rate,
@@ -1064,7 +1100,8 @@ class DAQ(Sensor):
         if synchroniser is not None:
             synchroniser.trigger()
         try:
-            samples = self.daq_task.read(self.NsampsPerDAQread, self.daq_timeout)
+            samples = self.daq_task.read(
+                self.NsampsPerDAQread, self.daq_timeout)
         except Exception as excpt:
             print(
                 """Error: could not read DAQ.
@@ -1144,6 +1181,10 @@ class MockCam(Sensor):
         return f"MockCam sensor instance: DAQ(configuration: {self.initial_configuration_dict})"
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
+        """
+        This function emulates the current behaviour of the GenICam and Basler camera sensor.
+        ROI values are extracted from combined input of the ROI and offset values.
+        """
         self.roi_shape = roi_shape_and_offset[:2]
         _ = roi_shape_and_offset[2:]
 
@@ -1165,7 +1206,7 @@ class MockCam(Sensor):
             synchroniser.trigger()
         noise = np.random.poisson(
             15_000,
-            size=(self.number_measurements, self.roi_shape[0], self.roi_shape[1]),
+            size=(self.number_measurements, *self.roi_shape),
         )
         return noise
 

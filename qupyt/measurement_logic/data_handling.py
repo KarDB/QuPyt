@@ -14,7 +14,6 @@ class Data(ConfigurationMixin):
         self.number_dynamic_steps: int
         self.number_measurements: int
         self.data_type: type
-        self.compress: bool = False
         self.live_compression: bool = False
         self.save_in_chunks: int = 0
         self.reference_channels: int = 2
@@ -38,7 +37,8 @@ class Data(ConfigurationMixin):
         self.reference_channels = int(reference_channels)
 
     def _set_compress_mode(self, compression_value: bool) -> None:
-        self.compress = compression_value
+        logging.warning("Depracation warning! The paremter 'compress' is beeing deprecated.\nPlase use 'live_compression' instead")
+        self.live_compression = compression_value
 
     def _set_live_compression(self, live_compression: bool) -> None:
         self.live_compression = live_compression
@@ -47,6 +47,9 @@ class Data(ConfigurationMixin):
         self.data_type = sensor.target_data_type
 
     def _set_number_dynamic_steps(self, number_dynamic_steps: int) -> None:
+        if number_dynamic_steps < 1:
+            raise ValueError("""Cannot have fewer than 1 dynamic steps. This will result in an empty measurement.
+            If you measure just one step, this is still ONE dynamic step. The first of one.""")
         self.number_dynamic_steps = int(number_dynamic_steps)
 
     def _set_averaging_mode(self, averaging_mode: str) -> None:
@@ -76,6 +79,7 @@ class Data(ConfigurationMixin):
         # Specifics have then to be dealt with in each class.
         if self.live_compression:
             self.roi_shape = [1]
+            self.data_type = float
         if self.averaging_mode == "sum":
             data_array_dim = [
                 self.reference_channels,
@@ -84,10 +88,14 @@ class Data(ConfigurationMixin):
                 *self.roi_shape,
             ]
         elif self.averaging_mode == "spread":
+            measurements_per_channel = self.number_measurements / self.reference_channels
+            if measurements_per_channel != int(measurements_per_channel):
+                raise ValueError(f"""Your number of measurements {self.number_measurements} is not divisible by the number of channels {self.reference_channels}.
+                Please make sure the number of measurements you want to recored can be distributed accross the reference channels. (I.e. number_measurements is divisible by reference_cannels""")
             data_array_dim = [
                 self.reference_channels,
                 self.number_dynamic_steps,
-                int(self.number_measurements / self.reference_channels),
+                int(measurements_per_channel),
                 *self.roi_shape,
             ]
         else:
@@ -127,13 +135,15 @@ class Data(ConfigurationMixin):
     def _update_data_compressed(self, data: np.ndarray, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
+                ndim = data.ndim
                 self.data[i, dynamic_step] += (
-                    data[i :: self.reference_channels].mean(axis=(1, 2)).sum(axis=0)
+                    data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).sum(axis=0)
                 )
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
+                ndim = data.ndim
                 self.data[i, dynamic_step] += (
-                    data[i :: self.reference_channels].mean(axis=(1, 2)).reshape(-1, 1)
+                    data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).reshape(-1, 1)
                 )
 
     def save(self, filename: str) -> None:
@@ -144,7 +154,4 @@ class Data(ConfigurationMixin):
          main measurement loop.
         :type filename: str
         """
-        if self.compress:
-            np.save(filename, self.data.mean(axis=(3, 4)))
-        else:
-            np.save(filename, self.data)
+        np.save(filename, self.data)
