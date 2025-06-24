@@ -302,7 +302,7 @@ class AWGenerator(VisaObject, Synchroniser):
                 for flag_channel in self.flag_channels:
                     if flag_channel in self.flag_values[wavename]:
                         self.instance.write(
-                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",HIGH'
+                            f'slist:sequence:step{i+1}:tflag1:{flag_channel}flag "sub_{channel}",PULSE'
                         )
                     else:
                         self.instance.write(
