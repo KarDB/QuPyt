@@ -48,10 +48,7 @@ def run_measurement(
                 range(int(params["averages"])), leave=itervalue == (iterator_size - 1)
             ):
                 sleep(float(params.get("sleep", 0)))
-                sensor.daq_task.start() # Start the DAQ task, fix for DAQ AWG issue
-                sleep(1e-6)
                 data = sensor.acquire_data(synchroniser)
-                sensor.daq_task.stop() #Stop DAQ after, fix for DAQ-AWg issue
                 data_container.update_data(data, itervalue, avg)
         return_status = "success"
     except Exception as e:

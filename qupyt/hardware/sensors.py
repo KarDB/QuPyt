@@ -1098,10 +1098,12 @@ class DAQ(Sensor):
         See :meth:`Sensor.acquire_data`.
         """
         if synchroniser is not None:
+            self.daq_task.start()
             synchroniser.trigger()
         try:
             samples = self.daq_task.read(
                 self.NsampsPerDAQread, self.daq_timeout)
+            self.daq_task.stop()
         except Exception as excpt:
             print(
                 """Error: could not read DAQ.
