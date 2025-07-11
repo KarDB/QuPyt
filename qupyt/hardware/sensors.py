@@ -1016,7 +1016,7 @@ class DAQ(Sensor):
         # AI (analog input) in volts
         self.min_voltage: float = -1.0
         self.max_voltage: float = 1.0
-        self.daq_timeout: int = 3600  # / s
+        self.daq_timeout: int = 10  # / s
         super().__init__(configuration)
         self.roi_shape = [1]
         self.attribute_map["min_voltage"] = self._set_min_voltage
@@ -1098,10 +1098,12 @@ class DAQ(Sensor):
         See :meth:`Sensor.acquire_data`.
         """
         if synchroniser is not None:
+            self.daq_task.start()
             synchroniser.trigger()
         try:
             samples = self.daq_task.read(
                 self.NsampsPerDAQread, self.daq_timeout)
+            self.daq_task.stop()
         except Exception as excpt:
             print(
                 """Error: could not read DAQ.
