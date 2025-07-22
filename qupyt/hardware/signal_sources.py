@@ -201,6 +201,7 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
         self.address = address
         visa_handler.VisaObject.__init__(self, address, device_type)
         SignalSource.__init__(self, configuration)
+        self.attribute_map['phase'] = self.set_phase
 
     @validate_call
     @coerce_device_config_shape
@@ -224,6 +225,19 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
         logging.info(
             f"{self.s_type} set frequency channel {channel} to".ljust(65, ".")
             + f"{freq}"
+        )
+
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
+    def set_phase(self, phase: ParameterInput) -> None:
+        channel, phase = phase
+        self.instance.write(self.command[f"SetPhase{channel}"] + str(phase))
+        #self.opc_wait()
+        sleep(0.5)
+        logging.info(
+            f"{self.s_type} set phase channel {channel} to".ljust(65, ".")
+            + f"{phase}"
         )
 
 
