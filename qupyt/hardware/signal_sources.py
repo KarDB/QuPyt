@@ -232,7 +232,10 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
     @loop_inputs
     def set_phase(self, phase: ParameterInput) -> None:
         channel, phase = phase
-        self.instance.write(self.command[f"SetPhase{channel}"] + str(phase))
+        phase_command = self.command.get(f"SetPhase{channel}")
+        if phase_command is None:
+            raise ValueError(f"The configure signal source {repr(self)} currently does not implement setting a phase.") 
+        self.instance.write(phase_command + str(phase))
         #self.opc_wait()
         sleep(0.5)
         logging.info(
