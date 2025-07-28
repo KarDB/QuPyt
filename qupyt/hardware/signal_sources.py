@@ -239,7 +239,7 @@ class PhaseMixin():
     Set the output signal phase for the specified channel.
     """
 
-    def __init__(self, address: str, device_type: str) -> None:
+    def __init__(self) -> None:
         self.attribute_map['phase'] = self.set_phase
 
     @validate_call
@@ -266,7 +266,7 @@ class AFGSignalSource(VisaSignalSource, PhaseMixin):
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
         VisaSignalSource.__init__(self, address, device_type, configuration)
-        PhaseMixin.__init__(self, address, device_type)
+        PhaseMixin.__init__(self)
 
 
 class RigolSignalSource(VisaSignalSource, PhaseMixin):
@@ -276,7 +276,7 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin):
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
         VisaSignalSource.__init__(self, address, device_type, configuration)
-        PhaseMixin.__init__(self, address, device_type)
+        PhaseMixin.__init__(self)
         self.attribute_map["gating"] = self._set_gate_mode
 
     @validate_call
