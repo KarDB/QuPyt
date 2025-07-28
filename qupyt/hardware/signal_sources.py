@@ -208,7 +208,6 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
         self.address = address
         visa_handler.VisaObject.__init__(self, address, device_type)
         SignalSource.__init__(self, configuration)
-        self.attribute_map['phase'] = self.set_phase
 
     @validate_call
     @coerce_device_config_shape
@@ -234,10 +233,15 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
             + f"{freq}"
         )
 
+
 class PhaseMixin():
-    def __init__(self) -> None:
+    """
+    Set the output signal phase for the specified channel.
+    """
+
+    def __init__(self, address: str, device_type: str) -> None:
         self.attribute_map['phase'] = self.set_phase
-    
+
     @validate_call
     @coerce_device_config_shape
     @loop_inputs
@@ -247,30 +251,32 @@ class PhaseMixin():
         if phase_command is None:
             raise ValueError(f"The configure signal source {repr(self)} currently does not implement setting a phase.") 
         self.instance.write(phase_command + str(phase))
-	    #self.opc_wait()
+        #self.opc_wait()
         sleep(0.5)
         logging.info(
             f"{self.s_type} set phase channel {channel} to".ljust(65, ".")
             + f"{phase}"
         )
-	
-class AFGSignalSource(VisaSignalSource):
-    """Class for TekAFG"""
+
+
+class AFGSignalSource(VisaSignalSource, PhaseMixin):
+    """Special class for TekAFG to enable setting the phase in radiants"""
 
     def __init__(
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
-        super().__init__(address, device_type, configuration)
-        
+        VisaSignalSource.__init__(self, address, device_type, configuration)
+        PhaseMixin.__init__(self, address, device_type)
 
-            
-class RigolSignalSource(VisaSignalSource):
-    """Special class for Rigol DG1022 to enable gating"""
+
+class RigolSignalSource(VisaSignalSource, PhaseMixin):
+    """Special class for Rigol DG1022 to enable gating and setting the phase in degrees"""
 
     def __init__(
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
-        super().__init__(address, device_type, configuration)
+        VisaSignalSource.__init__(self, address, device_type, configuration)
+        PhaseMixin.__init__(self, address, device_type)
         self.attribute_map["gating"] = self._set_gate_mode
 
     @validate_call
