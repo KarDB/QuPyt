@@ -103,6 +103,13 @@ class DeviceFactory:
                     device_info["device_type"],
                     device_info["config"],
                 )
+            if device_info["device_type"] == "TekAFG":
+                return AFGSignalSource(
+                    device_info["address"],
+                    device_info["device_type"],
+                    device_info["config"],
+                )
+               
             return VisaSignalSource(
                 device_info["address"],
                 device_info["device_type"],
@@ -227,13 +234,49 @@ class VisaSignalSource(visa_handler.VisaObject, SignalSource):
         )
 
 
-class RigolSignalSource(VisaSignalSource):
-    """Special class for Rigol DG1022 to enable gating"""
+class PhaseMixin():
+    """
+    Set the output signal phase for the specified channel.
+    """
+
+    def __init__(self) -> None:
+        self.attribute_map['phase'] = self.set_phase
+
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
+    def set_phase(self, phase: ParameterInput) -> None:
+        channel, phase = phase
+        phase_command = self.command.get(f"SetPhase{channel}")
+        if phase_command is None:
+            raise ValueError(f"The configure signal source {repr(self)} currently does not implement setting a phase.") 
+        self.instance.write(phase_command + str(phase))
+        #self.opc_wait()
+        sleep(0.5)
+        logging.info(
+            f"{self.s_type} set phase channel {channel} to".ljust(65, ".")
+            + f"{phase}"
+        )
+
+
+class AFGSignalSource(VisaSignalSource, PhaseMixin):
+    """Special class for TekAFG to enable setting the phase in radiants"""
 
     def __init__(
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
-        super().__init__(address, device_type, configuration)
+        VisaSignalSource.__init__(self, address, device_type, configuration)
+        PhaseMixin.__init__(self)
+
+
+class RigolSignalSource(VisaSignalSource, PhaseMixin):
+    """Special class for Rigol DG1022 to enable gating and setting the phase in degrees"""
+
+    def __init__(
+        self, address: str, device_type: str, configuration: Dict[str, Any]
+    ) -> None:
+        VisaSignalSource.__init__(self, address, device_type, configuration)
+        PhaseMixin.__init__(self)
         self.attribute_map["gating"] = self._set_gate_mode
 
     @validate_call
@@ -251,7 +294,7 @@ class RigolSignalSource(VisaSignalSource):
             self.instance.write(self.command[f"SetBurstMode{channel}"] + "GAT")
 
 
-class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
+class SMBVisaSignalSource(VisaSignalSource):
     """
     SignaSource implementation for devices that implement
     the VISA protocol and configure a switchable frequency list
@@ -260,13 +303,11 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
     def __init__(
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
-        self.address = address
         self.slist_frequencies: List[float] = []
         self.slist_amplitudes: List[float] = []
-        visa_handler.VisaObject.__init__(self, address, device_type)
-        SignalSource.__init__(self, configuration)
+        super().__init__(address, device_type, configuration)
         self.attribute_map["slist_frequencies"] = self._set_slist_frequencies
-        self.attribute_map["slist_amplitudes"] = self._set_slist_amplitudes
+        self.attribute_map["slist_amplitudes"] = self._set_slist_amplitudes 
 
     def _set_slist_frequencies(self, slist_frequencies: List[float]) -> None:
         self.slist_frequencies = slist_frequencies
@@ -321,30 +362,6 @@ class SMBVisaSignalSource(visa_handler.VisaObject, SignalSource):
         self.instance.write("SOURce1:FREQ:MODE LIST")
         self.opc_wait()
         logging.info("%s[done]", "SMB set slist values.".ljust(65, "."))
-
-    @validate_call
-    @coerce_device_config_shape
-    @loop_inputs
-    def set_amplitude(self, ampl: ParameterInput) -> None:
-        channel, ampl = ampl
-        self.instance.write(self.command[f"SetAmpl{channel}"] + str(ampl))
-        self.opc_wait()
-        logging.info(
-            f"{self.s_type} set amplitude channel {channel} to".ljust(65, ".")
-            + f"{ampl}"
-        )
-
-    @validate_call
-    @coerce_device_config_shape
-    @loop_inputs
-    def set_frequency(self, freq: ParameterInput) -> None:
-        channel, freq = freq
-        self.instance.write(self.command[f"SetFreq{channel}"] + str(freq))
-        self.opc_wait()
-        logging.info(
-            f"{self.s_type} set frequency channel {channel} to".ljust(65, ".")
-            + f"{freq}"
-        )
 
 
 class WindFreakSNV(SignalSource):
