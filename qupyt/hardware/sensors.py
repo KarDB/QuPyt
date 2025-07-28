@@ -340,19 +340,16 @@ class GenICamPhantom(Sensor):
         roi_shape_h_and_w[0] = int(roi_shape_h_and_w[0] / 4)
         #ensure the roi has a compliant size with the specification.
         if roi_shape_h_and_w[1] % 128 != 0:
-            if roi_shape_h_and_w[1] % 128 > 64:
-                roi_shape_h_and_w[1] = roi_shape_h_and_w[1] - (roi_shape_h_and_w[1] % 128) + 128
-            else:
-                roi_shape_h_and_w[1] -=  (roi_shape_h_and_w[1] % 128)
+            raise Exception("ROI Width for the S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
         if roi_shape_h_and_w[1] < 128:
-            roi_shape_h_and_w[1] = 128
+            raise Exception("ROI Width for the S710 has to at least 128px; {roi_shape_h_and_w[1]}px was specified")
         if roi_shape_h_and_w[1] > 1280:
-            roi_shape_h_and_w[1] = 1280
+            raise Exception("ROI Width for the S710 has to at most 1280px; {roi_shape_h_and_w[1]}px was specified")
 
         if roi_shape_h_and_w[0] > 200:
-            roi_shape_h_and_w[0] = 200
+            raise Exception("ROI Height for the S710 has to at most 200px per Sensor; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
         if roi_shape_h_and_w[0] < 8:
-            roi_shape_h_and_w[0] = 8
+            raise Exception("ROI Height for the S710 has to at least 8px per Sensor; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
 
         try:
             self.cam.remote.set("Height", roi_shape_h_and_w[0])
