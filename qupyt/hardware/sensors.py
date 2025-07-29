@@ -355,7 +355,10 @@ class GenICamPhantom(Sensor):
             self.cam.remote.set("Height", roi_shape_h_and_w[0])
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
             ### testing has shown, that .9*x AFR.Max is more stable than 1.0x or .95x 
-            self.grabber.remote.set("AcquisitionFrameRate",0.9*int(self.grabber.remote.get("AcquisitionFrameRate.Max")))
+            ### This line has to be used if the Framerate must be increased in the code.
+            ### However, it is removed since it is likley unneeded. In case of reintroduction, see:
+            ### https://github.com/KarDB/QuPyt/pull/33#discussion_r2239747736 ###
+            # self.grabber.remote.set("AcquisitionFrameRate",0.9*int(self.grabber.remote.get("AcquisitionFrameRate.Max")))
             self.roi_shape = roi_shape_h_and_w
             logging.info(
                 f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\".ljust(
