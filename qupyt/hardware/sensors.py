@@ -226,10 +226,10 @@ class GenICamPhantom(Sensor):
           Possible configuration values:
             - **exposure_time** (int, µs)
             - **image_roi** (list[int]):
-              **This setter is not fully implemented for this sensor. Please
-              configure the full sensor size with no x or y offset until furhter notice.**
+              **The S710 only supports size adjustment, but does not support a roi that is off-center
               Region Of Interest of the sensor in
-              the following format: [height, width, x_offset, y_offset].
+              the following format: [height, width, x_offset, y_offset]. **offset is left but ignored for now.
+              The code is not removed to ensure it is better reusable for future devices and nothing else breaks** 
               The roi_shape attribute of the :class:`Sensor` base class will
               be derived from this.
             - **pixel_bits** (string): Sets number of bits per pixel.
@@ -336,24 +336,43 @@ class GenICamPhantom(Sensor):
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
         roi_shape_h_and_w = roi_shape_and_offset[:2]
-        roi_offset_x_and_y = roi_shape_and_offset[2:]
+        #this code checks if the sizes are okay on a per-sensor-basis and not in the total camera size, so the divisison is performed here
+        if roi_shape_h_and_w[0] % 4 != 0:
+            raise Exception("Picture Size has to be a multiple of 4")
+
+        
+        roi_shape_h_and_w[0] = int(roi_shape_h_and_w[0] / 4)
+        #ensure the roi has a compliant size with the specification.
+        if roi_shape_h_and_w[1] % 128 != 0:
+            raise Exception("ROI Width for the S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
+        if roi_shape_h_and_w[1] < 128:
+            raise Exception("ROI Width for the S710 has to at least 128px; {roi_shape_h_and_w[1]}px was specified")
+        if roi_shape_h_and_w[1] > 1280:
+            raise Exception("ROI Width for the S710 has to at most 1280px; {roi_shape_h_and_w[1]}px was specified")
+
+        if roi_shape_h_and_w[0] > 200:
+            raise Exception("ROI Height for the S710 has to at most 200px per Sensor; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+        if roi_shape_h_and_w[0] < 8:
+            raise Exception("ROI Height for the S710 has to at least 8px per Sensor; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+
         try:
-            self.cam.remote.set("Height", int(roi_shape_h_and_w[0] / 4))
+            self.cam.remote.set("Height", roi_shape_h_and_w[0])
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
-            # self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
-            # self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
+            ### testing has shown, that .9*x AFR.Max is more stable than 1.0x or .95x 
+            ### This line has to be used if the Framerate must be increased in the code.
+            ### However, it is removed since it is likley unneeded. In case of reintroduction, see:
+            ### https://github.com/KarDB/QuPyt/pull/33#discussion_r2239747736 ###
+            # self.grabber.remote.set("AcquisitionFrameRate",0.9*int(self.grabber.remote.get("AcquisitionFrameRate.Max")))
             self.roi_shape = roi_shape_h_and_w
             logging.info(
-                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(
+                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\".ljust(
                     65, "."
                 )
                 + "[done]"
             )
         except Exception as exc:
             logging.exception(
-                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(
+                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\".ljust(
                     65, "."
                 )
                 + "[failed]"
@@ -1016,7 +1035,7 @@ class DAQ(Sensor):
         # AI (analog input) in volts
         self.min_voltage: float = -1.0
         self.max_voltage: float = 1.0
-        self.daq_timeout: int = 3600  # / s
+        self.daq_timeout: int = 10  # / s
         super().__init__(configuration)
         self.roi_shape = [1]
         self.attribute_map["min_voltage"] = self._set_min_voltage
@@ -1098,10 +1117,12 @@ class DAQ(Sensor):
         See :meth:`Sensor.acquire_data`.
         """
         if synchroniser is not None:
+            self.daq_task.start()
             synchroniser.trigger()
         try:
             samples = self.daq_task.read(
                 self.NsampsPerDAQread, self.daq_timeout)
+            self.daq_task.stop()
         except Exception as excpt:
             print(
                 """Error: could not read DAQ.
