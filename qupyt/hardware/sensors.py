@@ -336,6 +336,11 @@ class GenICamPhantom(Sensor):
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
         roi_shape_h_and_w = roi_shape_and_offset[:2]
+        if roi_shape_and_offset[2] or roi_shape_and_offset[3]:
+            logging.warning(f"Offset X:{roi_shape_and_offset[2]}+Y:{roi_shape_and_offset[3]} set, but the S710 does not support ROI offset.\n Consider resizing the ROI to get the Region in a center-focused way\n".ljust(
+                    65, "."
+                )
+                + "[warning]" )
         #this code checks if the sizes are okay on a per-sensor-basis and not in the total camera size, so the divisison is performed here
         if roi_shape_h_and_w[0] % 4 != 0:
             raise Exception("Picture Size has to be a multiple of 4")
@@ -365,14 +370,14 @@ class GenICamPhantom(Sensor):
             # self.grabber.remote.set("AcquisitionFrameRate",0.9*int(self.grabber.remote.get("AcquisitionFrameRate.Max")))
             self.roi_shape = roi_shape_h_and_w
             logging.info(
-                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\".ljust(
+                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n".ljust(
                     65, "."
                 )
                 + "[done]"
             )
         except Exception as exc:
             logging.exception(
-                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\".ljust(
+                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n".ljust(
                     65, "."
                 )
                 + "[failed]"
