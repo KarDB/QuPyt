@@ -226,12 +226,11 @@ class GenICamPhantom(Sensor):
           Possible configuration values:
             - **exposure_time** (int, µs)
             - **image_roi** (list[int]):
-              **This setter is not fully implemented for this sensor. Please
-              configure the full sensor size with no x or y offset until furhter notice.**
               Region Of Interest of the sensor in
-              the following format: [height, width, x_offset, y_offset].
-              The roi_shape attribute of the :class:`Sensor` base class will
-              be derived from this.
+              the following format: [height, width, x_offset, y_offset]. The roi_shape attribute of the :class:`Sensor` base class will
+              be derived from this. The Phantom S710 only supports size adjustment with height (32 to 800 in steps of 8)
+              and width (128 to 1280 in steps of 128), but does not support a ROI that is off-center
+              (thus ignoring these input values). The offset input is kept nevertheless to keep it structurally alike other camera inputs.
             - **pixel_bits** (string): Sets number of bits per pixel.
               E.g. 'Mono8', 'Mono12' or 'Mono16'.
               Note that we currently do not support the "bayer" pixel format.
@@ -335,25 +334,56 @@ class GenICamPhantom(Sensor):
     #     self.cam.remote_device.node_map.Gain.value = gain
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
+        """
+        This functions sets the range of interest (ROI) of the camera.
+        Hardware specific limitations include:
+            - Currently it is not possible to change the position of the field of view (FOV).
+            Thus, the values for the offsets are completely ignored independent of the chosen value.
+            A warning is logged though if they are set to something else than 0.
+            - The height can be set from 32 to 800 in steps of 8. The camera will accept values with an integer
+            of 4 without any warning/error but will internally change them upon a measurement.
+            - The width can be set from 128 to 1280 in steps of 128.
+        """
+
         roi_shape_h_and_w = roi_shape_and_offset[:2]
-        roi_offset_x_and_y = roi_shape_and_offset[2:]
+        if roi_shape_and_offset[2] or roi_shape_and_offset[3]:
+            logging.warning(f"Offset X:{roi_shape_and_offset[2]} and Y:{roi_shape_and_offset[3]} are ignored, as the Phantom S710\n" +
+                            f"does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
+                    65, "."
+                )
+                + "[warning]" )
+
+        # Checking size compatibility of chosen FOV.
+        if roi_shape_h_and_w[0] % 8 != 0:
+            raise Exception("ROI Height for the Phantom S710 has to be a multiple of 8")
+
+        roi_shape_h_and_w[0] = int(np.round(roi_shape_h_and_w[0] / 4))
+
+        if roi_shape_h_and_w[1] % 128 != 0:
+            raise Exception(f"ROI Width for the Phantom S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
+        if roi_shape_h_and_w[1] < 128:
+            raise Exception(f"ROI Width for the Phantom S710 has to be at least 128px; {roi_shape_h_and_w[1]}px was specified")
+        if roi_shape_h_and_w[1] > 1280:
+            raise Exception(f"ROI Width for the Phantom S710 has to be at most 1280px; {roi_shape_h_and_w[1]}px was specified")
+
+        if roi_shape_h_and_w[0] > 200:
+            raise Exception(f"ROI Height for the Phantom S710 has to be at most 800px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+        if roi_shape_h_and_w[0] < 8:
+            raise Exception(f"ROI Height for the Phantom S710 has to be at least 32px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+
         try:
-            self.cam.remote.set("Height", int(roi_shape_h_and_w[0] / 4))
+            self.cam.remote.set("Height", roi_shape_h_and_w[0])
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
-            # self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
-            # self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
-            self.roi_shape = roi_shape_h_and_w
+            self.roi_shape = [roi_shape_h_and_w[0]*4, roi_shape_h_and_w[1]]
             logging.info(
-                f"Set Sensor roi to height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                          with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(
+                f"Set Sensor roi to height: {roi_shape_h_and_w[0]*4} and width: {roi_shape_h_and_w[1]}\n".ljust(
                     65, "."
                 )
                 + "[done]"
             )
         except Exception as exc:
             logging.exception(
-                f"Failed to set roi of height: {roi_shape_h_and_w[0]} and width: {roi_shape_h_and_w[1]}\n\
-                               with offset X: {roi_offset_x_and_y[0]} and Y: {roi_offset_x_and_y[1]}".ljust(
+                f"Failed to set roi of height: {roi_shape_h_and_w[0]*4} and width: {roi_shape_h_and_w[1]}\n".ljust(
                     65, "."
                 )
                 + "[failed]"
@@ -364,28 +394,30 @@ class GenICamPhantom(Sensor):
         """
         See :meth:`Sensor.acquire_data`.
         """
-        time_1 = time()
+
         height = self.cam.remote.get("Height")
         width = self.cam.remote.get("Width")
+
         self.cam.realloc_buffers(self.number_measurements)
         self.cam.start()
         data = np.zeros((self.number_measurements,
                         height * 4, width), dtype=np.uint32)
+        timesteps = np.zeros(self.number_measurements, dtype=np.float64)
         if synchroniser is not None:
             synchroniser.trigger()
         for i in range(self.number_measurements):
             with Buffer(self.cam) as buffer:
-                buffer_ptr, image_size, part_num, _ = self._grab_frame_info(
+                buffer_ptr, image_size, part_num, timestep = self._grab_frame_info(
                     buffer)
                 raw_frame = self._move_frame_from_pool(
                     buffer_ptr, image_size, part_num)
                 data[i] += raw_frame
+                timesteps[i] += timestep
         self.cam.stop()
-        time_2 = time()
-        logging.info(
-            f"Data acquisition took {time_2-time_1} s".ljust(
-                65, ".") + "[done]"
-        )
+
+        logging.info(f"The real framerate calculated by the timing of the camera is {1/((timesteps[self.number_measurements-1]-timesteps[0])*1e-6/(self.number_measurements-1))} Hz".ljust(
+                65, ".") + "[info]")
+
         return data
 
     def _grab_frame_info(self, buffer: Buffer):
