@@ -234,7 +234,10 @@ class SPC(Sensor):
     """
     def __init__(self, configuration: Dict[str, Any])-> None:
         self.instance = tag.createTimeTagger()
-        self.measurement = None #tag.
+        measurement_port = configuration["measurement_pin"]
+        signal_port = configuration["signal_pin"]
+        number_bins = configuration["n_bins"]
+        self.measurement = CountBetweenMarkers(tagger=self.instance,measurement_port,signal_port,nbins=number_bins)
         super().__init__(configuration)
         self.initial_configuration_dict = configuration
         if configuration is not None:
@@ -249,8 +252,9 @@ class SPC(Sensor):
         See :meth:`Sensor.acquire_data`.
         """
         bincount = self.initial_configuration_dict["n_bins"]
-        binsize = 1e12/self.initial_configuration_dict["bin_rate"]
+        binsize = int( 1e12/self.initial_configuration_dict["bin_rate"])
         measure_time  = bincount*binsize
+        self.measurement.clear()
         if synchroniser is not None:
             synchroniser.trigger()
         return [self._run_measurement(measure_time) for i in range(self.number_measurements)]
