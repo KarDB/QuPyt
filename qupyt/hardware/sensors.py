@@ -226,12 +226,11 @@ class GenICamPhantom(Sensor):
           Possible configuration values:
             - **exposure_time** (int, µs)
             - **image_roi** (list[int]):
-              **The S710 only supports size adjustment, but does not support a roi that is off-center
               Region Of Interest of the sensor in
-              the following format: [height, width, x_offset, y_offset]. **offset is left but ignored for now.
-              The code is not removed to ensure it is better reusable for future devices and nothing else breaks** 
-              The roi_shape attribute of the :class:`Sensor` base class will
-              be derived from this.
+              the following format: [height, width, x_offset, y_offset]. The roi_shape attribute of the :class:`Sensor` base class will
+              be derived from this. The Phantom S710 only supports size adjustment with height (32 to 800 in steps of 8)
+              and width (128 to 1280 in steps of 128), but does not support a ROI that is off-center
+              (thus ignoring these input values). The offset input is kept nevertheless to keep it structurally alike other camera inputs.
             - **pixel_bits** (string): Sets number of bits per pixel.
               E.g. 'Mono8', 'Mono12' or 'Mono16'.
               Note that we currently do not support the "bayer" pixel format.
@@ -335,19 +334,31 @@ class GenICamPhantom(Sensor):
     #     self.cam.remote_device.node_map.Gain.value = gain
 
     def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
+        """
+        This functions sets the range of interest (ROI) of the camera.
+        Hardware specific limitations include:
+            - Currently it is not possible to change the position of the field of view (FOV).
+            Thus, the values for the offsets are completely ignored independent of the chosen value.
+            A warning is logged though if they are set to something else than 0.
+            - The height can be set from 32 to 800 in steps of 8. The camera will accept values with an integer
+            of 4 without any warning/error but will internally change them upon a measurement.
+            - The width can be set from 128 to 1280 in steps of 128.
+        """
+
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         if roi_shape_and_offset[2] or roi_shape_and_offset[3]:
-            logging.warning(f"Offset X:{roi_shape_and_offset[2]}+Y:{roi_shape_and_offset[3]} set, but the S710 does not support ROI offset.\n Consider resizing the ROI to get the Region in a center-focused way\n".ljust(
+            logging.warning(f"Offset X:{roi_shape_and_offset[2]} and Y:{roi_shape_and_offset[3]} are ignored, as the Phantom S710\n" +
+                            f"does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
                     65, "."
                 )
                 + "[warning]" )
-        #this code checks if the sizes are okay on a per-sensor-basis and not in the total camera size, so the divisison is performed here
+
+        # Checking size compatibility of chosen FOV.
         if roi_shape_h_and_w[0] % 8 != 0:
             raise Exception("ROI Height for the Phantom S710 has to be a multiple of 8")
 
-        
         roi_shape_h_and_w[0] = int(np.round(roi_shape_h_and_w[0] / 4))
-        #ensure the roi has a compliant size with the specification.
+
         if roi_shape_h_and_w[1] % 128 != 0:
             raise Exception(f"ROI Width for the Phantom S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
         if roi_shape_h_and_w[1] < 128:
