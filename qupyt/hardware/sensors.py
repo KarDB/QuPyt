@@ -355,21 +355,21 @@ class GenICamPhantom(Sensor):
 
         # Checking size compatibility of chosen FOV.
         if roi_shape_h_and_w[0] % 8 != 0:
-            raise Exception("ROI Height for the Phantom S710 has to be a multiple of 8")
+            raise ValueError("ROI Height for the Phantom S710 has to be a multiple of 8")
 
         roi_shape_h_and_w[0] = int(np.round(roi_shape_h_and_w[0] / 4))
 
         if roi_shape_h_and_w[1] % 128 != 0:
-            raise Exception(f"ROI Width for the Phantom S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
+            raise ValueError(f"ROI Width for the Phantom S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
         if roi_shape_h_and_w[1] < 128:
-            raise Exception(f"ROI Width for the Phantom S710 has to be at least 128px; {roi_shape_h_and_w[1]}px was specified")
+            raise ValueError(f"ROI Width for the Phantom S710 has to be at least 128px; {roi_shape_h_and_w[1]}px was specified")
         if roi_shape_h_and_w[1] > 1280:
-            raise Exception(f"ROI Width for the Phantom S710 has to be at most 1280px; {roi_shape_h_and_w[1]}px was specified")
+            raise ValueError(f"ROI Width for the Phantom S710 has to be at most 1280px; {roi_shape_h_and_w[1]}px was specified")
 
         if roi_shape_h_and_w[0] > 200:
-            raise Exception(f"ROI Height for the Phantom S710 has to be at most 800px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+            raise ValueError(f"ROI Height for the Phantom S710 has to be at most 800px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
         if roi_shape_h_and_w[0] < 8:
-            raise Exception(f"ROI Height for the Phantom S710 has to be at least 32px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+            raise ValueError(f"ROI Height for the Phantom S710 has to be at least 32px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
 
         try:
             self.cam.remote.set("Height", roi_shape_h_and_w[0])
