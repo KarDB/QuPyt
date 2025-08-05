@@ -18,6 +18,14 @@ import numpy as np
 from pypylon import pylon
 from harvesters.core import Harvester
 
+
+try:
+    import TimeTagger as tag
+except ImportError:
+    logging.warning(
+        "Could not load TimeTagger library".ljust(65, ".")
+        + "[failed]\nIf you are not using a Single Photon Counter you do not need this!"
+    )
 try:
     from egrabber import (
         EGenTL,
@@ -107,6 +115,8 @@ class SensorFactory:
         :raises ValueError:
         """
         try:
+            if sensor_type == "SPC"
+                return SPC(configuration)
             if sensor_type == "Basler1920":
                 return BaslerCam(configuration)
             if sensor_type == "EoSense1.1CXP":
@@ -206,6 +216,55 @@ class Sensor(ABC, ConfigurationMixin):
         """
         Closes and if necessary destroys the sensor instance.
         """
+class SPC(Sensor):
+    """
+        Sensor class for usage of a Single Photon Counter hooked up to a TimeTagger for data acqisition
+        It uses the TimeTagger software wrappers from SwabianInstruments.
+        Alternative Versions may require different implementations.
+
+        Note: This requires the TimeTagger framework.
+    
+        Arguments:
+                - **configuration** (dict): Configuration dictionary. Keys will be used
+                  to select setter methods from an attribute map dicionary to set
+                  associated values.
+    
+        Raises (__init__):
+        - ConfigurationError
+    """
+    def __init__(self, configuration: Dict[str, Any])-> None:
+        self.instance = tag.createTimeTagger()
+        self.measurement = None #tag.
+        super().__init__(configuration)
+        self.initial_configuration_dict = configuration
+        if configuration is not None:
+            self._update_from_configuration(configuration)
+    def open(self) -> None:
+        """" This function is unused since the instance creation is done in init and the further configuration of the Measurement is done in acquire_data"""
+    def close(self)-> None:
+        self.instance = None
+        gc.collect()
+    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+        """
+        See :meth:`Sensor.acquire_data`.
+        """
+        bincount = self.initial_configuration_dict["n_bins"]
+        binsize = 1e12/self.initial_configuration_dict["bin_rate"]
+        measure_time  = bincount*binsize
+        if synchroniser is not None:
+            synchroniser.trigger()
+        return [self._run_measurement(measure_time) for i in range(self.number_measurements)]
+          #  self.measurement
+
+    def _run_measurement(self,measure_time : int) -> np.ndarray:
+        self.measurement.startFor(measure_time)
+        self.measurement.waitForCompletion()
+        data = self.measurement.getData()
+        self.measurement.clear()
+        return data
+         
+
+    
 
 
 class GenICamPhantom(Sensor):
