@@ -343,40 +343,26 @@ class GenICamPhantom(Sensor):
                 + "[warning]" )
         #this code checks if the sizes are okay on a per-sensor-basis and not in the total camera size, so the divisison is performed here
         if roi_shape_h_and_w[0] % 8 != 0:
-            raise Exception("Picture Size has to be a multiple of 8")
+            raise Exception("ROI Height for the Phantom S710 has to be a multiple of 8")
 
         
         roi_shape_h_and_w[0] = int(np.round(roi_shape_h_and_w[0] / 4))
         #ensure the roi has a compliant size with the specification.
         if roi_shape_h_and_w[1] % 128 != 0:
-            raise Exception(f"ROI Width for the S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
+            raise Exception(f"ROI Width for the Phantom S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
         if roi_shape_h_and_w[1] < 128:
-            raise Exception(f"ROI Width for the S710 has to at least 128px; {roi_shape_h_and_w[1]}px was specified")
+            raise Exception(f"ROI Width for the Phantom S710 has to be at least 128px; {roi_shape_h_and_w[1]}px was specified")
         if roi_shape_h_and_w[1] > 1280:
-            raise Exception(f"ROI Width for the S710 has to at most 1280px; {roi_shape_h_and_w[1]}px was specified")
+            raise Exception(f"ROI Width for the Phantom S710 has to be at most 1280px; {roi_shape_h_and_w[1]}px was specified")
 
         if roi_shape_h_and_w[0] > 200:
-            raise Exception(f"ROI Height for the S710 has to at most 800px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+            raise Exception(f"ROI Height for the Phantom S710 has to be at most 800px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
         if roi_shape_h_and_w[0] < 8:
-            raise Exception(f"ROI Height for the S710 has to at least 32px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+            raise Exception(f"ROI Height for the Phantom S710 has to be at least 32px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
 
         try:
             self.cam.remote.set("Height", roi_shape_h_and_w[0])
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
-            height_real = self.cam.remote.get("Height")
-            width_real = self.cam.remote.get("Width")
-            logging.info(
-            f"Real camera height: {height_real} and width: {width_real}\n".ljust(
-                    65, "."
-                )
-                + "[done]"
-            )
-
-            ### testing has shown, that .9*x AFR.Max is more stable than 1.0x or .95x 
-            ### This line has to be used if the Framerate must be increased in the code.
-            ### However, it is removed since it is likley unneeded. In case of reintroduction, see:
-            ### https://github.com/KarDB/QuPyt/pull/33#discussion_r2239747736 ###
-            # self.grabber.remote.set("AcquisitionFrameRate",0.9*int(self.grabber.remote.get("AcquisitionFrameRate.Max")))
             self.roi_shape = [roi_shape_h_and_w[0]*4, roi_shape_h_and_w[1]]
             logging.info(
                 f"Set Sensor roi to height: {roi_shape_h_and_w[0]*4} and width: {roi_shape_h_and_w[1]}\n".ljust(
@@ -397,12 +383,10 @@ class GenICamPhantom(Sensor):
         """
         See :meth:`Sensor.acquire_data`.
         """
-        time_1 = time()
+
         height = self.cam.remote.get("Height")
         width = self.cam.remote.get("Width")
 
-        logging.info(f"Sizes are {height}, {width}, {self.roi_shape} .".ljust(
-                65, ".") + "[info]")
         self.cam.realloc_buffers(self.number_measurements)
         self.cam.start()
         data = np.zeros((self.number_measurements,
@@ -419,16 +403,10 @@ class GenICamPhantom(Sensor):
                 data[i] += raw_frame
                 timesteps[i] += timestep
         self.cam.stop()
-        time_2 = time()
 
-        logging.info(f"Framerate is {1/((timesteps[self.number_measurements-1]-timesteps[0])*1e-6/(self.number_measurements-1))} Hz".ljust(
+        logging.info(f"The real framerate calculated by the timing of the camera is {1/((timesteps[self.number_measurements-1]-timesteps[0])*1e-6/(self.number_measurements-1))} Hz".ljust(
                 65, ".") + "[info]")
-        logging.info(f"Timesteps are {timesteps-timesteps[0]} .".ljust(
-                65, ".") + "[info]")
-        logging.info(
-            f"Data acquisition took {time_2-time_1} s".ljust(
-                65, ".") + "[done]"
-        )
+
         return data
 
     def _grab_frame_info(self, buffer: Buffer):
