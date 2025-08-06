@@ -238,11 +238,8 @@ class SPC(Sensor):
         signal_port = configuration["signal_pin"]
         self.attribute_map["signal_level"] = self._setSignalThreshhold
         self.attribute_map["measurement_level"] = self._setMeasurementThreshhold
-        
-        self.instance.setTriggerLevel(signal_port,0.2)
-        self.instance.setTriggerLevel(measurement_port,0.2)
-        self.measurement = tag.CountBetweenMarkers(tagger=self.instance,click_channel=measurement_port,begin_channel=signal_port,n_values=configuration["number_measurements"])
         super().__init__(configuration)
+        self.measurement = tag.CountBetweenMarkers(tagger=self.instance,click_channel=measurement_port,begin_channel=signal_port,n_values=configuration["number_measurements"])      
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
@@ -255,7 +252,6 @@ class SPC(Sensor):
         """
         See :meth:`Sensor.acquire_data`.
         """
-        bincount = self.initial_configuration_dict["number_measurements"]
         measure_time = self.initial_configuration_dict["measurement_time"]
         
         self.measurement.clear()
