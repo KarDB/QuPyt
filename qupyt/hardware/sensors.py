@@ -115,7 +115,7 @@ class SensorFactory:
         :raises ValueError:
         """
         try:
-            if sensor_type == "SPC"
+            if sensor_type == "SPC":
                 return SPC(configuration)
             if sensor_type == "Basler1920":
                 return BaslerCam(configuration)
@@ -236,8 +236,12 @@ class SPC(Sensor):
         self.instance = tag.createTimeTagger()
         measurement_port = configuration["measurement_pin"]
         signal_port = configuration["signal_pin"]
-        number_bins = configuration["n_bins"]
-        self.measurement = CountBetweenMarkers(tagger=self.instance,measurement_port,signal_port,nbins=number_bins)
+        self.attribute_map["signal_level"] = self._setSignalThreshhold
+        self.attribute_map["measurement_level"] = self._setMeasurementThreshhold
+        
+        self.instance.setTriggerLevel(signal_port,0.2)
+        self.instance.setTriggerLevel(measurement_port,0.2)
+        self.measurement = tag.CountBetweenMarkers(tagger=self.instance,click_channel=measurement_port,begin_channel=signal_port,n_values=configuration["number_measurements"])
         super().__init__(configuration)
         self.initial_configuration_dict = configuration
         if configuration is not None:
@@ -251,21 +255,23 @@ class SPC(Sensor):
         """
         See :meth:`Sensor.acquire_data`.
         """
-        bincount = self.initial_configuration_dict["n_bins"]
-        binsize = int( 1e12/self.initial_configuration_dict["bin_rate"])
-        measure_time  = bincount*binsize
+        bincount = self.initial_configuration_dict["number_measurements"]
+        measure_time = self.initial_configuration_dict["measurement_time"]
+        
         self.measurement.clear()
         if synchroniser is not None:
             synchroniser.trigger()
-        return [self._run_measurement(measure_time) for i in range(self.number_measurements)]
-          #  self.measurement
-
-    def _run_measurement(self,measure_time : int) -> np.ndarray:
         self.measurement.startFor(measure_time)
-        self.measurement.waitForCompletion()
+        self.measurement.waitUntilFinished()
         data = self.measurement.getData()
         self.measurement.clear()
         return data
+          #  self.measurement
+    def _setMeasurementThreshhold(self,voltage : int) -> None:
+        self.instance.setTriggerLevel(self.initial_configuration_dict["measurement_pin"],voltage)
+    def _setSignalThreshhold(self,voltage : int) -> None:
+        self.instance.setTriggerLevel(self.initial_configuration_dict["signal_pin"],voltage)
+
          
 
     
