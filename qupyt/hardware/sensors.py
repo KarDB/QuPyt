@@ -18,6 +18,14 @@ import numpy as np
 from pypylon import pylon
 from harvesters.core import Harvester
 
+
+try:
+    import TimeTagger as tag
+except ImportError:
+    logging.warning(
+        "Could not load TimeTagger library".ljust(65, ".")
+        + "[failed]\nIf you are not using a Single Photon Counter you do not need this!"
+    )
 try:
     from egrabber import (
         EGenTL,
@@ -107,6 +115,8 @@ class SensorFactory:
         :raises ValueError:
         """
         try:
+            if sensor_type == "SPC":
+                return SPC(configuration)
             if sensor_type == "Basler1920":
                 return BaslerCam(configuration)
             if sensor_type == "EoSense1.1CXP":
@@ -206,6 +216,89 @@ class Sensor(ABC, ConfigurationMixin):
         """
         Closes and if necessary destroys the sensor instance.
         """
+class SPC(Sensor):
+    """
+        Sensor class for usage of a Single Photon Counter hooked up to a TimeTagger for data acqisition
+        It uses the TimeTagger software wrappers from SwabianInstruments.
+        Alternative Versions may require different implementations.
+
+        Note: This requires the TimeTagger framework.
+    
+        Arguments:
+                - **configuration** (dict): Configuration dictionary. Keys will be used
+                  to select setter methods from an attribute map dicionary to set
+                  associated values.
+                  
+                  Possible configuration values:
+                    -**measurement_pin**: The connector on the TimeTagger that is connected to the Photon Detector
+                        [1,2,3,4]
+                    -**signal_pin**: The connector on the TimeTagger that handles the bin-switching for the TimeTagger
+                        [1,2,3,4]
+                    -**measurement_level**: The Voltage at which crossed the TimeTagger measures its Count - Vales depend strongly on your TimeTagger Version and the Device connected.
+                        for the *TimeTagger Ultra* the Manufacturer states an maximum Interval of -2.5 to 2.5 V; but it aslo strongly depends on the Photon Detectors specifics - the Excelitas SPCM-AQRH-WX-TR for example has a 2.2V output signal.
+                    -**signal_level** analogous to measurement_level, but for the bin-switching signal 
+                    -**measurement_time**  Total Time for the Measurement (code requiring this may be deprecatable, but this needs more testing)  
+
+                    
+        Raises (__init__):
+        - ConfigurationError
+    """
+    def __init__(self, configuration: Dict[str, Any])-> None:
+        self.instance = tag.createTimeTagger()
+        measurement_port = configuration["measurement_pin"]
+        signal_port = configuration["signal_pin"]
+        self.attribute_map["signal_level"] = self._setSignalThreshhold
+        self.attribute_map["measurement_level"] = self._setMeasurementThreshhold
+        super().__init__(configuration)
+        self.measurement = tag.CountBetweenMarkers(tagger=self.instance,click_channel=measurement_port,begin_channel=signal_port,n_values=configuration["number_measurements"])   
+        ### It may work - but that would require testing within QuPyt - to set signal_port as end_channel as well and get only bins with desireable Data. however, this behavior is hard to investigate without a software-controlled switching signal, so it is left for now in the "safe" but counterintuitive way.
+        ### the line above would have to be replaced with this:
+        # self.measurement = tag.CountBetweenMarkers(tagger=self.instance,click_channel=measurement_port,begin_channel=signal_port,end_channel=signal_port,n_values=configuration["number_measurements"])   
+             logging.warning(
+        "QuPyt Measurement implementation may be revised - see line 254f in qupyt/hardware/sensors".ljust(65, ".")
+        + "[warning]\n"
+    )
+        self.initial_configuration_dict = configuration
+        if configuration is not None:
+            self._update_from_configuration(configuration)
+    def open(self) -> None:
+        logging.warning(
+        "Warning: this Sensor was not yet tested with QuPyt. Bugs may be present and not yet be fixed".ljust(65, ".")
+        + "[warning]\n"
+    )
+        """" This function is unused since the instance creation is done in init and the further configuration of the Measurement is done in acquire_data"""
+    def close(self)-> None:
+        self.instance = None
+        gc.collect()
+    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
+        """
+        See :meth:`Sensor.acquire_data`.
+
+        note the second Dimension here is the binwidth if you require it for processing Data
+        """
+        measure_time = self.initial_configuration_dict["measurement_time"]
+        
+        self.measurement.clear()
+        if synchroniser is not None:
+            synchroniser.trigger()
+        ### it could be possible to drop the requirement for measure_time and replace it with just self.measurement.start()
+        self.measurement.startFor(measure_time)
+        self.measurement.waitUntilFinished()
+        data = self.measurement.getData()
+        binsizes = self.measurement. getBinWidths()
+        self.measurement.clear()
+        return np.array([data,binsizes])
+        ###currently binsizes are returned as well. If this is not idiomatic switch the line above to the one below.
+        #return data
+         
+    def _setMeasurementThreshhold(self,voltage : float) -> None:
+        self.instance.setTriggerLevel(self.initial_configuration_dict["measurement_pin"],voltage)
+    def _setSignalThreshhold(self,voltage : float) -> None:
+        self.instance.setTriggerLevel(self.initial_configuration_dict["signal_pin"],voltage)
+
+         
+
+    
 
 
 class GenICamPhantom(Sensor):
