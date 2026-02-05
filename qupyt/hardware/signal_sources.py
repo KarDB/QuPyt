@@ -70,6 +70,7 @@ class DeviceFactory:
             "Mock",
             "SRS",
             "SMB",
+            "SMA",
             "Rigol",
             "TekAWG",
             "TekAFG",
@@ -91,12 +92,13 @@ class DeviceFactory:
                 return WindFreakSHDMini(device_info["address"], device_info["config"])
             if device_info["device_type"] == "Mock":
                 return MockSignalSource(device_info["address"], device_info["config"])
-            if device_info["device_type"] == "SMB":
-                return SMBVisaSignalSource(
+            if device_info["device_type"] == "SMB" or device_info["device_type"] == "SMA":
+                return SMAandSMBVisaSignalSource(
                     device_info["address"],
                     device_info["device_type"],
                     device_info["config"],
                 )
+
             if device_info["device_type"] == "Rigol":
                 return RigolSignalSource(
                     device_info["address"],
@@ -294,7 +296,7 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin):
             self.instance.write(self.command[f"SetBurstMode{channel}"] + "GAT")
 
 
-class SMBVisaSignalSource(VisaSignalSource):
+class SMAandSMBVisaSignalSource(VisaSignalSource):
     """
     SignaSource implementation for devices that implement
     the VISA protocol and configure a switchable frequency list
@@ -307,7 +309,7 @@ class SMBVisaSignalSource(VisaSignalSource):
         self.slist_amplitudes: List[float] = []
         super().__init__(address, device_type, configuration)
         self.attribute_map["slist_frequencies"] = self._set_slist_frequencies
-        self.attribute_map["slist_amplitudes"] = self._set_slist_amplitudes 
+        self.attribute_map["slist_amplitudes"] = self._set_slist_amplitudes
 
     def _set_slist_frequencies(self, slist_frequencies: List[float]) -> None:
         self.slist_frequencies = slist_frequencies
@@ -326,20 +328,23 @@ class SMBVisaSignalSource(VisaSignalSource):
     def _configure_slist(self) -> None:
         self.instance.write("*RST")
         self.opc_wait()
-        self.instance.write("OUTP ON")
+        self.instance.write("OUTP:STAT ON")
         self.opc_wait()
-        self.instance.write("SOURce1:FREQ:MODE CW")
+        self.instance.write("SOURce:FREQ:MODE CW")
         self.opc_wait()
         # Delete list if exists.
-        if "SyncList" in self.instance.query('SOURce1:LIST:CAT?'):
-            self.instance.write('SOURce1:LIST:DEL "SyncList"')
+        if "SyncList" in self.instance.query('SOURce:LIST:CAT?'):
+            self.instance.write('SOURce:LIST:DEL "SyncList"')
         # create list
-        self.instance.write('SOURce1:LIST:SEL "SyncList"')
+        self.instance.write('SOURce:LIST:SEL "SyncList"')
+        self.opc_wait()
+
+        #set dwell time
         self.opc_wait()
 
         # write frequency to list first row in arg first one being the NV
         # second one the overhauser-frequency
-        set_slist_frequencies = f"SOURce1:LIST:FREQ {self.slist_frequencies[0]} Hz"
+        set_slist_frequencies = f"SOURce:LIST:FREQ {self.slist_frequencies[0]} Hz"
         for slist_freq in self.slist_frequencies[1:]:
             set_slist_frequencies += f", {slist_freq} Hz"
         self.instance.write(set_slist_frequencies)
@@ -347,21 +352,22 @@ class SMBVisaSignalSource(VisaSignalSource):
 
         # write amp to list first row in arg first one being the NV
         # second one the overhauser-amp
-        set_slist_amplitudes = f"SOURce1:LIST:POW {self.slist_amplitudes[0]} dBm"
+        set_slist_amplitudes = f"SOURce:LIST:POW {self.slist_amplitudes[0]} dBm"
         for slist_ampl in self.slist_amplitudes[1:]:
             set_slist_amplitudes += f", {slist_ampl} dBm"
         self.instance.write(set_slist_amplitudes)
         self.opc_wait()
 
         # set list mode to step not auto
-        self.instance.write("SOURce1:LIST:MODE STEP")
+        self.instance.write("SOURce:LIST:MODE STEP")
         self.opc_wait()
         # set trigger type to external
-        self.instance.write("SOURce1:LIST:TRIG:SOUR EXT")
+        self.instance.write("SOURce:LIST:TRIG:SOUR EXT")
         self.opc_wait()
-        self.instance.write("SOURce1:FREQ:MODE LIST")
+        self.instance.write("SOURce:FREQ:MODE LIST")
         self.opc_wait()
-        logging.info("%s[done]", "SMB set slist values.".ljust(65, "."))
+        logging.info("%s[done]", "SMB or SMA set slist values.".ljust(65, "."))
+
 
 
 class WindFreakSNV(SignalSource):

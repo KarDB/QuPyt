@@ -23,7 +23,7 @@ class VisaObject:
         handle: visa adress of signal source
         s_type: source type (SRS, RS)...
         """
-        self.known_s_types = ["SRS", "SMB", "Rigol", "TekAWG", "TekAFG"]
+        self.known_s_types = ["SRS", "SMA", "SMB", "Rigol", "TekAWG", "TekAFG"]
         self.handle = handle
         self.s_type = s_type
         if self.s_type not in self.known_s_types:
@@ -70,6 +70,15 @@ class VisaObject:
             }
 
         elif self.s_type == "SMB":
+            self.command = {
+                "SetAmpl1": "POW ",
+                "GetAmpl1": "POW?",
+                "SetFreq1": "FREQ ",
+                "GetFreq1": "FREQ?",
+                "OPC": "*OPC?",
+            }
+
+        elif self.s_type == "SMA":
             self.command = {
                 "SetAmpl1": "POW ",
                 "GetAmpl1": "POW?",
