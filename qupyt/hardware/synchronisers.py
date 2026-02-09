@@ -98,7 +98,7 @@ class Synchroniser(ABC, ConfigurationMixin):
     one measurement step. To do this they need a pulse sequence they are
     supposed to play during the measurement. This pulse sequence is read
     from a yaml file from its default location
-    (~/.qupyt/sequences/sequence.yaml). The specifics of how a pulse sequence
+    (~/.qupyt/sequences/sequence_0.yaml). The specifics of how a pulse sequence
     is played depends on the synchroniser (Tektronix AWG, PulseStreamer, ...)
     and have to be dealt with in the implementation of this class for the
     synchroniser in question.
@@ -130,7 +130,7 @@ class Synchroniser(ABC, ConfigurationMixin):
         self.address = address
 
     @abstractmethod
-    def load_sequence(self) -> None:
+    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         """
         Load the YAML formatted pulse sequence from its default location
         (see above), and parse it to the specifics of the synchroniser. Finally
@@ -237,12 +237,11 @@ class AWGenerator(VisaObject, Synchroniser):
         self.instance.write("trigger:immediate atrigger")
         logging.info("Sent trigger to AWG".ljust(65, ".") + "[done]")
 
-    def load_sequence(self) -> None:
+    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         self.stop()
         self._clear_awg()
         sequence_translator = PulseSequenceYaml(
-            self.channel_mapping, self.channels, samprate=self.samprate
-        )
+            self.channel_mapping, self.channels, samprate=self.samprate, yaml_file = ps_yaml_file)
         sequence_translator.translate_yaml_to_numeric_instructions()
         self._load_sequence_block(get_seq_dir() / "sequence.npz")
         self._upload_waveforms()
@@ -689,14 +688,14 @@ class PStreamer(Synchroniser):
                 "Warning (plot_sequence()): No sequence is streaming in the PulseStreamer."
             )
 
-    def load_sequence(self) -> None:
+    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         """
         Calls the WriteDigSig() function and loads the corresponding sequences
         to the respective channels.
         """
         try:
             # Selected folder:
-            self.yaml_file = set_up.get_seq_dir() / "sequence.yaml"
+            self.yaml_file = set_up.get_seq_dir() / ps_yaml_file
             with open(self.yaml_file, "r", encoding="utf-8") as file:
                 full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
             sequence_order = full_pulse_list["sequencing_order"]
@@ -816,9 +815,9 @@ class MockGenerator(Synchroniser):
     def open(self) -> None:
         logging.info("Opened MockSynchroniser".ljust(65, ".") + "[done]")
 
-    def load_sequence(self) -> None:
+    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         try:
-            self.yaml_file = set_up.get_seq_dir() / "sequence.yaml"
+            self.yaml_file = set_up.get_seq_dir() / ps_yaml_file
             with open(self.yaml_file, "r", encoding="utf-8") as file:
                 full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
             total_duration = (
@@ -948,8 +947,8 @@ class PulseBlaster(Synchroniser):
     def open(self) -> None:
         self.configure_pb()
 
-    def load_sequence(self) -> None:
-        yaml_sequence_transpiler = PulseBlasterSequence(self.channel_mapping)
+    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
+        yaml_sequence_transpiler = PulseBlasterSequence(self.channel_mapping, ps_yaml_file)
         yaml_sequence_transpiler.parse_pulse_sequence_file()
         channel_bit_mask, pulse_duration_list = yaml_sequence_transpiler.compile()
         self.program_pb(channel_bit_mask, pulse_duration_list)

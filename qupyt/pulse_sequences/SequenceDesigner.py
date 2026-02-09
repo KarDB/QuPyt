@@ -20,7 +20,7 @@ class PulseSequenceYaml:
         #  There is one analog channel per source but mulitple makers etc.
         awg_sources: list[int],
         samprate: float = 5e9,
-        yaml_file: Path = get_seq_dir() / "sequence.yaml",
+        yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
     ) -> None:
         self.yaml_file = yaml_file
         self.awg_sources = awg_sources
@@ -238,7 +238,7 @@ class PulseBlasterSequence:
     def __init__(
         self,
         channel_mapping: Dict[str, Any],
-        yaml_file: Path = get_seq_dir() / "sequence.yaml",
+        yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
     ) -> None:
         self.event_times: List[float] = []
         self.event_durations: List[float] = []

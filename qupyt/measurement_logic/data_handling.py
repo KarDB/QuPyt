@@ -15,11 +15,13 @@ class Data(ConfigurationMixin):
         self.number_measurements: int
         self.data_type: type
         self.live_compression: bool = False
+        self.number_pulse_sequences: int = 1
         self.save_in_chunks: int = 0
         self.reference_channels: int = 2
         self.data: np.ndarray
         self.attribute_map = {
             "dynamic_steps": self._set_number_dynamic_steps,
+            "ps_steps": self._set_number_pulse_sequences,
             "averaging_mode": self._set_averaging_mode,
             "number_measurements": self._set_number_measurements,
             "roi_shape": self._set_roi_shape,
@@ -52,6 +54,9 @@ class Data(ConfigurationMixin):
             If you measure just one step, this is still ONE dynamic step. The first of one.""")
         self.number_dynamic_steps = int(number_dynamic_steps)
 
+    def _set_number_pulse_sequences(self, number_pulse_sequences: int) -> None:
+        self.number_pulse_sequences = int(number_pulse_sequences)
+
     def _set_averaging_mode(self, averaging_mode: str) -> None:
         self.averaging_mode = str(averaging_mode)
 
@@ -83,6 +88,7 @@ class Data(ConfigurationMixin):
         if self.averaging_mode == "sum":
             data_array_dim = [
                 self.reference_channels,
+                self.number_pulse_sequences,
                 self.number_dynamic_steps,
                 1,
                 *self.roi_shape,
@@ -94,6 +100,7 @@ class Data(ConfigurationMixin):
                 Please make sure the number of measurements you want to recored can be distributed accross the reference channels. (I.e. number_measurements is divisible by reference_cannels""")
             data_array_dim = [
                 self.reference_channels,
+                self.number_pulse_sequences,
                 self.number_dynamic_steps,
                 int(measurements_per_channel),
                 *self.roi_shape,
@@ -111,38 +118,38 @@ class Data(ConfigurationMixin):
         )
         self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
 
-    def update_data(self, data: np.ndarray, dynamic_step: int, avg_step: int) -> None:
+    def update_data(self, data: np.ndarray, ps_step: int, dynamic_step: int, avg_step: int) -> None:
         if self.save_in_chunks != 0 and avg_step % self.save_in_chunks == 0:
             self.save(f"save_chunk_{avg_step}.npy")
             self.create_array()
         if self.live_compression:
-            self._update_data_compressed(data, dynamic_step)
+            self._update_data_compressed(data, ps_step, dynamic_step)
         else:
-            self._update_data_full(data, dynamic_step)
+            self._update_data_full(data, ps_step, dynamic_step)
 
-    def _update_data_full(self, data: np.ndarray, dynamic_step: int) -> None:
+    def _update_data_full(self, data: np.ndarray, ps_step: int, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
-                self.data[i, dynamic_step] += data[i :: self.reference_channels].sum(
+                self.data[i, ps_step, dynamic_step] += data[i :: self.reference_channels].sum(
                     axis=0
                 )
             # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
-                self.data[i, dynamic_step] += data[i :: self.reference_channels]
+                self.data[i, ps_step, dynamic_step] += data[i :: self.reference_channels]
                 # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
 
-    def _update_data_compressed(self, data: np.ndarray, dynamic_step: int) -> None:
+    def _update_data_compressed(self, data: np.ndarray, ps_step: int, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
                 ndim = data.ndim
-                self.data[i, dynamic_step] += (
+                self.data[i, ps_step, dynamic_step] += (
                     data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).sum(axis=0)
                 )
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
                 ndim = data.ndim
-                self.data[i, dynamic_step] += (
+                self.data[i, ps_step, dynamic_step] += (
                     data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).reshape(-1, 1)
                 )
 

@@ -37,6 +37,7 @@ synchroniser:
     LASER: 8
     READ: 1
 
+pulse_sequence_steps: &ps_steps 20
 dynamic_steps: &n_dynamic_steps 10
 
 # List devices that are supposed to update their
@@ -83,11 +84,15 @@ data:
   dynamic_steps: *n_dynamic_steps
   compress: false
   reference_channels: 2
+  ps_steps: *ps_steps
 
 ps_path: './odmr_sample_pulse_sequence.py'
 pulse_sequence:
+  pulse_sequence_steps: *ps_steps
+  sweep_param: 'laser_duration'
+  sweep_values: [10, 100]
   mw_duration: 20
-  laserduration: 50
+  laser_duration: 50
   readout_time: 8
   referenced_measurements: *nframes
   max_framerate: 10000
