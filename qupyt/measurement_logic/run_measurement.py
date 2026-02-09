@@ -36,6 +36,7 @@ def run_measurement(
         data_container.create_array()
 
         for ps_itervalue in tqdm(range(ps_iterator_size)):
+            print(ps_itervalue)
             synchroniser.open()
             synchroniser.stop()
             synchroniser.load_sequence("sequence_" + str(ps_itervalue) + ".yaml")

@@ -46,11 +46,12 @@ class YamlSequence:
             self.counter[sequence_block][pulse_channel] += 1
 
     def write(self, sequence_number: int | None = None) -> None:
-        sequence_number_string = "0" if sequence_number is None else str(x)
+        sequence_number_string = "0" if sequence_number is None else str(sequence_number)
         file_path = set_up.get_seq_dir()
+        file_name = f"sequence_{sequence_number_string}.yaml"
         self.pulse_sequence["sequencing_order"] = self.sequencing_order
         self.pulse_sequence["sequencing_repeats"] = self.sequencing_repeats
-        with open(file_path / "sequence_" + sequence_number_string + ".yaml", "w", encoding="utf-8") as file:
+        with open(file_path / file_name, "w", encoding="utf-8") as file:
             yaml.dump(self.pulse_sequence, file)
 
 

@@ -86,7 +86,7 @@ data:
   reference_channels: 2
   ps_steps: *ps_steps
 
-ps_path: './odmr_sample_pulse_sequence.py'
+ps_path: 'C:\Users\ge34dug\PycharmProjects\QuPyt\source\example_pulse_sequences\odmr.py'
 pulse_sequence:
   pulse_sequence_steps: *ps_steps
   sweep_param: 'laser_duration'

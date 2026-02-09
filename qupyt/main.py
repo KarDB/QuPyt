@@ -11,9 +11,10 @@ import os
 import platform
 from datetime import date
 from time import sleep
-from queue import Queue
+from queue import Queue, Empty
 from typing import Optional
 from pathlib import Path
+from threading import Event
 
 import yaml
 from watchdog.observers import Observer
@@ -111,9 +112,19 @@ def parse_input() -> None:
             _set_busy()
             logging.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
             instruction_file = queue.get()
-            with open(instruction_file, "r", encoding="utf-8") as file:
-                params = yaml.safe_load(file)
-            os.rename(instruction_file, instruction_file + "_running")
+            print('Got file!')
+            try:
+                with open(instruction_file, "r", encoding="utf-8") as file:
+                    params = yaml.safe_load(file)
+            except FileNotFoundError:
+                # Suppress this specific message
+                pass
+
+            # Rename safely, only if the original file exists
+            if os.path.exists(instruction_file):
+                os.replace(instruction_file, instruction_file + "_running")
+
+            print('renamed file')
             parameter_update = write_user_ps(
                 Path(params["ps_path"]), params["pulse_sequence"]
             )

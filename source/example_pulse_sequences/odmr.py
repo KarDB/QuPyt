@@ -22,6 +22,8 @@ def generate_sequence(params: dict):
     sweep_param = None if sweep_param_raw in (None, "") else str(sweep_param_raw)
     sweep_values = params.get("sweep_values", None)
 
+    print(sweep_param, pulse_sequence_steps, sweep_values)
+
     if sweep_param is not None and sweep_param not in params:
         logging.warning(
             "generate_sequence(): sweep_param=%r was provided, but no such key exists in params.",
@@ -59,6 +61,7 @@ def generate_sequence(params: dict):
         return None
 
     for ps_step in range(pulse_sequence_steps):
+        print('PS_step', ps_step, 'sequence_setps',pulse_sequence_steps)
         if sweep_param is None:
             ps_step = 0
         if sweep_param is not None and sweep_param in params:
@@ -66,7 +69,7 @@ def generate_sequence(params: dict):
             if v is not None:
                 params[sweep_param] = v
 
-        return gen_esr(
+        backup_params = gen_esr(
             params.get("mw_duration", 10),
             params.get("laser_duration", 10),
             params.get("readout_time", 1),
@@ -74,6 +77,7 @@ def generate_sequence(params: dict):
             params.get("max_framerate", 1000),
             ps_step,
         )
+    return backup_params
 
 
 
