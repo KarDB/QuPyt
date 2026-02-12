@@ -9,12 +9,12 @@ import threading
 import traceback
 import os
 import platform
+import time
 from datetime import date
 from time import sleep
 from queue import Queue, Empty
 from typing import Optional
 from pathlib import Path
-from threading import Event
 
 import yaml
 from watchdog.observers import Observer
@@ -102,33 +102,65 @@ def _set_ready() -> None:
 def parse_input() -> None:
     static_devices = DeviceHandler({})
     dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
+
+    processed_files = set()  # track files already picked from the queue
+
     while True:
+        # Wait if the queue is empty
         if queue.empty():
             static_devices.update_devices({})
             dynamic_devices.update_devices({})
             _set_ready()
             event_thread.wait()
+            continue  # check queue again
+
         try:
             _set_busy()
-            logging.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
-            instruction_file = queue.get()
-            print('Got file!')
+
+            # Get the next file from the queue
             try:
-                with open(instruction_file, "r", encoding="utf-8") as file:
-                    params = yaml.safe_load(file)
-            except FileNotFoundError:
-                # Suppress this specific message
-                pass
+                instruction_file = queue.get(timeout=1)
+            except Empty:
+                continue  # no file yet, check again
 
-            # Rename safely, only if the original file exists
-            if os.path.exists(instruction_file):
-                os.replace(instruction_file, instruction_file + "_running")
+            # Track files by full path + last modification time
+            instruction_path = Path(instruction_file)
+            if not instruction_path.exists():
+                # File might have been removed; skip
+                continue
+            file_key = (str(instruction_path), os.path.getmtime(instruction_path))
+            if file_key in processed_files:
+                continue  # already processed this instance
+            processed_files.add(file_key)
 
-            print('renamed file')
+            logging.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
+            #print(f"Got file: {instruction_file}")
+
+            # Retry reading the file in case it's still being written
+            for attempt in range(3):
+                try:
+                    with open(instruction_file, "r", encoding="utf-8") as file:
+                        params = yaml.safe_load(file)
+                    break
+                except FileNotFoundError:
+                    time.sleep(0.1)  # wait 100ms
+            else:
+                print(f"File still missing after retries, skipping: {instruction_file}")
+                processed_files.discard(file_key)
+                continue
+
+            # Use timestamped _running filename to avoid collisions
+            timestamp = int(time.time() * 1000)  # milliseconds
+            running_file = f"{instruction_file}_running_{timestamp}"
+            os.replace(instruction_file, running_file)
+
+            # Update parameters
             parameter_update = write_user_ps(
                 Path(params["ps_path"]), params["pulse_sequence"]
             )
             update_params_dict(params, parameter_update)
+
+            # Create measurement objects
             synchroniser = SynchroniserFactory.create_synchroniser(
                 params["synchroniser"]["type"],
                 params["synchroniser"]["config"],
@@ -137,20 +169,33 @@ def parse_input() -> None:
             sensor = SensorFactory.create_sensor(
                 params["sensor"]["type"], params["sensor"]["config"]
             )
+
+            # Update devices
             static_devices.update_devices(params["static_devices"])
             dynamic_devices.number_dynamic_steps = int(params["dynamic_steps"])
             dynamic_devices.update_devices(params["dynamic_devices"])
+
+            # Run the measurement
             success_status = run_measurement(
                 static_devices, dynamic_devices, sensor, synchroniser, params
             )
-            if success_status == "success":
-                os.remove(instruction_file + "_running")
-            elif success_status == "failed":
-                os.rename(instruction_file + "_running", instruction_file + "_failed")
-        except Exception:
-            logging.exception("Excpetion in main measurement loop")
-            traceback.print_exc()
 
+            # Handle post-measurement file renames
+            if success_status == "success":
+                if os.path.exists(running_file):
+                    os.remove(running_file)
+            elif success_status == "failed":
+                failed_file = f"{instruction_file}_failed_{timestamp}"
+                if os.path.exists(running_file):
+                    os.replace(running_file, failed_file)
+
+            # Allow the same filename to be processed again in future
+            processed_files.discard(file_key)
+
+        except Exception:
+            logging.exception("Exception in main measurement loop")
+            import traceback
+            traceback.print_exc()
 
 class WaitingRoomEventHandler(PatternMatchingEventHandler):
     """

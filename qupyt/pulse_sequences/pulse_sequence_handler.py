@@ -46,10 +46,9 @@ def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]
     Load user specified pulse sequence definition and
     execute it to generate the pulse sequence.
     """
-    print('writing sequence start')
     user_ps = cast(UserPulseSeqProtocol, _load_module_from_path(path))
     dependent_parameters = user_ps.generate_sequence(params)
-    print('writing sequence end')
+    print("generated new pulse sequence files")
     return dependent_parameters
 
 
