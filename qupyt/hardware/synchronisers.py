@@ -130,7 +130,7 @@ class Synchroniser(ABC, ConfigurationMixin):
         self.address = address
 
     @abstractmethod
-    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
+    def load_sequence(self, ps_yaml_file: Path) -> None:
         """
         Load the YAML formatted pulse sequence from its default location
         (see above), and parse it to the specifics of the synchroniser. Finally

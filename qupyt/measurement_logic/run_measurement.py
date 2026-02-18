@@ -16,6 +16,7 @@ from qupyt.measurement_logic.data_handling import Data
 from qupyt.hardware.synchronisers import Synchroniser
 from qupyt.hardware.sensors import Sensor
 from qupyt._version import __version__ as qupyt_version
+from qupyt.set_up import get_seq_dir
 
 
 def run_measurement(
@@ -38,7 +39,7 @@ def run_measurement(
         for ps_itervalue in tqdm(range(ps_iterator_size)):
             synchroniser.open()
             synchroniser.stop()
-            synchroniser.load_sequence("sequence_" + str(ps_itervalue) + ".yaml")
+            synchroniser.load_sequence(get_seq_dir() / f"sequence_{ps_itervalue}.yaml")
             synchroniser.run()
             sleep(0.1)
             sensor.open()
