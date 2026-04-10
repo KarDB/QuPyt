@@ -3,12 +3,15 @@ from typing import Dict, Any, List
 import numpy as np
 from qupyt.hardware.sensors import Sensor
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
+import time
+import os
+import multiprocessing
 
 
 class Data(ConfigurationMixin):
     attribute_map: UpdateConfigurationType
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    def __init__(self, configuration: Dict[str, Any], measurement_file_name:str) -> None:
         self.roi_shape: list[int]
         self.averaging_mode: str
         self.number_dynamic_steps: int
@@ -18,6 +21,11 @@ class Data(ConfigurationMixin):
         self.save_in_chunks: int = 0
         self.reference_channels: int = 2
         self.data: np.ndarray
+        self.memory_map: np.memmap
+        self.memory_map_current_length = 0
+        
+        
+        self.measurement_file_name = measurement_file_name
         self.attribute_map = {
             "dynamic_steps": self._set_number_dynamic_steps,
             "averaging_mode": self._set_averaging_mode,
@@ -27,15 +35,23 @@ class Data(ConfigurationMixin):
             "live_compression": self._set_live_compression,
             "save_in_chunks": self._set_save_chunk_size,
             "reference_channels": self._set_reference_channels,
+            "time_stamping": self._set_time_stamping,
+            "gui_live_view": self._set_gui_live_view,
+            "temporary_saving": self._set_temporary_saving
         }
+        
         self._update_from_configuration(configuration)
-
+        
     def _set_save_chunk_size(self, save_in_chunks: int) -> None:
         self.save_in_chunks = save_in_chunks
-
+    def _set_temporary_saving(self, temporary_saving: bool) -> None:
+        self.temporary_saving = temporary_saving
     def _set_reference_channels(self, reference_channels: int) -> None:
         self.reference_channels = int(reference_channels)
-
+    def _set_time_stamping(self, time_stamping: bool) -> None:
+        self.time_stamping = time_stamping
+    def _set_gui_live_view(self, gui_live_view: bool) -> None:
+        self.gui_live_view = gui_live_view
     def _set_compress_mode(self, compression_value: bool) -> None:
         logging.warning("Depracation warning! The paremter 'compress' is beeing deprecated.\nPlase use 'live_compression' instead")
         self.live_compression = compression_value
@@ -100,7 +116,7 @@ class Data(ConfigurationMixin):
             ]
         else:
             logging.info(
-                f"Failed to crearte dara array for mode {self.averaging_mode}".ljust(
+                f"Failed to create dara array for mode {self.averaging_mode}".ljust(
                     65, "."
                 )
                 + "[failed]"
@@ -110,27 +126,49 @@ class Data(ConfigurationMixin):
             f"Created data array of shape {data_array_dim}".ljust(65, ".") + "[done]"
         )
         self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
-
-    def update_data(self, data: np.ndarray, dynamic_step: int, avg_step: int) -> None:
+        
+    def create_memory_map(self, file_name: str, averages: int) -> None:
+        
+        mmap_width = 2+self.number_measurements
+        mmap_length = averages * self.number_dynamic_steps
+        self.memory_map = np.memmap(f"C:/Users/ge54vec/.qupyt/temp/{file_name}_temp.dat",dtype=float, mode="w+",
+                                    shape=(mmap_length,mmap_width))
+        self.memory_map[:,:] = 0.0
+        self.memory_map.flush()
+        print(f"Memory map dimensions are: {self.memory_map.shape}, {self.memory_map.size}")
+    def update_data(self, data: np.ndarray, dynamic_step: int, avg_step: int, t_begin: float, t_end: float) -> None:
+        #print(data)
         if self.save_in_chunks != 0 and avg_step % self.save_in_chunks == 0:
-            self.save(f"save_chunk_{avg_step}.npy")
+            time_0 = time.time()
+            os.makedirs(f"{self.measurement_file_name}_chunks", exist_ok=True)
+            print(f"directory creation time: {(time.time() - time_0)} ms")
+            self.save(f"{self.measurement_file_name}_chunks/{self.measurement_file_name}_save_chunk_{avg_step}.npy")
+            print(f"chunk writing time: {(time.time() - time_0)*1000} ms")
             self.create_array()
+       
+        if self.temporary_saving:
+            self.save_temporary_file(data, t_begin, t_end) 
         if self.live_compression:
-            self._update_data_compressed(data, dynamic_step)
+            self._update_data_compressed(data, dynamic_step)    
         else:
             self._update_data_full(data, dynamic_step)
 
     def _update_data_full(self, data: np.ndarray, dynamic_step: int) -> None:
+        #print(f"Data Stream:{data}")
+        #time_0 = time.time()
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
                 self.data[i, dynamic_step] += data[i :: self.reference_channels].sum(
                     axis=0
                 )
-            # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
+            if self.gui_live_view:
+                np.save("C:/Users/ge54vec/.qupyt/data", self.data)
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
                 self.data[i, dynamic_step] += data[i :: self.reference_channels]
-                # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
+                if self.gui_live_view:
+                    np.save("C:/Users/ge54vec/.qupyt/data", self.data)
+        #print(f"updating data_full time: {(time.time() - time_0)*1000} ms ")
 
     def _update_data_compressed(self, data: np.ndarray, dynamic_step: int) -> None:
         if self.averaging_mode == "sum":
@@ -154,4 +192,23 @@ class Data(ConfigurationMixin):
          main measurement loop.
         :type filename: str
         """
-        np.save(filename, self.data)
+        #Multiprocessing parallelizes the process since it moves it to another kernel
+        a = multiprocessing.Process(target=np.save,args=(filename,self.data),)
+        a.start()
+        #np.save(filename, self.data)
+
+    def save_temporary_file(self, data: np.ndarray, t_begin: float, t_end: float) -> None:
+       #flatten data
+        reshaped_data = np.array(data.flatten("F"), copy=True, dtype=float)
+
+        # Write timestamps
+        time_stamps = np.array([t_begin, t_end], dtype=float, copy=True)
+        #conca data
+        data_stream = np.concatenate((time_stamps, reshaped_data,),axis=None)
+        # Save to memmap
+        self.memory_map[self.memory_map_current_length] = data_stream
+        self.memory_map.flush()
+    
+        print(f"Saved record {self.memory_map_current_length + 1}: t0={t_begin}, t1={t_end}")
+        #print( self.memory_map[self.memory_map_current_length])
+        self.memory_map_current_length += 1

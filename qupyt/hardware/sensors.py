@@ -1131,7 +1131,9 @@ class DAQ(Sensor):
         """
         if synchroniser is not None:
             self.daq_task.start()
+            print(time())
             synchroniser.trigger()
+            print(time())
         try:
             samples = self.daq_task.read(
                 self.NsampsPerDAQread, self.daq_timeout)
