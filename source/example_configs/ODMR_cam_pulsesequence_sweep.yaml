@@ -1,9 +1,6 @@
-experiment_type: ODMR  # This is just an identifier. It does not directly affect the measurement.
-
-# Defines the overall number of repetitions of the experiment.
-# You will only rarely need this. Typically it is beneficial to
-# set the number of averages using the number_measurements parameter.
+experiment_type: ODMR_with_pulsesequence_sweep  # This is just an identifier. It does not directly affect the measurement.
 averages: 1
+sleep: 0
 
 # Defines the sensor used in the experiment.
 # (Basler camera, DAQ/photo diode, ...)
@@ -11,10 +8,10 @@ averages: 1
 sensor:
   # change this to the correct identifier for the
   # sensor you want to use.
-  type: "MockCam"
+  type: 'MockCam'
   config:
     # Please adjust these depening on the sensor used.
-    number_measurements: &nframes 20
+    number_measurements: &n_datapoints 1000
     target_data_type: int64
     image_roi:
     - 100  # height
@@ -38,7 +35,7 @@ synchroniser:
     READ: 1
 
 pulse_sequence_steps: &ps_steps 20
-dynamic_steps: &n_dynamic_steps 10
+dynamic_steps: &n_dynamic_steps 100
 
 # List devices that are supposed to update their
 # ouput values for each dynamic step.
@@ -50,12 +47,10 @@ dynamic_devices:
     device_type: 'Mock'
     # Configure available parameters
     config:
-      amplitude: 
+      amplitude: ['channel_1', [1, 1]]
       # Specify the channel, as well as starting and stopping value
-      - ['channel_2', [1, 10]]
-      - ['channel_3', [1, 10]]
       # The default channel, if omitted, is channel_1
-      frequency: [2.0e9, 3.7e9]
+      frequency: [2.0e9, 3.7e9] # = ['channel_1', [2.0e9, 3.7e9]]
 # List devices that will output the same value
 # for the duration of the measurement.
 static_devices:
@@ -80,13 +75,13 @@ data:
   # This is relevant for e.g. Rabi, XY8, ...
   # sum: Summs up all indiviudal number_measurements for each dynamic step.
   # See docs for more details.
-  averaging_mode: 'spread'
+  averaging_mode: 'sum'
   dynamic_steps: *n_dynamic_steps
   compress: false
   reference_channels: 2
   ps_steps: *ps_steps
 
-ps_path: 'C:\Users\ge34dug\PycharmProjects\QuPyt\source\example_pulse_sequences\odmr.py'
+ps_path: '.\QuPyt\source\example_pulse_sequences\odmr_cam.py'
 pulse_sequence:
   pulse_sequence_steps: *ps_steps
   sweep_param: 'laser_duration'
@@ -94,5 +89,5 @@ pulse_sequence:
   mw_duration: 20
   laser_duration: 50
   readout_time: 8
-  referenced_measurements: *nframes
+  number_measurements: *n_datapoints
   max_framerate: 10000

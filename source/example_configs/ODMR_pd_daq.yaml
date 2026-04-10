@@ -1,0 +1,88 @@
+experiment_type: ODMR_pd_aom  # This is just an identifier. It does not directly affect the measurement.
+averages: 1
+sleep: 0
+
+# Defines the sensor used in the experiment.
+# (Basler camera, DAQ/photo diode, ...)
+# Here we mock or simulate the camera in software. 
+sensor:
+  # change this to the correct identifier for the
+  # sensor you want to use.
+  type: 'MockCam'
+  config:
+    # Please adjust these depening on the sensor used.
+    number_measurements: &n_datapoints 1000
+    target_data_type: int64
+    image_roi:
+    - 100  # height
+    - 100  # width
+    - 0    # xoffs
+    - 0    # yoffs
+
+# This defines the synchronising device for our experiment.
+# (Pulse Streamer, Taktronix AWG, ...)
+synchroniser:
+  # Adjust the device identifier
+  type: 'MockSynchroniser'
+  config:
+    # Enter the VISA adress of your device.
+    address: 'TCPIP::some::INSTR'
+  channel_mapping:
+    # There map the channels defined in the pulse sequence file
+    # to the output of your synchroniser.
+    LASER: 5
+    READ: 1
+    MW: 0
+    START: 2
+
+dynamic_steps: &n_dynamic_steps 100
+
+# List devices that are supposed to update their
+# ouput values for each dynamic step.
+dynamic_devices:
+  mw_source: # This can be chosen freely. Make sure its unique.
+    # Enter the (VISA) adress of your device.
+    address: 'TCPIP::some::INSTR'
+    # Adjust the device identifier.
+    device_type: 'Mock'
+    # Configure available parameters
+    config:
+      amplitude: ['channel_1', [1, 1]]
+      # Specify the channel, as well as starting and stopping value
+      # The default channel, if omitted, is channel_1
+      frequency: [2.0e9, 3.7e9] # = ['channel_1', [2.0e9, 3.7e9]]
+# List devices that will output the same value
+# for the duration of the measurement.
+static_devices:
+  # This device is not necessary for ODMR.
+  unnecessary_source:
+    # Enter the (VISA) adress of your device.
+    address: 'TCPIP::some::INSTR'
+    # Adjust the device identifier.
+    device_type: 'Mock'
+    # Configure available parameters
+    config:
+      amplitude:
+      # Specify the channel, as well as the desired value.
+      - ['channel_2', 1]
+      - ['channel_3', 3]
+      # The default channel, if omitted, is channel_1
+      frequency: ['channel_1', 3.7e9]
+
+data:
+  # avalialbe modes are 'spread' and 'sum'
+  # spread: retains all indiviudal number_measurements recorded for each dynamic step.
+  # This is relevant for e.g. Rabi, XY8, ...
+  # sum: Summs up all indiviudal number_measurements for each dynamic step.
+  # See docs for more details.
+  averaging_mode: 'sum'
+  dynamic_steps: *n_dynamic_steps
+  reference_channels: 2
+
+ps_path: '.\QuPyt\source\example_pulse_sequences\odmr_pd_daq.py'
+pulse_sequence:
+  mw_duration: 10
+  laser_duration: 50
+  number_measurements: *n_datapoints
+  readout_offset: 1
+  AOM_frequency: 250e6

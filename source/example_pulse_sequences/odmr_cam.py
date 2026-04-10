@@ -4,9 +4,7 @@ This pulse sequence is not suited to be used directly in a measurement.
 Instead, the pulse sequence needs to be adjusted to the particularities
 of the hardware used.
 """
-# pylint: disable=logging-format-interpolation
-# pylint: disable=logging-fstring-interpolation
-# pylint: disable=logging-not-lazy
+
 import logging
 from qupyt.pulse_sequences.yaml_sequence import YamlSequence
 
@@ -61,7 +59,6 @@ def generate_sequence(params: dict):
         return None
 
     for ps_step in range(pulse_sequence_steps):
-        print('PS_step', ps_step, 'sequence_setps',pulse_sequence_steps)
         if sweep_param is None:
             ps_step = 0
         if sweep_param is not None and sweep_param in params:
@@ -69,24 +66,24 @@ def generate_sequence(params: dict):
             if v is not None:
                 params[sweep_param] = v
 
-        backup_params = gen_esr(
-            params.get("mw_duration", 10),
-            params.get("laser_duration", 10),
-            params.get("readout_time", 1),
-            params.get("referenced_measurements", 100),
-            params.get("max_framerate", 1000),
+        backup_params = gen_odmr(
+            params.get("mw_duration"),
+            params.get("laser_duration"),
+            params.get("number_measurements"),
+            params.get("readout_time"),
+            params.get("max_framerate"),
             ps_step,
         )
     return backup_params
 
 
 
-def gen_esr(
+def gen_odmr(
         mw_duration: float,
         laser_duration: float,
+        number_measurements: int,
         readout_time: float,
-        referenced_measurements: int,
-        max_framerate: float = 10000,
+        max_framerate: float,
         ps_step: int= 0
 ) -> dict:
     """
@@ -157,7 +154,8 @@ def gen_esr(
     # This defines the order of the pulse blocks.
     esr.sequencing_order = ['wait_loop', 'block_0']
     # This defines how often each block in the sequence gets repeated.
-    esr.sequencing_repeats = [1, int(referenced_measurements/2) + 10]
+    esr.sequencing_repeats = [1, int(number_measurements/2) + 10]
     esr.write(ps_step)
     # you can return a dict here that added / updates the configuration file.
+    # In case of using a camera you might want to return the readout_time here.
     return {}
