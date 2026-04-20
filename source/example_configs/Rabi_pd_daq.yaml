@@ -1,0 +1,66 @@
+experiment_type: Rabi
+averages: 1
+sleep: 0
+
+# Devices
+sensor:
+  type: 'MockCam'
+  config:
+    # Please adjust these depening on the sensor used.
+    number_measurements: &n_datapoints 1000
+    target_data_type: int64
+    image_roi:
+    - 100  # height
+    - 100  # width
+    - 0    # xoffs
+    - 0    # yoffs
+
+synchroniser:
+  # Adjust the device identifier
+  type: 'MockSynchroniser'
+  config:
+    # Enter the VISA adress of your device.
+    address: 'TCPIP::some::INSTR'
+    #sampling_rate: &samprate 5.0e9
+  channel_mapping:
+    # There map the channels defined in the pulse sequence file
+    # to the output of your synchroniser.
+    LASER: 5
+    READ: 1
+    MW: 0
+    START: 2
+
+
+dynamic_steps: &n_dynamic_steps 1 #  not necessary but dynamic_steps needs to be assigned
+dynamic_devices:
+static_devices:
+  mw_source:
+    # Enter the (VISA) adress of your device.
+    address: 'TCPIP::some::INSTR'
+    # Adjust the device identifier.
+    device_type: 'Mock'
+    # Configure available parameters
+    config:
+      amplitude: [ 'channel_1', 1 ]
+      frequency: [ 'channel_1', 3.7e9 ]
+
+
+# Data
+data:
+  averaging_mode: 'spread'
+  dynamic_steps: *n_dynamic_steps
+
+
+# Pulse Sequence
+ps_path: '.\QuPyt\source\example_pulse_sequences\rabi_pd_daq.py'
+pulse_sequence:
+  max_mw_duration: 0.1 #us
+  number_measurements: *n_datapoints
+  laser_duration: 50
+  AWG_frequency: 0.5e9
+  sampling_rate: 5.9e9 #*samprate
+  MW_amplitude: 1.0
+  readout_offset: 1
+  laser_mw_offset: 1
+  mw_laser_offset: 0.5
+

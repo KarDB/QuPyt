@@ -1,0 +1,75 @@
+experiment_type: CASR_sensitivity
+averages: 1
+sleep: 0
+
+
+sensor:
+  type: 'MockCam'
+  config:
+    # Please adjust these depening on the sensor used.
+    number_measurements: &n_datapoints 1000
+    target_data_type: int64
+    image_roi:
+    - 100  # height
+    - 100  # width
+    - 0    # xoffs
+    - 0    # yoffs
+
+synchroniser:
+  type: 'MockSynchroniser'
+  config:
+    address: 'TCPIP::some::INSTR'
+    # sampling_rate: &samprate 5.0e9
+  channel_mapping:
+    LASER: 5
+    READ: 1
+    MW: 0
+    START: 2
+    CALIB: 'C'  # AWG flag channel
+
+
+dynamic_steps: &n_dynamic_steps 1
+dynamic_devices:
+
+static_devices:
+  rf_calibration_source:
+    address: 'TCPIP::some::INSTR'
+    # Adjust the device identifier.
+    device_type: 'Mock'
+    config:
+      # in case the source "Mock" is replaced with "Rigol" it is possible
+      # to select "gateing", otherwise it has to be set at the instrument
+      # by hand.
+      # gating:
+      # - ['channel_2', "gate"]
+      amplitude:
+      - ['channel_2', 0.05]
+      frequency:
+      - ['channel_2', 3580000]
+
+
+data:
+  averaging_mode: 'spread'
+  dynamic_steps: *n_dynamic_steps
+
+ps_path: '.\QuPyt\source\example_pulse_sequences\casr_sensitivity.py'
+
+pulse_sequence:
+  AWG_frequency: 0.5e+09
+  seq_type: 'XY8'
+  N: 20
+  tau: 0.07
+  pi_half: 0.024
+  pi: 0.048
+  laser_duration: 50
+  number_measurements: *n_datapoints
+  sampling_rate: 5.0e9 #*samprate
+  calibration_target_frequency: 1000
+  ts_start: 1
+  ts_end: 1
+  duration_offset: 0
+  readout_offset: 0.1
+  readout_phase: 0
+  MW_amplitude: 1.0
+  AOM_frequency: 250e6
+  global_phase: 0
