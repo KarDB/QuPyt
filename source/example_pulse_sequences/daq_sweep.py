@@ -12,7 +12,7 @@ def generate_sequence(params: dict):
     float(params.get('max_delay')),
     float(params.get('pi')),
     float(params.get('laser_duration')),
-    float(params.get('AOM_frequency'))  # Hz
+    float(params.get('AOM_frequency', 250e6))  # Hz
 )
 
 def DAQ_read(
@@ -21,7 +21,7 @@ def DAQ_read(
     max_delay: float,
     pi: float,
     laser_duration: float,
-    AOM_frequency: float = 250e6
+    AOM_frequency: float
 
 ) -> dict:
     number_delays = number_measurements//2

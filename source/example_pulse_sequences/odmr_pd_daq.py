@@ -17,8 +17,8 @@ def generate_sequence(params: dict):
         params.get('mw_duration'),
         params.get('laser_duration'),
         params.get('number_measurements'),
-        params.get('readout_offset'),
-        params.get('AOM_frequency')  # Hz
+        params.get('readout_offset', 1.0),
+        params.get('AOM_frequency', 250e6)  # Hz
     )
 
 
@@ -26,8 +26,8 @@ def gen_odmr(
         mw_duration: float,
         laser_duration: float,
         number_measurements: int,
-        readout_offset: float = 1,
-        AOM_frequency: float = 250e6
+        readout_offset: float,
+        AOM_frequency: float
 ) -> dict:
     """
     Implementation of the ESR pulsesequence.

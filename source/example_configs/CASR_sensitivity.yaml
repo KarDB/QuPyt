@@ -52,7 +52,7 @@ data:
   averaging_mode: 'spread'
   dynamic_steps: *n_dynamic_steps
 
-ps_path: '.\QuPyt\source\example_pulse_sequences\casr_sensitivity.py'
+ps_path: '.\QuPyt\source\example_pulse_sequences\casr.py'
 
 pulse_sequence:
   AWG_frequency: 0.5e+09

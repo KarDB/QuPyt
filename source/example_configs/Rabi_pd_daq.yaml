@@ -58,7 +58,7 @@ pulse_sequence:
   number_measurements: *n_datapoints
   laser_duration: 50
   AWG_frequency: 0.5e9
-  sampling_rate: 5.9e9 #*samprate
+  sampling_rate: 5.0e9 #*samprate
   MW_amplitude: 1.0
   readout_offset: 1
   laser_mw_offset: 1

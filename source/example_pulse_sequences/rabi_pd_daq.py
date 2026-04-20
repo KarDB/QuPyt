@@ -66,11 +66,11 @@ def gen_rabi(
         laser_duration: float,
         AWG_frequency: float,
         sampling_rate: float,
-        MW_amplitude: float= 1.0,
-        AOM_frequency: float = 250e6,
-        readout_offset: float = 1.0,
-        laser_mw_offset: float = 0.5,
-        mw_laser_offset: float = 0.5
+        MW_amplitude: float,
+        AOM_frequency: float,
+        readout_offset: float,
+        laser_mw_offset: float,
+        mw_laser_offset: float
 ) -> dict:
     """
     Implementation of the Rabi pulsesequence.
