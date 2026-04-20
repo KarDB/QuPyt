@@ -167,6 +167,8 @@ class MockSignalSource(SignalSource):
     def __init__(self, address: str, configuration: Dict[str, Any]) -> None:
         self.address = address
         super().__init__(configuration)
+        self.attribute_map["phase"] = self.set_phase
+
 
     def __repr__(self) -> str:
         return f"MockSignalSource(address: {self.address})"
@@ -192,6 +194,16 @@ class MockSignalSource(SignalSource):
         sleep(0.1)
         logging.info(
             f"MOCKING! -> set amplitued channel {channel} to".ljust(65, ".") + f"{ampl}"
+        )
+
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
+    def set_phase(self, phase: ParameterInput) -> None:
+        channel, phase = phase
+        sleep(0.1)
+        logging.info(
+            f"MOCKING! -> set phase channel {channel} to".ljust(65, ".") + f"{phase}"
         )
 
     def close(self) -> None:
@@ -280,6 +292,7 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin):
         VisaSignalSource.__init__(self, address, device_type, configuration)
         PhaseMixin.__init__(self)
         self.attribute_map["gating"] = self._set_gate_mode
+        self.attribute_map["phase"] = self.set_phase
 
     @validate_call
     @coerce_device_config_shape
@@ -294,6 +307,18 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin):
         if mode.lower() == "gate":
             self.instance.write(self.command[f"SetBurstState{channel}"] + "ON")
             self.instance.write(self.command[f"SetBurstMode{channel}"] + "GAT")
+
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
+    def set_phase(self, phase: ParameterInput) -> None:
+        channel, phase = phase
+        if not (-360 <= phase <= 360):
+            raise ConfigurationError("Burst phase", phase, "range -360 to 360 degrees")
+
+        cmd = self.command[f"SetBurstPhase{channel}"]
+        self.instance.write(f"{cmd}{phase}")
+
 
 
 class SMAandSMBVisaSignalSource(VisaSignalSource):
