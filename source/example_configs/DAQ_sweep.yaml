@@ -1,0 +1,55 @@
+experiment_type: DAQ_read_timing
+averages: 100
+sleep: 0
+
+sensor:
+  #type: "DAQ"
+  #config:
+  #  number_measurements: &n_datapoints 100
+  #  apd_input: Dev1/ai1
+
+  type: 'MockCam'
+  config:
+    # Please adjust these depening on the sensor used.
+    number_measurements: &n_datapoints 100
+    target_data_type: int64
+    image_roi:
+    - 100  # height
+    - 100  # width
+    - 0    # xoffs
+    - 0    # yoffs
+
+
+synchroniser:
+  # Adjust the device identifier
+  type: 'MockSynchroniser'
+  config:
+    # Enter the VISA adress of your device.
+    address: 'TCPIP::some::INSTR'
+    # sampling_rate: &samprate 5.0e9
+  channel_mapping:
+    # There map the channels defined in the pulse sequence file
+    # to the output of your synchroniser.
+    LASER: 5
+    READ: 1
+    MW: 0
+    START: 2
+
+dynamic_steps: &n_dynamic_steps 1
+dynamic_devices:
+static_devices:
+
+
+
+data:
+  averaging_mode: 'spread'
+  dynamic_steps: *n_dynamic_steps
+
+ps_path: '.\QuPyt\source\example_pulse_sequences\daq_sweep.py'
+
+pulse_sequence:
+  number_measurements: *n_datapoints
+  AWG_frequency:  0.5e9
+  max_delay: 2.5
+  pi: 0.04
+  laser_duration: 50
