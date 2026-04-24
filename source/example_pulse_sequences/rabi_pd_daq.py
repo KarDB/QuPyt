@@ -5,13 +5,13 @@ from qupyt.pulse_sequences.yaml_sequence import YamlSequence
 
 def linspace_discrete_by_intervals(length_us: float,
                                    n_intervals: int,
-                                   sampling_rat: float,
+                                   sampling_rate: float,
                                    tol_samples: float = 1e-9):
 
     """
     Endpoint is always excluded.
     """
-    Ts_us = (1.0 / sampling_rat) * 1e6  # sample period in microseconds
+    Ts_us = (1.0 / sampling_rate) * 1e6  # sample period in microseconds
     n_points = n_intervals +1  # Number of points implied by "number of spacings"
     dt_us = length_us / n_intervals  # Intended spacing between points
     step_exact = dt_us / Ts_us
@@ -52,11 +52,11 @@ def generate_sequence(params: dict):
         float(params.get('laser_duration')),
         float(params.get('AWG_frequency')),
         float(params.get('sampling_rate')),
-        float(params.get('MW_amplitude')),
-        float(params.get('AOM_frequency')),
-        float(params.get('readout_offset')),
-        float(params.get('laser_mw_offset')),
-        float(params.get('mw_laser_offset'))
+        float(params.get('MW_amplitude', 1.0)),
+        float(params.get('AOM_frequency', 250e6)),
+        float(params.get('readout_offset', 1.0)),
+        float(params.get('laser_mw_offset', 0.5)),
+        float(params.get('mw_laser_offset', 0.5))
     )
 
 
@@ -66,11 +66,11 @@ def gen_rabi(
         laser_duration: float,
         AWG_frequency: float,
         sampling_rate: float,
-        MW_amplitude: float= 1.0,
-        AOM_frequency: float = 250e6,
-        readout_offset: float = 1.0,
-        laser_mw_offset: float = 0.5,
-        mw_laser_offset: float = 0.5
+        MW_amplitude: float,
+        AOM_frequency: float,
+        readout_offset: float,
+        laser_mw_offset: float,
+        mw_laser_offset: float
 ) -> dict:
     """
     Implementation of the Rabi pulsesequence.

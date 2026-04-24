@@ -20,8 +20,6 @@ def generate_sequence(params: dict):
     sweep_param = None if sweep_param_raw in (None, "") else str(sweep_param_raw)
     sweep_values = params.get("sweep_values", None)
 
-    print(sweep_param, pulse_sequence_steps, sweep_values)
-
     if sweep_param is not None and sweep_param not in params:
         logging.warning(
             "generate_sequence(): sweep_param=%r was provided, but no such key exists in params.",

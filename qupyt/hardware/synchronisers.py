@@ -261,7 +261,7 @@ class AWGenerator(VisaObject, Synchroniser):
             for marker in self.marker_channels:
                 self._set_marker_amplitude(
                     channel, marker, self.marker_amplitude)
-        print("Configuring AWG".ljust(65, ".") + colored(" [done]", "green"))
+        print("\nConfiguring AWG".ljust(65, ".") + colored(" [done]", "green"))
 
     def _upload_waveform(self, wavename: str, waveform: np.ndarray) -> None:
         self.instance.write('wlist:waveform:delete "' + wavename + '"')

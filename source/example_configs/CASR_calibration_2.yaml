@@ -18,7 +18,7 @@ synchroniser:
   type: 'MockSynchroniser'
   config:
     address: 'TCPIP::some::INSTR'
-    sampling_rate: &samprate 5.0e9
+    # sampling_rate: &samprate 5.0e9
   channel_mapping:
     LASER: 5
     READ: 1
@@ -54,7 +54,7 @@ pulse_sequence:
   pi: 0.048
   laser_duration: 50
   number_measurements: *n_datapoints
-  sampling_rate: *samprate
+  sampling_rate: 5.0e9 #*samprate
   calibration_target_frequency: 1000
   ts_start: 1
   ts_end: 1

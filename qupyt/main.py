@@ -102,18 +102,14 @@ def _set_ready() -> None:
 def parse_input() -> None:
     static_devices = DeviceHandler({})
     dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
-
     processed_files = set()  # track files already picked from the queue
-
     while True:
-        # Wait if the queue is empty
         if queue.empty():
             static_devices.update_devices({})
             dynamic_devices.update_devices({})
             _set_ready()
             event_thread.wait()
-            continue  # check queue again
-
+            continue
         try:
             _set_busy()
 
@@ -134,7 +130,6 @@ def parse_input() -> None:
             processed_files.add(file_key)
 
             logging.info("STARTED NEW MEASUREMENT".ljust(65, "=") + "[START]")
-            #print(f"Got file: {instruction_file}")
 
             # Retry reading the file in case it's still being written
             for attempt in range(3):
@@ -193,9 +188,9 @@ def parse_input() -> None:
             processed_files.discard(file_key)
 
         except Exception:
-            logging.exception("Exception in main measurement loop")
-            import traceback
+            logging.exception("Excpetion in main measurement loop")
             traceback.print_exc()
+
 
 class WaitingRoomEventHandler(PatternMatchingEventHandler):
     """

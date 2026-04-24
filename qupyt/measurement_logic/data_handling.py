@@ -122,6 +122,7 @@ class Data(ConfigurationMixin):
         if self.save_in_chunks != 0 and avg_step % self.save_in_chunks == 0:
             self.save(f"save_chunk_{avg_step}.npy")
             self.create_array()
+            self._update_data_full(data, ps_step, dynamic_step)
         if self.live_compression:
             self._update_data_compressed(data, ps_step, dynamic_step)
         else:

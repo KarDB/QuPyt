@@ -19,7 +19,7 @@ synchroniser:
   type: 'MockSynchroniser'
   config:
     address: 'TCPIP::some::INSTR'
-    sampling_rate: &samprate 5.0e9
+    # sampling_rate: &samprate 5.0e9
   channel_mapping:
     LASER: 5
     READ: 1
@@ -52,7 +52,7 @@ data:
   averaging_mode: 'spread'
   dynamic_steps: *n_dynamic_steps
 
-ps_path: '.\QuPyt\source\example_pulse_sequences\casr_sensitivity.py'
+ps_path: '.\QuPyt\source\example_pulse_sequences\casr.py'
 
 pulse_sequence:
   AWG_frequency: 0.5e+09
@@ -63,7 +63,7 @@ pulse_sequence:
   pi: 0.048
   laser_duration: 50
   number_measurements: *n_datapoints
-  sampling_rate: *samprate
+  sampling_rate: 5.0e9 #*samprate
   calibration_target_frequency: 1000
   ts_start: 1
   ts_end: 1

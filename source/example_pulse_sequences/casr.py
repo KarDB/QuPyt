@@ -222,9 +222,9 @@ def gen_sync(AWG_frequency: float,
     calibration_frequency = compute_calibration_signal(number_measurements, total_time, tau, calibration_target_frequency)
 
     return {
-        'dynamic_devices': {
+        'static_devices': {
             'rf_calibration_source': {
-                'config': {'frequency': ['channel_2',[ calibration_frequency,  calibration_frequency]]}
+                'config': {'frequency': ['channel_2', calibration_frequency]}
             }
         },
         'duration_pulseseq_cycle': total_time}

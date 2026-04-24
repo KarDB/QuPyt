@@ -26,7 +26,7 @@ synchroniser:
   config:
     # Enter the VISA adress of your device.
     address: 'TCPIP::some::INSTR'
-    sampling_rate: &samprate 5.0e9
+    # sampling_rate: &samprate 5.0e9
   channel_mapping:
     # There map the channels defined in the pulse sequence file
     # to the output of your synchroniser.

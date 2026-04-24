@@ -41,7 +41,7 @@ def run_measurement(
             synchroniser.stop()
             synchroniser.load_sequence(get_seq_dir() / f"sequence_{ps_itervalue}.yaml")
             synchroniser.run()
-            sleep(0.1)
+            sleep(10)
             sensor.open()
             sleep(0.5)
             for itervalue in tqdm(range(iterator_size), leave=(ps_itervalue == ps_iterator_size - 1)):

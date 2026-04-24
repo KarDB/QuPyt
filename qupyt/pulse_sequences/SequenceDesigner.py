@@ -48,8 +48,8 @@ class PulseSequenceYaml:
             return False
 
     def translate_yaml_to_numeric_instructions(self) -> None:
-        #if self._sequence_didnt_change():
-        #    return
+        if self._sequence_didnt_change():
+            return
         with open(self.yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
         sequence_order = sequence_instructions["sequencing_order"]

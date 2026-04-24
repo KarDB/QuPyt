@@ -48,7 +48,6 @@ def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]
     """
     user_ps = cast(UserPulseSeqProtocol, _load_module_from_path(path))
     dependent_parameters = user_ps.generate_sequence(params)
-    print("generated new pulse sequence files")
     return dependent_parameters
 
 
