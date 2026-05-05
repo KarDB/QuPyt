@@ -19,6 +19,7 @@ class Data(ConfigurationMixin):
         self.save_in_chunks: int = 0
         self.reference_channels: int = 2
         self.data: np.ndarray
+        self.filename: tuple[str, str]
         self.attribute_map = {
             "dynamic_steps": self._set_number_dynamic_steps,
             "ps_steps": self._set_number_pulse_sequences,
@@ -65,6 +66,12 @@ class Data(ConfigurationMixin):
 
     def _set_roi_shape(self, roi_shape: List[int]) -> None:
         self.roi_shape = roi_shape
+
+    def _set_filename(self, filename: tuple[str, str]) -> None:
+        self.filename = filename
+
+    def set_filename(self, filename: tuple[str, str]) -> None:
+        self._set_filename(filename)
 
     def set_dims_from_sensor(self, sensor: Sensor) -> None:
         self._set_ROI_from_sensor(sensor)
@@ -120,8 +127,10 @@ class Data(ConfigurationMixin):
 
     def update_data(self, data: np.ndarray, ps_step: int, dynamic_step: int, avg_step: int) -> None:
         if self.save_in_chunks != 0 and avg_step % self.save_in_chunks == 0:
-            self.save(f"save_chunk_{avg_step}.npy")
+            self._update_data_full(data, ps_step, dynamic_step)
+            self.save(self.filename[0] + "_ch-" +f"{avg_step}_" + self.filename[1])
             self.create_array()
+            return None
         if self.live_compression:
             self._update_data_compressed(data, ps_step, dynamic_step)
         else:
