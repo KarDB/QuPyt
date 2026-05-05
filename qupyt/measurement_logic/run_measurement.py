@@ -35,6 +35,8 @@ def run_measurement(
         data_container = Data(params["data"])
         data_container.set_dims_from_sensor(sensor)
         data_container.create_array()
+        params["filename"] = params["experiment_type"] + "_" + mid
+        data_container.set_filename((params["experiment_type"],mid))
 
         for ps_itervalue in tqdm(range(ps_iterator_size)):
             synchroniser.open()
@@ -65,10 +67,10 @@ def run_measurement(
         sensor.close()
         synchroniser.close()
         print("sensor closed")
-        params["filename"] = params["experiment_type"] + "_" + mid
         params["measurement_status"] = return_status
         params["qupyt_version"] = qupyt_version
-
+        if data_container.save_in_chunks == 0:
+            data_container.save(params["filename"])
         data_container.save(params["filename"])
         with open(params["filename"] + ".yaml", "w", encoding="utf-8") as file:
             yaml.dump(params, file)
