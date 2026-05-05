@@ -96,12 +96,13 @@ class PulseSequence:
     ) -> None:
         self.samp_rate = samprate  # samples per second
         self.min_time = 1 / samprate
-        self.num_points = int(samprate * duration * 1e-6)
+        points = samprate * duration * 1e-6
+        self.num_points = int(round(points))
         self.time = np.linspace(0, duration, self.num_points)  # in microseconds
         self.numseqs = numseqs
         self.awg_sources = awg_sources
 
-        if self.num_points != samprate * duration * 10**-6:
+        if not np.isclose(points, self.num_points, rtol=0.0, atol=1e-9):
             print(
                 colored(
                     "WARNING! the sequence duration is not an integer multiple of samples".ljust(
