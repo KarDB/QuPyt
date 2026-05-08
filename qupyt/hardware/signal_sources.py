@@ -292,6 +292,7 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin):
         PhaseMixin.__init__(self)
         self.attribute_map["gating"] = self._set_gate_mode
         self.attribute_map["phase"] = self.set_phase
+        self.attribute_map["triggered_n_cycles"] = self._set_triggered_n_cycles
 
     @validate_call
     @coerce_device_config_shape
@@ -318,7 +319,41 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin):
         cmd = self.command[f"SetBurstPhase{channel}"]
         self.instance.write(f"{cmd}{phase}")
 
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
+    def _set_triggered_n_cycles(self, n_cycles: ParameterInput) -> None:
+        """
+            Configure Rigol DG1000Z burst mode such that every external rising-edge
+            trigger produces exactly n_cycles waveform periods.
 
+            Expected config example:
+                triggered_n_cycles: ["1", 43]
+
+            This internally sets:
+                - burst ON
+                - burst mode TRIG
+                - burst cycles = n_cycles
+                - trigger source EXT
+                - trigger slope POS
+            """
+        channel, n_cycles = n_cycles
+        n_cycles = int(n_cycles)
+
+        if n_cycles < 1:
+            raise ValueError("triggered_n_cycles must be >= 1")
+
+        self.instance.write(self.command[f"SetBurstState{channel}"] + "ON")
+        self.instance.write(self.command[f"SetBurstMode{channel}"] + "TRIG")
+        self.instance.write(self.command[f"SetBurstNCycles{channel}"] + str(n_cycles))
+        self.instance.write(self.command[f"SetBurstTriggerSource{channel}"] + "EXT")
+        self.instance.write(self.command[f"SetBurstTriggerSlope{channel}"] + "POS")
+        self.opc_wait()
+
+        logging.info(
+            f"{self.s_type} set triggered N-cycle burst channel {channel} to".ljust(65, ".")
+            + f"{n_cycles} cycles, EXT trigger, rising edge"
+        )
 
 class SMAandSMBVisaSignalSource(VisaSignalSource):
     """
