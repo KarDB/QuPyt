@@ -346,8 +346,8 @@ class RigolSignalSource(VisaSignalSource, PhaseMixin):
         self.instance.write(self.command[f"SetBurstState{channel}"] + "ON")
         self.instance.write(self.command[f"SetBurstMode{channel}"] + "TRIG")
         self.instance.write(self.command[f"SetBurstNCycles{channel}"] + str(n_cycles))
-        self.instance.write(self.command[f"SetBurstTriggerSource{channel}"] + "EXT")
-        self.instance.write(self.command[f"SetBurstTriggerSlope{channel}"] + "POS")
+        #self.instance.write(self.command[f"SetBurstTriggerSource{channel}"] + "EXT")
+        #self.instance.write(self.command[f"SetBurstTriggerSlope{channel}"] + "POS")
         self.opc_wait()
 
         logging.info(
