@@ -19,7 +19,7 @@ class PulseSequenceYaml:
         #  e.g. source1 might include analog 1, marker 1, ...
         #  There is one analog channel per source but mulitple makers etc.
         awg_sources: list[int],
-        samprate: float = 5e9,
+        samprate: float,# = 5e9,
         yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
     ) -> None:
         self.yaml_file = yaml_file
@@ -48,8 +48,8 @@ class PulseSequenceYaml:
             return False
 
     def translate_yaml_to_numeric_instructions(self) -> None:
-        if self._sequence_didnt_change():
-            return
+        #if self._sequence_didnt_change():
+        #    return
         with open(self.yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
         sequence_order = sequence_instructions["sequencing_order"]

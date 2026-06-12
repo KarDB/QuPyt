@@ -43,7 +43,7 @@ def run_measurement(
             synchroniser.stop()
             synchroniser.load_sequence(get_seq_dir() / f"sequence_{ps_itervalue}.yaml")
             synchroniser.run()
-            sleep(5)
+            sleep(0.1)
             sensor.open()
             sleep(0.5)
             for itervalue in tqdm(range(iterator_size), leave=(ps_itervalue == ps_iterator_size - 1)):
@@ -69,9 +69,10 @@ def run_measurement(
         print("sensor closed")
         params["measurement_status"] = return_status
         params["qupyt_version"] = qupyt_version
-        if data_container.save_in_chunks == 0:
+        if return_status == "success":
+            data_container.save(params["filename"], average_count=int(params["averages"]))
+        else:
             data_container.save(params["filename"])
-        data_container.save(params["filename"])
         with open(params["filename"] + ".yaml", "w", encoding="utf-8") as file:
             yaml.dump(params, file)
         del data_container
