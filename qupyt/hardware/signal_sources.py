@@ -273,13 +273,42 @@ class PhaseMixin():
 
 
 class AFGSignalSource(VisaSignalSource, PhaseMixin):
-    """Special class for TekAFG to enable setting the phase in radiants"""
+    """Special class for TekAFG to enable gating and output phase control."""
 
     def __init__(
         self, address: str, device_type: str, configuration: Dict[str, Any]
     ) -> None:
         VisaSignalSource.__init__(self, address, device_type, configuration)
         PhaseMixin.__init__(self)
+        self.attribute_map["gating"] = self._set_gate_mode
+        self.attribute_map["phase"] = self.set_phase
+
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
+    def _set_gate_mode(self, mode: ParameterInput) -> None:
+        valids = ["off", "gate"]
+        channel, mode = mode
+        if channel != "1":
+            raise ConfigurationError("TekAFG burst channel", channel, ["channel_1"])
+        if mode.lower() not in valids:
+            raise ConfigurationError("Burst mode", mode, valids)
+        if mode.lower() == "off":
+            self.instance.write(self.command[f"SetBurstState{channel}"] + "OFF")
+        if mode.lower() == "gate":
+            self.instance.write(self.command[f"SetBurstState{channel}"] + "ON")
+            self.instance.write(self.command[f"SetBurstMode{channel}"] + "GATed")
+
+    @validate_call
+    @coerce_device_config_shape
+    @loop_inputs
+    def set_phase(self, phase: ParameterInput) -> None:
+        channel, phase = phase
+        if not (0 <= phase <= 360):
+            raise ConfigurationError("Output phase", phase, "range 0 to 360 degrees")
+
+        cmd = self.command[f"SetPhase{channel}"]
+        self.instance.write(f"{cmd}{phase} DEG")
 
 
 class RigolSignalSource(VisaSignalSource, PhaseMixin):

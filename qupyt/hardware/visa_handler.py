@@ -129,10 +129,12 @@ class VisaObject:
                 "GetAmpl1": "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude?",
                 "SetFreq1": "SOURce1:FREQuency:FIXed ",
                 "GetFreq1": "SOURce1:FREQuency:FIXed?",
-                "SetPhase1": "SOURce1:PHASe ",
+                "SetPhase1": "SOURce1:PHASe:ADJust ",
+                "SetBurstMode1": "SOURce1:BURSt:MODE ",
+                "SetBurstState1": "SOURce1:BURSt:STATe ",
                 "SetAmpl2": "SOURce2:VOLTage:LEVel:IMMediate:AMPLitude ",
                 "SetFreq2": "SOURce2:FREQuency:FIXed ",
-                "SetPhase2": "SOURce2:PHASe ",
+                "SetPhase2": "SOURce2:PHASe:ADJust ",
                 # The Tek AFG does not implement an OPC.
                 # We therefore skip the waiting time and
                 # Query impedance which will alwasy return
