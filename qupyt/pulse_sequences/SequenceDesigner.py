@@ -239,7 +239,7 @@ class PulseBlasterSequence:
     def __init__(
         self,
         channel_mapping: Dict[str, Any],
-        yaml_file: Path = get_seq_dir() / "sequence.yaml",
+        yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
     ) -> None:
         self.event_times: List[float] = []
         self.event_durations: List[float] = []
