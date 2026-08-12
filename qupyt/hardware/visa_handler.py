@@ -146,10 +146,23 @@ class VisaObject:
         ready to execute the next command.
         Pauses execution until the device is ready.
         """
-        opc_val = 0
-        while opc_val == 0:
+        last_response = ""
+        for attempt in range(3):
             opc = self.instance.query(self.command["OPC"])
-            opc_val = int(opc)
+            last_response = opc
+            try:
+                if float(opc.strip()) != 0:
+                    return
+            except ValueError:
+                logging.warning(
+                    f"{self.s_type} returned invalid OPC response {opc!r}; "
+                    f"retrying ({attempt + 1}/10)"
+                )
+            sleep(0.1)
+        raise TimeoutError(
+            f"{self.s_type} did not return a valid OPC response. "
+            f"Last response was {last_response!r}."
+        )
 
     def close(self) -> None:
         if self.s_type == "TekAWG":
