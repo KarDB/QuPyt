@@ -7,6 +7,9 @@ import importlib.util
 from types import ModuleType
 from pathlib import Path
 from typing import Dict, Any, Optional, Protocol, cast
+import yaml
+
+from qupyt.set_up import get_seq_dir
 
 
 # pylint: disable=too-few-public-methods
@@ -46,6 +49,11 @@ def write_user_ps(path: Path, params: Dict[str, Any]) -> Optional[Dict[str, Any]
     Load user specified pulse sequence definition and
     execute it to generate the pulse sequence.
     """
+    sequence_dir = get_seq_dir()
+    previous_sequence_files = {
+        sequence_file: sequence_file.stat().st_mtime_ns
+        for sequence_file in sequence_dir.glob("sequence_*.yaml")
+    }
     user_ps = cast(UserPulseSeqProtocol, _load_module_from_path(path))
     dependent_parameters = user_ps.generate_sequence(params)
     return dependent_parameters
