@@ -156,7 +156,7 @@ class VisaObject:
             except ValueError:
                 logging.warning(
                     f"{self.s_type} returned invalid OPC response {opc!r}; "
-                    f"retrying ({attempt + 1}/10)"
+                    f"retrying ({attempt + 1}/3)"
                 )
             sleep(0.1)
         raise TimeoutError(
