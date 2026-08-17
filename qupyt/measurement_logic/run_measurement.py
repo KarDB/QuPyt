@@ -87,9 +87,10 @@ def run_measurement(
         print("sensor closed")
         params["measurement_status"] = return_status
         params["qupyt_version"] = qupyt_version
-        if data_container.save_in_chunks == 0:
+        if return_status == "success":
+            data_container.save(params["filename"], average_count=int(params["averages"]))
+        else:
             data_container.save(params["filename"])
-        data_container.save(params["filename"])
         with open(params["filename"] + ".yaml", "w", encoding="utf-8") as file:
             yaml.dump(params, file)
         del data_container
