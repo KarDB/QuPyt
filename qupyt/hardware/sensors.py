@@ -1170,6 +1170,10 @@ class DAQ(Sensor):
         """
         See :meth:`Sensor.close`
         """
+        if not hasattr(self, "daq_task"):
+            # Setup can fail before DAQ.open() creates the task; close should not
+            # hide the original setup error with a secondary AttributeError.
+            return
         self.daq_task.close()
         logging.info("DAQ closed".ljust(65, "."))
 
