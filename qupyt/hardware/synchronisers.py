@@ -45,32 +45,12 @@ except (ImportError, NameError):
     )
 
 
-# Default AWG70000B sequencer limits. AWG/Mock synchroniser configs can
-# override these with awg_max_sequence_steps / awg_max_step_repeat for other
-# AWG models; pulse-sequence YAML should not define hardware limits.
-AWG_MAX_SEQUENCE_STEPS = 16_384
-AWG_MAX_STEP_REPEAT = 1_048_576
-
-
-@dataclass(frozen=True)
-class AWGSequenceStep:
-    """One expanded logical AWG sequencer step.
-
-    Repeated-child compression must compare all hardware-visible state, not just
-    waveform names; repeat counts and flag states are part of the timing contract.
-    """
-
-    waveform: str
-    repeat: int
-    flags: tuple[str, ...]
-
-
-def _check_awg_sequence_mode_supported(
+def _validate_synchroniser_sequence_mode(
     sequence_instructions: Dict[str, Any],
     device_type: str,
     supported_modes: tuple[str, ...],
 ) -> str:
-    """Validate optional Tek AWG upload metadata for a synchroniser.
+    """Reject sequence upload modes unsupported by the selected synchroniser.
 
     awg_sequence_mode is not part of the logical pulse program. It only
     describes how TekAWG should upload that pulse program. Non-AWG devices
@@ -255,6 +235,18 @@ class AWGenerator(VisaObject, Synchroniser):
     Tek AWG70000-series sequence-asset SCPI and was tested on AWG70001B.
     """
 
+    @dataclass(frozen=True)
+    class AWGSequenceStep:
+        """One expanded logical AWG sequencer step.
+
+        Repeated-child compression must compare all hardware-visible state, not just
+        waveform names; repeat counts and flag states are part of the timing contract.
+        """
+
+        waveform: str
+        repeat: int
+        flags: tuple[str, ...]
+
     def __init__(
         self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
     ) -> None:
@@ -272,8 +264,8 @@ class AWGenerator(VisaObject, Synchroniser):
         self.dac_resolution: int = 12
         self.channels: list[int] = [1, 2]
         self.marker_channels: list[int] = [1, 2, 3, 4]
-        self.awg_max_sequence_steps: int = AWG_MAX_SEQUENCE_STEPS
-        self.awg_max_step_repeat: int = AWG_MAX_STEP_REPEAT
+        self.awg_max_sequence_steps: int = 16_384
+        self.awg_max_step_repeat: int = 1_048_576
 
         Synchroniser.__init__(self)
         self.attribute_map["device_type"] = self._set_device_type
@@ -395,7 +387,7 @@ class AWGenerator(VisaObject, Synchroniser):
         )
 
     def _sequence_flat(
-        self, seqname: str, logical_steps: list[AWGSequenceStep], nongatereps: int = 1
+        self, seqname: str, logical_steps: list[AWGenerator.AWGSequenceStep], nongatereps: int = 1
     ) -> None:
         if len(logical_steps) > self.awg_max_sequence_steps:
             raise ValueError(
@@ -448,7 +440,7 @@ class AWGenerator(VisaObject, Synchroniser):
         print(colored(" [done]", "green"))
 
     def _sequence_repeated_child(
-        self, seqname: str, logical_steps: list[AWGSequenceStep], nongatereps: int = 1
+        self, seqname: str, logical_steps: list[AWGenerator.AWGSequenceStep], nongatereps: int = 1
     ) -> None:
         # This parent/child sequencer upload uses Tek AWG70000-series SCPI and
         # was tested on TEKTRONIX AWG70001B firmware FV:8.1.0266.0. Similar Tek
@@ -561,7 +553,7 @@ class AWGenerator(VisaObject, Synchroniser):
         self,
         sequence_name: str,
         step_number: int,
-        step: AWGSequenceStep,
+        step: AWGenerator.AWGSequenceStep,
         channel: int,
         track: int,
     ) -> None:
@@ -592,7 +584,7 @@ class AWGenerator(VisaObject, Synchroniser):
     def _get_awg_sequence_mode(self) -> str:
         return str(self.sequence_options.get("awg_sequence_mode", "flat"))
 
-    def _get_logical_awg_steps(self) -> list[AWGSequenceStep]:
+    def _get_logical_awg_steps(self) -> list[AWGenerator.AWGSequenceStep]:
         if len(self.wavenames) != len(self.seqrepeats):
             raise ValueError(
                 "Tek AWG sequence metadata mismatch: "
@@ -608,7 +600,7 @@ class AWGenerator(VisaObject, Synchroniser):
             repeat = int(repeat)
             self._validate_awg_repeat_count(repeat, f"step {len(steps) + 1}")
             steps.append(
-                AWGSequenceStep(
+                AWGenerator.AWGSequenceStep(
                     waveform=str(wavename),
                     repeat=repeat,
                     flags=tuple(sorted(self.flag_values.get(wavename, []))),
@@ -626,8 +618,8 @@ class AWGenerator(VisaObject, Synchroniser):
             )
 
     def _validate_repeated_child_region(
-        self, steps: list[AWGSequenceStep]
-    ) -> tuple[list[AWGSequenceStep], list[AWGSequenceStep], int, list[AWGSequenceStep]]:
+        self, steps: list[AWGenerator.AWGSequenceStep]
+    ) -> tuple[list[AWGenerator.AWGSequenceStep], list[AWGenerator.AWGSequenceStep], int, list[AWGenerator.AWGSequenceStep]]:
         config = self.sequence_options.get("awg_repeated_child", {})
         if not isinstance(config, dict):
             raise ValueError(
@@ -708,7 +700,7 @@ class AWGenerator(VisaObject, Synchroniser):
         return steps[:prefix_steps], child, repetitions, suffix
 
     def _infer_child_repetitions(
-        self, steps: list[AWGSequenceStep], prefix_steps: int, child: list[AWGSequenceStep]
+        self, steps: list[AWGenerator.AWGSequenceStep], prefix_steps: int, child: list[AWGenerator.AWGSequenceStep]
     ) -> int:
         child_steps = len(child)
         repetitions = 0
@@ -1189,7 +1181,7 @@ class PStreamer(Synchroniser):
                 full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
             # PulseStreamer consumes the expanded pulse program directly; it
             # does not implement Tek AWG parent/child sequencer compression.
-            _check_awg_sequence_mode_supported(
+            _validate_synchroniser_sequence_mode(
                 full_pulse_list, "PulseStreamer", ("flat",)
             )
             sequence_order = full_pulse_list["sequencing_order"]
@@ -1292,14 +1284,15 @@ class MockGenerator(Synchroniser):
     def __init__(self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]):
         self.channel_mapping = channel_mapping
         self.device_type: str = "MockGenerator"
-        self.awg_max_sequence_steps: int = AWG_MAX_SEQUENCE_STEPS
-        self.awg_max_step_repeat: int = AWG_MAX_STEP_REPEAT
+        self.max_sequence_steps: int = 16_384
+        self.max_step_repeat: int = 1_048_576
 
         Synchroniser.__init__(self)
+        # Retain TekAWG YAML keys so the mock can dry-run the same config.
         self.attribute_map["awg_max_sequence_steps"] = (
-            self._set_awg_max_sequence_steps
+            self._set_max_sequence_steps
         )
-        self.attribute_map["awg_max_step_repeat"] = self._set_awg_max_step_repeat
+        self.attribute_map["awg_max_step_repeat"] = self._set_max_step_repeat
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
@@ -1328,7 +1321,7 @@ class MockGenerator(Synchroniser):
             # Mock accepts repeated_child as a dry run of the Tek AWG upload
             # strategy. It validates the metadata but still has no hardware
             # sequencer to program.
-            _check_awg_sequence_mode_supported(
+            _validate_synchroniser_sequence_mode(
                 full_pulse_list, "MockSynchroniser", ("flat", "repeated_child")
             )
             self._validate_awg_sequence_options(
@@ -1394,7 +1387,7 @@ class MockGenerator(Synchroniser):
             for block, repeat in zip(sequence_order, sequencing_repeats):
                 repeat = int(repeat)
                 self._validate_awg_repeat_count(repeat, f"step {len(logical_steps) + 1}")
-                logical_steps.append(AWGSequenceStep(str(block), repeat, ()))
+                logical_steps.append(AWGenerator.AWGSequenceStep(str(block), repeat, ()))
             prefix, child, repetitions, suffix = self._validate_repeated_child_region(
                 logical_steps
             )
@@ -1424,29 +1417,29 @@ class MockGenerator(Synchroniser):
     def _validate_awg_repeat_count(self, repeat: int, context: str) -> None:
         if repeat <= 0:
             raise ValueError(f"MockSynchroniser AWG {context} repeat count must be positive.")
-        if repeat > self.awg_max_step_repeat:
+        if repeat > self.max_step_repeat:
             raise ValueError(
                 f"MockSynchroniser AWG {context} repeat count {repeat} exceeds "
-                f"the configured AWG limit of {self.awg_max_step_repeat}."
+                f"the configured AWG limit of {self.max_step_repeat}."
             )
 
-    def _set_awg_max_sequence_steps(self, max_sequence_steps: int) -> None:
-        self.awg_max_sequence_steps = _validate_awg_limit(
+    def _set_max_sequence_steps(self, max_sequence_steps: int) -> None:
+        self.max_sequence_steps = _validate_awg_limit(
             max_sequence_steps,
             "awg_max_sequence_steps",
             "MockSynchroniser",
         )
 
-    def _set_awg_max_step_repeat(self, max_step_repeat: int) -> None:
-        self.awg_max_step_repeat = _validate_awg_limit(
+    def _set_max_step_repeat(self, max_step_repeat: int) -> None:
+        self.max_step_repeat = _validate_awg_limit(
             max_step_repeat,
             "awg_max_step_repeat",
             "MockSynchroniser",
         )
 
     def _validate_repeated_child_region(
-        self, steps: list[AWGSequenceStep]
-    ) -> tuple[list[AWGSequenceStep], list[AWGSequenceStep], int, list[AWGSequenceStep]]:
+        self, steps: list[AWGenerator.AWGSequenceStep]
+    ) -> tuple[list[AWGenerator.AWGSequenceStep], list[AWGenerator.AWGSequenceStep], int, list[AWGenerator.AWGSequenceStep]]:
         config = self.sequence_options.get("awg_repeated_child", {})
         if not isinstance(config, dict):
             raise ValueError(
@@ -1470,10 +1463,10 @@ class MockGenerator(Synchroniser):
             raise ValueError(
                 f"awg_repeated_child child_steps must be > 0, got {child_steps}."
             )
-        if child_steps > self.awg_max_sequence_steps:
+        if child_steps > self.max_sequence_steps:
             raise ValueError(
                 f"Repeated child sequence has {child_steps} steps, exceeding "
-                f"the configured AWG limit of {self.awg_max_sequence_steps}."
+                f"the configured AWG limit of {self.max_sequence_steps}."
             )
         if prefix_steps + child_steps > len(steps):
             raise ValueError(
@@ -1522,15 +1515,15 @@ class MockGenerator(Synchroniser):
         suffix_start = prefix_steps + repetitions * child_steps
         suffix = steps[suffix_start:]
         compact_body_steps = prefix_steps + 1 + len(suffix)
-        if compact_body_steps > self.awg_max_sequence_steps:
+        if compact_body_steps > self.max_sequence_steps:
             raise ValueError(
                 f"Compact AWG parent/body sequence has {compact_body_steps} steps, "
-                f"exceeding the configured AWG limit of {self.awg_max_sequence_steps}."
+                f"exceeding the configured AWG limit of {self.max_sequence_steps}."
             )
         return steps[:prefix_steps], child, repetitions, suffix
 
     def _infer_child_repetitions(
-        self, steps: list[AWGSequenceStep], prefix_steps: int, child: list[AWGSequenceStep]
+        self, steps: list[AWGenerator.AWGSequenceStep], prefix_steps: int, child: list[AWGenerator.AWGSequenceStep]
     ) -> int:
         child_steps = len(child)
         repetitions = 0
@@ -1656,7 +1649,7 @@ class PulseBlaster(Synchroniser):
         with open(yaml_file, "r", encoding="utf-8") as file:
             # PulseBlaster also consumes the expanded program directly. Keep
             # Tek-only upload modes out of this path with a clear error.
-            _check_awg_sequence_mode_supported(
+            _validate_synchroniser_sequence_mode(
                 yaml.safe_load(file) or {}, "PulseBlaster", ("flat",)
             )
         yaml_sequence_transpiler = PulseBlasterSequence(self.channel_mapping, ps_yaml_file)
