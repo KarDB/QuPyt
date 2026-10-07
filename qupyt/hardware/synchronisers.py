@@ -24,6 +24,7 @@ from termcolor import colored
 from qupyt.set_up import get_seq_dir
 from qupyt.pulse_sequences.SequenceDesigner import (
     PulseSequenceYaml,
+    parse_awg_flag,
     PulseBlasterSequence,
 )
 from pulsestreamer import PulseStreamer
@@ -289,11 +290,19 @@ class AWGenerator(VisaObject, Synchroniser):
         self._limit_channels_to_available_outputs()
 
     def _extract_flags(self, channel_mapping: Dict[str, Union[int, str]]) -> list[str]:
-        return [
-            channel_value
-            for channel_value in channel_mapping.values()
-            if not isinstance(channel_value, int)
-        ]
+        selectors = []
+        for value in channel_mapping.values():
+            if isinstance(value, int):
+                continue
+            # Validate syntax here; active channels are configured afterwards.
+            parse_awg_flag(value, [1, 2])
+            if value not in selectors:
+                selectors.append(value)
+        return selectors
+
+    def _validate_flag_channels(self) -> None:
+        for selector in self.flag_channels:
+            parse_awg_flag(selector, self.channels)
 
     def open(self) -> None:
         self._limit_channels_to_available_outputs()
@@ -320,6 +329,7 @@ class AWGenerator(VisaObject, Synchroniser):
 
     def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
         self._limit_channels_to_available_outputs()
+        self._validate_flag_channels()
         self.stop()
         self.instance.write("*CLS")
         self._clear_awg()
@@ -328,6 +338,7 @@ class AWGenerator(VisaObject, Synchroniser):
             self.channel_mapping, self.channels, samprate=self.samprate, yaml_file = ps_yaml_file)
         sequence_translator.translate_yaml_to_numeric_instructions()
         self._load_sequence_block(get_seq_dir() / "sequence.npz")
+        self._get_logical_awg_steps()  # Validate cached flag metadata before upload.
         self._upload_waveforms()
         self._raise_on_awg_errors("waveform upload")
         self._sequence("autoseq", nongatereps=1)
@@ -405,7 +416,7 @@ class AWGenerator(VisaObject, Synchroniser):
         for i, step in enumerate(logical_steps, start=1):
             for track, channel in enumerate(self.channels, start=1):
                 self._configure_waveform_step(
-                    "sub", i, step, channel, track, set_flags=(track == 1)
+                    "sub", i, step, channel, track
                 )
 
         self.instance.write(f'slist:sequence:delete "{seqname}"')
@@ -495,7 +506,6 @@ class AWGenerator(VisaObject, Synchroniser):
                     step,
                     channel,
                     track,
-                    set_flags=(track == 1),
                 )
 
         self.instance.write(f'slist:sequence:delete "{top_sequence}"')
@@ -520,7 +530,7 @@ class AWGenerator(VisaObject, Synchroniser):
         for step in prefix:
             for track, channel in enumerate(self.channels, start=1):
                 self._configure_waveform_step(
-                    top_sequence, body_step, step, channel, track, set_flags=(track == 1)
+                    top_sequence, body_step, step, channel, track
                 )
             body_step += 1
         self.instance.write(
@@ -534,7 +544,7 @@ class AWGenerator(VisaObject, Synchroniser):
         for step in suffix:
             for track, channel in enumerate(self.channels, start=1):
                 self._configure_waveform_step(
-                    top_sequence, body_step, step, channel, track, set_flags=(track == 1)
+                    top_sequence, body_step, step, channel, track
                 )
             body_step += 1
         self.instance.write(
@@ -554,7 +564,6 @@ class AWGenerator(VisaObject, Synchroniser):
         step: AWGSequenceStep,
         channel: int,
         track: int,
-        set_flags: bool = True,
     ) -> None:
         self.instance.write(
             f'slist:sequence:step{step_number}:rcount "{sequence_name}",{step.repeat}'
@@ -562,12 +571,22 @@ class AWGenerator(VisaObject, Synchroniser):
         self.instance.write(
             f'slist:sequence:step{step_number}:tasset{track}:waveform "{sequence_name}","{step.waveform}_{channel}"'
         )
-        if not set_flags:
-            return
-        for flag_channel in self.flag_channels:
-            flag_value = "HIGH" if flag_channel in step.flags else "LOW"
+        # Resolve physical channels to tracks through the configured ordering.
+        # Combine overlapping legacy/qualified selectors before writing each flag.
+        targeted_flags = {
+            flag for selector in self.flag_channels
+            for flag, source in [parse_awg_flag(selector, self.channels)]
+            if source is None or source == channel
+        }
+        present_flags = {
+            flag for selector in step.flags
+            for flag, source in [parse_awg_flag(selector, self.channels)]
+            if source is None or source == channel
+        }
+        for flag in sorted(targeted_flags):
+            flag_value = "HIGH" if flag in present_flags else "LOW"
             self.instance.write(
-                f'slist:sequence:step{step_number}:tflag1:{flag_channel}flag "{sequence_name}",{flag_value}'
+                f'slist:sequence:step{step_number}:tflag{track}:{flag}flag "{sequence_name}",{flag_value}'
             )
 
     def _get_awg_sequence_mode(self) -> str:
@@ -580,6 +599,10 @@ class AWGenerator(VisaObject, Synchroniser):
                 f"{len(self.wavenames)} waveform names but "
                 f"{len(self.seqrepeats)} repeat counts."
             )
+        self._validate_flag_channels()
+        for selectors in self.flag_values.values():
+            for selector in selectors:
+                parse_awg_flag(selector, self.channels)
         steps = []
         for wavename, repeat in zip(self.wavenames, self.seqrepeats):
             repeat = int(repeat)
