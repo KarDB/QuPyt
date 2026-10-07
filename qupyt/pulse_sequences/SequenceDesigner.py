@@ -1,12 +1,29 @@
 import logging
+import re
 import pickle
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import hashlib
 from pathlib import Path
 import numpy as np
 from termcolor import colored
 import yaml
 from qupyt.set_up import get_seq_dir
+
+
+def parse_awg_flag(selector: str, channels: list[int]) -> Tuple[str, Optional[int]]:
+    """Parse a flag selector; its suffix is a physical AWG source channel."""
+    if not isinstance(selector, str) or re.fullmatch(r"[ABCD](?:[12])?", selector) is None:
+        raise ValueError(
+            f"Invalid AWG flag selector {selector!r}; expected A, B, C, D "
+            "or a flag followed by physical AWG channel 1 or 2 (for example A2)."
+        )
+    channel = int(selector[1]) if len(selector) == 2 else None
+    if channel is not None and channel not in channels:
+        raise ValueError(
+            f"AWG flag selector {selector!r} requests inactive AWG channel "
+            f"{channel}; active channels are {channels}."
+        )
+    return selector[0], channel
 
 
 class PulseSequenceYaml:
@@ -30,6 +47,14 @@ class PulseSequenceYaml:
     def _sequence_didnt_change(self) -> bool:
         with open(self.yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
+        # Configuration changes (including A -> A2) must regenerate flag metadata
+        # even when the pulse YAML is unchanged.
+        sequence_instructions = {
+            "sequence": sequence_instructions,
+            "channel_mapping": self.channel_mapping,
+            "awg_sources": self.awg_sources,
+            "sampling_rate": self.samp_rate,
+        }
         try:
             with open(
                 self.yaml_file.with_suffix(".aux"), "r", encoding="utf-8"
@@ -48,8 +73,11 @@ class PulseSequenceYaml:
             return False
 
     def translate_yaml_to_numeric_instructions(self) -> None:
-        #if self._sequence_didnt_change():
-        #    return
+        for selector in self.channel_mapping.values():
+            if isinstance(selector, str):
+                parse_awg_flag(selector, self.awg_sources)
+        if self._sequence_didnt_change():
+            return
         with open(self.yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
         sequence_order = sequence_instructions["sequencing_order"]
