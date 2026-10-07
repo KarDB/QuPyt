@@ -19,7 +19,7 @@ class PulseSequenceYaml:
         #  e.g. source1 might include analog 1, marker 1, ...
         #  There is one analog channel per source but mulitple makers etc.
         awg_sources: list[int],
-        samprate: float = 5e9,
+        samprate: float,# = 5e9,
         yaml_file: Path = get_seq_dir() / "sequence_0.yaml",
     ) -> None:
         self.yaml_file = yaml_file

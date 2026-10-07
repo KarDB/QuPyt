@@ -19,6 +19,17 @@ from qupyt._version import __version__ as qupyt_version
 from qupyt.set_up import get_seq_dir
 
 
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized_value = value.strip().lower()
+        if normalized_value in {"true", "yes", "1", "on"}:
+            return True
+        if normalized_value in {"false", "no", "0", "off"}:
+            return False
+    return bool(value)
+
 def run_measurement(
     static_devices: DeviceHandler,
     dynamic_devices: DynamicDeviceHandler,
@@ -29,6 +40,9 @@ def run_measurement(
     static_devices.set_all_params()
     iterator_size = int(params.get("dynamic_steps", 1))
     ps_iterator_size = int(params.get("pulse_sequence_steps", 1))
+    synchroniser_params = params.get("synchroniser", {})
+    upload_to_synchroniser = _as_bool(synchroniser_params.get("upload", True))
+    has_dynamic_devices = bool(dynamic_devices.devices)
     mid = datetime.today().strftime("%Y-%m-%d-%H-%M-%S")
     return_status = "all_fail"
     try:
@@ -41,14 +55,18 @@ def run_measurement(
         for ps_itervalue in tqdm(range(ps_iterator_size)):
             synchroniser.open()
             synchroniser.stop()
-            synchroniser.load_sequence(get_seq_dir() / f"sequence_{ps_itervalue}.yaml")
+            if upload_to_synchroniser:
+                synchroniser.load_sequence(get_seq_dir() / f"sequence_{ps_itervalue}.yaml")
+            else:
+                logging.info("Skipped synchroniser sequence upload".ljust(65, ".") + "[done]")
             synchroniser.run()
             sleep(0.1)
             sensor.open()
-            sleep(0.5)
+            sleep(0.1)
             for itervalue in tqdm(range(iterator_size), leave=(ps_itervalue == ps_iterator_size - 1)):
                 dynamic_devices.next_dynamic_step()
-                sleep(0.1)
+                if has_dynamic_devices:
+                    sleep(0.1)
                 for avg in tqdm(
                         range(int(params["averages"])),
                         leave=(itervalue == (iterator_size - 1)) and (ps_itervalue == (ps_iterator_size - 1)),
@@ -69,9 +87,10 @@ def run_measurement(
         print("sensor closed")
         params["measurement_status"] = return_status
         params["qupyt_version"] = qupyt_version
-        if data_container.save_in_chunks == 0:
+        if return_status == "success":
+            data_container.save(params["filename"], average_count=int(params["averages"]))
+        else:
             data_container.save(params["filename"])
-        data_container.save(params["filename"])
         with open(params["filename"] + ".yaml", "w", encoding="utf-8") as file:
             yaml.dump(params, file)
         del data_container

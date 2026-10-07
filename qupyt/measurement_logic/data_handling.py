@@ -19,6 +19,8 @@ class Data(ConfigurationMixin):
         self.save_in_chunks: int = 0
         self.reference_channels: int = 2
         self.data: np.ndarray
+        self.chunk_data: np.ndarray
+        self.chunk_save_index: int = 0
         self.filename: tuple[str, str]
         self.attribute_map = {
             "dynamic_steps": self._set_number_dynamic_steps,
@@ -124,45 +126,77 @@ class Data(ConfigurationMixin):
             f"Created data array of shape {data_array_dim}".ljust(65, ".") + "[done]"
         )
         self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
+        self.chunk_data = np.zeros_like(self.data)
 
     def update_data(self, data: np.ndarray, ps_step: int, dynamic_step: int, avg_step: int) -> None:
-        if self.save_in_chunks != 0 and avg_step % self.save_in_chunks == 0:
-            self._update_data_full(data, ps_step, dynamic_step)
-            self.save(self.filename[0] + "_ch-" +f"{avg_step}_" + self.filename[1])
-            self.create_array()
-            return None
         if self.live_compression:
             self._update_data_compressed(data, ps_step, dynamic_step)
+            if self.save_in_chunks != 0:
+                self._update_data_compressed(data, ps_step, dynamic_step, target_array=self.chunk_data)
         else:
             self._update_data_full(data, ps_step, dynamic_step)
+            if self.save_in_chunks != 0:
+                self._update_data_full(data, ps_step, dynamic_step, target_array=self.chunk_data)
+        if (
+            self.save_in_chunks != 0
+            and (avg_step + 1) % self.save_in_chunks == 0
+        ):
+            self.save(
+                self.filename[0] + "_ch-" + f"{self.chunk_save_index}_" + self.filename[1],
+                source_data=self.chunk_data,
+                average_count=self.save_in_chunks,
+            )
+            self.chunk_save_index += 1
+            self.chunk_data.fill(0)
 
-    def _update_data_full(self, data: np.ndarray, ps_step: int, dynamic_step: int) -> None:
+    def _update_data_full(
+        self,
+        data: np.ndarray,
+        ps_step: int,
+        dynamic_step: int,
+        target_array: np.ndarray | None = None,
+    ) -> None:
+        if target_array is None:
+            target_array = self.data
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
-                self.data[i, ps_step, dynamic_step] += data[i :: self.reference_channels].sum(
+                target_array[i, ps_step, dynamic_step] += data[i :: self.reference_channels].sum(
                     axis=0
                 )
             # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
-                self.data[i, ps_step, dynamic_step] += data[i :: self.reference_channels]
+                target_array[i, ps_step, dynamic_step] += data[i :: self.reference_channels]
                 # np.save("C:/Users/ge54vec/.qupyt/data", self.data)
 
-    def _update_data_compressed(self, data: np.ndarray, ps_step: int, dynamic_step: int) -> None:
+    def _update_data_compressed(
+        self,
+        data: np.ndarray,
+        ps_step: int,
+        dynamic_step: int,
+        target_array: np.ndarray | None = None,
+    ) -> None:
+        if target_array is None:
+            target_array = self.data
         if self.averaging_mode == "sum":
             for i in range(self.reference_channels):
                 ndim = data.ndim
-                self.data[i, ps_step, dynamic_step] += (
+                target_array[i, ps_step, dynamic_step] += (
                     data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).sum(axis=0)
                 )
         elif self.averaging_mode == "spread":
             for i in range(self.reference_channels):
                 ndim = data.ndim
-                self.data[i, ps_step, dynamic_step] += (
+                target_array[i, ps_step, dynamic_step] += (
                     data[i :: self.reference_channels].mean(axis=tuple(range(1, ndim))).reshape(-1, 1)
                 )
 
-    def save(self, filename: str) -> None:
+    def save(
+        self,
+        filename: str,
+        source_data: np.ndarray | None = None,
+        average_count: int | None = None,
+    ) -> None:
         """
         Save data (without metadata) to a .npy file.
         :param filename: Name of the resulting data file.
@@ -170,4 +204,9 @@ class Data(ConfigurationMixin):
          main measurement loop.
         :type filename: str
         """
-        np.save(filename, self.data)
+        if source_data is None:
+            source_data = self.data
+        if average_count is not None and average_count > 0:
+            np.save(filename, source_data / average_count)
+            return None
+        np.save(filename, source_data)

@@ -18,6 +18,8 @@ sensor:
 synchroniser:
   # Adjust the device identifier
   type: 'MockSynchroniser'
+  # Set to false to reuse a sequence already loaded on the synchroniser.
+  upload: true
   config:
     # Enter the VISA adress of your device.
     address: 'TCPIP::some::INSTR'

@@ -129,10 +129,12 @@ class VisaObject:
                 "GetAmpl1": "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude?",
                 "SetFreq1": "SOURce1:FREQuency:FIXed ",
                 "GetFreq1": "SOURce1:FREQuency:FIXed?",
-                "SetPhase1": "SOURce1:PHASe ",
+                "SetPhase1": "SOURce1:PHASe:ADJust ",
+                "SetBurstMode1": "SOURce1:BURSt:MODE ",
+                "SetBurstState1": "SOURce1:BURSt:STATe ",
                 "SetAmpl2": "SOURce2:VOLTage:LEVel:IMMediate:AMPLitude ",
                 "SetFreq2": "SOURce2:FREQuency:FIXed ",
-                "SetPhase2": "SOURce2:PHASe ",
+                "SetPhase2": "SOURce2:PHASe:ADJust ",
                 # The Tek AFG does not implement an OPC.
                 # We therefore skip the waiting time and
                 # Query impedance which will alwasy return
@@ -146,10 +148,23 @@ class VisaObject:
         ready to execute the next command.
         Pauses execution until the device is ready.
         """
-        opc_val = 0
-        while opc_val == 0:
+        last_response = ""
+        for attempt in range(3):
             opc = self.instance.query(self.command["OPC"])
-            opc_val = int(opc)
+            last_response = opc
+            try:
+                if float(opc.strip()) != 0:
+                    return
+            except ValueError:
+                logging.warning(
+                    f"{self.s_type} returned invalid OPC response {opc!r}; "
+                    f"retrying ({attempt + 1}/3)"
+                )
+            sleep(0.1)
+        raise TimeoutError(
+            f"{self.s_type} did not return a valid OPC response. "
+            f"Last response was {last_response!r}."
+        )
 
     def close(self) -> None:
         if self.s_type == "TekAWG":

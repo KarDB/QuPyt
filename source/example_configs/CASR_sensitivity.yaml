@@ -37,11 +37,13 @@ static_devices:
     # Adjust the device identifier.
     device_type: 'Mock'
     config:
-      # in case the source "Mock" is replaced with "Rigol" it is possible
-      # to select "gateing", otherwise it has to be set at the instrument
-      # by hand.
+      # in case the source "Mock" is replaced with "Rigol" or "TekAFG" it is
+      # possible to select "gating", otherwise it has to be set at the
+      # instrument by hand. TekAFG burst mode is only available on channel_1.
       # gating:
-      # - ['channel_2', "gate"]
+      # - ['channel_1', "gate"]
+      # phase:
+      # - ['channel_1', 0]
       amplitude:
       - ['channel_2', 0.05]
       frequency:
