@@ -338,7 +338,7 @@ class ComplexSequence:
                 )
 
             return
-        
+
         self.append_pulse(
             self.channel,
             start,
