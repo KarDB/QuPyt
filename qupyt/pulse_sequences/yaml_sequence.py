@@ -73,7 +73,7 @@ class ComplexSequence:
         blocks: list[str] = ["block_0"],
         global_phase: float = 0,
         ts_start: float = 1,
-        ts_end: float = 1
+        ts_end: float = 1,
     ) -> None:
         self.sequence = sequence_instance
         self.channel: str = channel
@@ -88,6 +88,14 @@ class ComplexSequence:
         self.phases: list[float] = []
         self.ts_start: float = ts_start
         self.ts_end: float = ts_end
+
+        # Optional explicit pulse schedule for DROID60 and DIRAC2.
+        # Start times are relative to the beginning of the full sequence.
+        self.pulse_starts: Optional[list[float]] = None
+        self.pulse_durations: list[float] = [] # Duration varies for DROID and DIRAC2
+
+        # Total duration, including preparation and readout pulses.
+        self.duration: float = 0.0 # Total sequence duration for scheduling the experiment
 
     def append_pulse(
         self,
@@ -129,6 +137,12 @@ class ComplexSequence:
             Here N is the number of pi-pulses per block. It is also used to
             calculate the phases in the UD sequence.
         """
+
+        # Clear any previously prepared sequence.
+        self.pulse_starts = None
+        self.pulse_durations = []
+        self.phases = []
+        self.duration = 0.0
 
         match = re.fullmatch(r"([A-Za-z]+)(\d+)", seq_type)
         if not match:
@@ -172,6 +186,18 @@ class ComplexSequence:
                 for k in range(N):
                     phase_block.append(((k * (k + 1)) / 2 * phi_ud) % (2 * np.pi))
 
+        elif seq_name in ("DROID", "DIRAC"):
+            if (seq_name, N) not in (("DROID", 60), ("DIRAC", 2)): # N = sequence number
+                raise ValueError(f"Unsupported sequence: {seq_type}")
+
+            self._prepare_droid_dirac(
+                seq_type=f"{seq_name}{N}",
+                n=n,
+                readout_phase=readout_phase,
+            )
+            return # Does not go into the other duration calcuation
+
+
         else:
             raise ValueError(f"Unsupported sequence family: {seq_type}")
 
@@ -179,13 +205,140 @@ class ComplexSequence:
             raise RuntimeError(f"phase_block was not initialized.")
 
         self.phases = initial_phase + list(phase_block) * n + final_phase
+        number_inner_pulses = len(self.phases) - 2
+
+        self.duration = ((self.ts_start + 2 * (number_inner_pulses - 1)+ self.ts_end) * self.tau + 2 * self.pi_half_pulse_dur)
         return None
+
+    def _prepare_droid_dirac(
+        self,
+        seq_type: str,
+        n: int,
+        readout_phase: float,
+    ) -> None:
+        """Prepare an explicitly timed sequence, including outer pi/2 pulses."""
+        if not isinstance(n, (int, np.integer)) or n < 1:
+            raise ValueError("n must be a positive integer.")
+
+        tau = self.tau
+        pi = self.pi_pulse_dur
+        pi_half = self.pi_half_pulse_dur
+
+        if any(
+            not np.isfinite(value) or value <= 0
+            for value in (tau, pi, pi_half)
+        ):
+            raise ValueError("tau and pulse durations must be positive and finite.")
+
+        if not all(
+            np.isfinite(value)
+            for value in (self.ts_start, self.ts_end, readout_phase)
+        ):
+            raise ValueError("Boundary shifts and readout phase must be finite.")
+
+
+        # Reuse the existing definition without writing any pulses.
+        definition = ArbitrarySequenceWriter(
+            channel=self.channel,
+            N=1,
+            pi=pi,
+            pi_half=pi_half,
+            tau=tau,
+            res_mix_freq=self.mixing_freq,
+        )
+        definition.prepare_sequence(seq_type)
+
+        block_phases = definition.params["phases"]
+        block_durations = definition.params["durations"]
+        block_delays = definition.params["delays"]
+
+        # Preserve the existing arbitrary writer's initial timing offset.
+        initial_offset = pi
+
+        if not (
+            len(block_phases)
+            == len(block_durations)
+            == len(block_delays) - 1
+        ):
+            raise ValueError("Inconsistent pulse-block definition.")
+
+        # Preparation pulse.
+        starts = [0.0]
+        durations = [pi_half]
+        phases = [0.0]
+
+        # Boundary convention:
+        # ts_start=ts_end=1 preserves the default train timing.
+        # Each extra unit adds tau at the corresponding boundary.
+        cursor = initial_offset + (self.ts_start - 1) * tau
+
+        for _ in range(n):
+            cursor += block_delays[0]
+
+            for k, phase in enumerate(block_phases):
+                starts.append(cursor)
+                durations.append(block_durations[k])
+                phases.append(phase)
+
+                # These are start-to-start increments, NOT empty gaps.
+                cursor += block_delays[k + 1]
+
+        # Readout placement: half-pulse duration after the train cursor,
+        # plus the requested end-boundary shift.
+        readout_start = (
+            cursor + pi_half + (self.ts_end - 1) * tau
+        )
+        starts.append(readout_start)
+        durations.append(pi_half)
+        phases.append(readout_phase)
+
+        # Validate before publishing the schedule to the writer.
+        for k in range(1, len(starts)):
+            previous_end = starts[k - 1] + durations[k - 1]
+            if starts[k] < previous_end - 1e-12:
+                raise ValueError(
+                    "Pulses overlap. Check tau, pulse durations, "
+                    "ts_start and ts_end."
+                )
+
+        self.pulse_starts = starts
+        self.pulse_durations = durations
+        self.phases = phases
+        self.duration = starts[-1] + durations[-1]
+
 
 
     def write_sequence(self, start: float = 0) -> None:
         """Iterates over phases attibute and appends
         pulses to sequece instance.
         """
+        if self.pulse_starts is not None: # pulse_starts contains a list: write each pulse with its specified start, duration and phase.
+            if not (
+                len(self.pulse_starts)
+                == len(self.pulse_durations)
+                == len(self.phases)
+            ):
+                raise ValueError(
+                    "Pulse starts, durations and phases must have equal lengths."
+                )
+
+            for pulse_start, duration, phase in zip(
+                self.pulse_starts,
+                self.pulse_durations,
+                self.phases,
+            ):
+                self.sequence.add_pulse(
+                    self.channel,
+                    start=start + pulse_start,
+                    duration=duration,
+                    amplitude=self.amplitude,
+                    frequency=self.mixing_freq,
+                    phase=phase + self.global_phase,
+                    sequence_blocks=self.blocks,
+                )
+
+            return
+
         self.append_pulse(
             self.channel,
             start,
@@ -254,7 +407,7 @@ class ArbitrarySequenceWriter:
             and num_pulses == len(self.params["mixing_freqs"])
         ), "Uncompatible list lengths."
 
-        if self.seq_type in ("DROID60", "LG4"):
+        if self.seq_type in ("DROID60", "DIRAC2", "LG4"):
             running_start += self.pi
 
         # Write sequence
@@ -279,7 +432,7 @@ class ArbitrarySequenceWriter:
         self, seq_type: str, lock_scaling: float = 1.0
     ) -> Optional[float]:
         self.seq_type = seq_type
-        supported_sequence_types = ["XY8", "DROID60", "LG4", "CPMG"]
+        supported_sequence_types = ["XY8", "DROID60", "DIRAC2", "LG4", "CPMG"]
         if seq_type not in supported_sequence_types:
             raise ValueError(
                 "Sequence type {} not supported.\
@@ -390,6 +543,66 @@ class ArbitrarySequenceWriter:
                 -np.pi / 2,
             ]
             return sum(self.params["delays"]) * self.N + self.pi + self.pi_half
+
+        elif seq_type == "DIRAC2":
+            pi = self.pi
+            pi_half = self.pi_half
+            tau = self.tau
+
+            if not np.isclose(pi, 2 * pi_half, rtol=1e-9, atol=1e-12):
+                raise ValueError(
+                    "This DIRAC2 timing requires pi == 2 * pi_half."
+                )
+
+            # arXiv:2303.07374v1.
+            # Each row: pi pulse, then two adjacent pi/2 pulses.
+            # Phase units: pi/2; 0=+X, 1=+Y, 2=-X, -1=-Y.
+            phase_triplets = [
+                (-1, -1,  2),
+                ( 1,  1,  2),
+                ( 1,  1,  2),
+                ( 1,  1,  0),
+                (-1, -1,  2),
+                (-1, -1,  2),
+                (-1, -1,  0),
+                (-1, -1,  2),
+                ( 1,  1,  0),
+                (-1, -1,  0),
+                (-1, -1,  0),
+                ( 1,  1, -1),
+                (-1,  2,  1),
+                ( 1,  2,  1),
+                ( 1,  2, -1),
+                (-1,  0,  1),
+                ( 1,  2,  1),
+                ( 1,  0,  1),
+                ( 1,  0,  1),
+                ( 1,  2, -1),
+                (-1,  0, -1),
+                (-1,  0, -1),
+                (-1,  0,  1),
+                ( 1,  0,  2),
+            ]
+
+            self.params["phases"] = [
+                phase * np.pi / 2
+                for triplet in phase_triplets
+                for phase in triplet
+            ]
+            self.params["durations"] = [pi, pi_half, pi_half] * 24
+
+            # Initial delay, followed by cursor increments after each pulse.
+            self.params["delays"] = (
+                [2 * tau - pi, 2 * tau, pi_half]
+                + [2 * tau - pi_half, 2 * tau, pi_half] * 23
+                + [pi_half]
+            )
+
+            self.params["amplitudes"] = [1.0] * 72
+            self.params["mixing_freqs"] = [self.res_mix_freq] * 72
+
+            # Same return-value convention as the existing DROID60 branch.
+            return sum(self.params["delays"]) * self.N + pi + pi_half
 
         elif seq_type == "LG4":
             alpha = 55 * np.pi / 180
