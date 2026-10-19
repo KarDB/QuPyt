@@ -9,6 +9,7 @@ from typing import Any, cast
 
 import numpy as np
 import yaml
+from numpy.typing import NDArray
 from termcolor import colored
 
 from qupyt.set_up import get_seq_dir
@@ -315,6 +316,7 @@ class PulseSequence:
             raise ValueError(
                 f"Pulse interval [{start}, {start + duration}) exceeds sequence bounds [0, {self.num_points})"
             )
+        fr: NDArray[np.float64] | int
         if freq is not None:
             frequency, phase = freq
             frequency *= 10**-6

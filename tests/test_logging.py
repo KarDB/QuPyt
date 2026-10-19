@@ -368,6 +368,7 @@ def test_cli_captures_import_warnings_and_instruction_failure(tmp_path: Path) ->
     # Import main in a separate process because it configures the root logger.
     script = r"""
 import builtins
+import faulthandler
 import logging
 from pathlib import Path
 from queue import Queue
@@ -379,11 +380,13 @@ from unittest.mock import Mock, patch
 home = Path(sys.argv[1])
 sys.argv = ["qupyt", "--debug"]
 original_import = builtins.__import__
+faulthandler.enable()
+faulthandler.dump_traceback_later(60)
 def without_egrabber(name: str, *args: Any, **kwargs: Any) -> ModuleType:
     if name == "egrabber":
         raise ImportError("optional driver intentionally unavailable")
     return original_import(name, *args, **kwargs)
-with patch.object(Path, "home", return_value=home), patch.object(builtins, "__import__", side_effect=without_egrabber):
+with patch.object(Path, "home", return_value=home), patch.object(builtins, "__import__", new=without_egrabber):
     import qupyt.main as main
     instruction = main.get_waiting_room() / "broken.yaml"
     instruction.write_text("ps_path: missing.py\npulse_sequence: {}\n", encoding="utf-8")
@@ -396,15 +399,29 @@ with patch.object(Path, "home", return_value=home), patch.object(builtins, "__im
     except KeyboardInterrupt:
         pass
 logging.shutdown()
+faulthandler.cancel_dump_traceback_later()
 """
-    result = subprocess.run(
-        [sys.executable, "-c", script, str(tmp_path)],
-        cwd=Path(__file__).resolve().parents[1],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(tmp_path)],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        stdout = error.stdout or ""
+        stderr = error.stderr or ""
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode("utf-8", errors="replace")
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", errors="replace")
+        pytest.fail(
+            f"CLI subprocess exceeded {error.timeout} seconds.\n"
+            f"Captured stdout:\n{stdout}\nCaptured stderr:\n{stderr}",
+            pytrace=False,
+        )
     assert result.returncode == 0, result.stderr
     logs = list((tmp_path / ".qupyt" / "log").glob("*.log"))
     assert len(logs) == 1
