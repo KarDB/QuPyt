@@ -1,53 +1,69 @@
-"""
-Create one Class to handle all connections through the VISA library.
-For different microwave sources or visa devices, the commands to set e.g.
-an output power are unified by storing the device speicif commands in a
-dictionary for each device.
+"""Manage VISA connections and device-specific signal-source commands.
+
+Store device commands in a common dictionary so signal-source operations share
+a consistent interface.
 """
 
-from time import sleep
+from __future__ import annotations
+
 import logging
-from typing import Dict
+from time import sleep
+from typing import Any
+
 import pyvisa
+
 from qupyt.mixins import ConfigurationError
+from qupyt.utils.errors import cleanup_after_error
 
 
 class VisaObject:
-    """
-    Visa class acting as parent for all devices intended
-    to connect via the VISA protocol.
-    """
+    """Base connection for devices controlled through the VISA protocol."""
+
+    # PyVISA chooses a backend-specific resource class at runtime.
+    instance: Any
 
     def __init__(self, handle: str, s_type: str) -> None:
-        """
-        handle: visa adress of signal source
-        s_type: source type (SRS, RS)...
+        """Connect to a supported VISA device and load its command set.
+
+        Parameters
+        ----------
+        handle : str
+            VISA resource address of the signal source.
+        s_type : str
+            Device type: SRS, SMA, SMB, Rigol, TekAWG, or TekAFG.
+
+        Raises
+        ------
+        ConfigurationError
+            If the device type is unsupported.
         """
         self.known_s_types = ["SRS", "SMA", "SMB", "Rigol", "TekAWG", "TekAFG"]
         self.handle = handle
         self.s_type = s_type
+        self.instance = None
         if self.s_type not in self.known_s_types:
             raise ConfigurationError(
                 "the VISA device type", self.s_type, self.known_s_types
             )
-        self.command: Dict[str, str]
+        self.command: dict[str, str]
         self._get_instructions()
         try:
             resource_manager = pyvisa.ResourceManager()
             self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
             logging.info(
-                f"Opening {s_type} at adress {handle}".ljust(
-                    65, ".") + "[done]"
+                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[done]"
             )
-        except Exception as exc:
+        except BaseException:
             logging.exception(
-                f"Opening {s_type} at adress {handle}".ljust(
-                    65, ".") + "[failed]"
+                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[failed]"
             )
-            resource_manager.close()
-            resource_manager.visalib._registry.clear()
-            raise exc
+            # Resource managers are shared; closing one also closes other devices.
+            if self.instance is not None:
+                cleanup_after_error(
+                    lambda: VisaObject.close(self), f"VISA setup cleanup at {handle}"
+                )
+            raise
 
     def __repr__(self) -> str:
         return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
@@ -56,10 +72,7 @@ class VisaObject:
         return f"VisaObject(handle: {self.handle}, s_type: {self.s_type})"
 
     def _get_instructions(self) -> None:
-        """
-        Get set of instructions depending
-        on type of signal source.
-        """
+        """Select the command set for the configured signal-source type."""
         if self.s_type == "SRS":
             self.command = {
                 "SetAmpl1": "AMPR ",
@@ -143,43 +156,67 @@ class VisaObject:
             }
 
     def opc_wait(self) -> None:
-        """
-        Check if the device has finished all tasks and is
-        ready to execute the next command.
-        Pauses execution until the device is ready.
-        """
+        """Wait until the device reports that its pending operations are complete."""
         last_response = ""
+        logging.debug(
+            "Waiting for %s at %s to complete pending operations",
+            self.s_type,
+            self.handle,
+        )
         for attempt in range(3):
-            opc = self.instance.query(self.command["OPC"])
+            try:
+                opc = self.instance.query(self.command["OPC"])
+            except Exception:
+                logging.exception(
+                    "Failed to query OPC for %s at %s", self.s_type, self.handle
+                )
+                raise
             last_response = opc
             try:
                 if float(opc.strip()) != 0:
+                    logging.debug(
+                        "%s at %s completed pending operations",
+                        self.s_type,
+                        self.handle,
+                    )
                     return
             except ValueError:
                 logging.warning(
-                    f"{self.s_type} returned invalid OPC response {opc!r}; "
-                    f"retrying ({attempt + 1}/3)"
+                    "%s returned invalid OPC response %r; retrying (%s/3)",
+                    self.s_type,
+                    opc,
+                    attempt + 1,
                 )
             sleep(0.1)
+        logging.error(
+            "%s at %s timed out waiting for OPC; last_response=%r",
+            self.s_type,
+            self.handle,
+            last_response,
+        )
         raise TimeoutError(
             f"{self.s_type} did not return a valid OPC response. "
             f"Last response was {last_response!r}."
         )
 
     def close(self) -> None:
+        if getattr(self, "instance", None) is None:
+            return
         if self.s_type == "TekAWG":
-            print("Sleeping for 5 seconds in close to prevent TCPIP issues:")
+            logging.debug(
+                "Waiting 5 seconds before closing TekAWG at %s to prevent TCP/IP issues",
+                self.handle,
+            )
             sleep(5)
         try:
             self.instance.close()
-            self.instance.visalib._registry.clear()
+            self.instance = None
             logging.info(
                 f"Closing {self.s_type} at adress {self.handle}".ljust(65, ".")
                 + "[done]"
             )
         except Exception:
             logging.exception(
-                "Closing {self.s_type} at adress {self.handle} failed".ljust(
-                    65, ".")
-                + "[failed]"
+                "Closing %s at address %s failed", self.s_type, self.handle
             )
+            raise

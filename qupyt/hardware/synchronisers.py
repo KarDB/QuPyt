@@ -1,52 +1,70 @@
 # pylint: disable=logging-format-interpolation
 # pylint: disable=logging-not-lazy
-"""
-Handle AWG input and output.
-"""
+"""Handle AWG input and output."""
 
 from __future__ import annotations
+
 import logging
 import pickle
-from time import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple, List, Union
 from pathlib import Path
-import sys
-import ctypes as ct
+from time import monotonic, sleep, time
+from typing import Any, cast
 
-import yaml
 import matplotlib.pyplot as plt
 import numpy as np
-from tqdm import tqdm
+import yaml
+from numpy.typing import NDArray
+from pulsestreamer import (
+    OutputState,
+    PulseStreamer,
+    Sequence,
+    TriggerRearm,
+    TriggerStart,
+    findPulseStreamers,
+)
 from termcolor import colored
+from tqdm import tqdm
 
-from qupyt.set_up import get_seq_dir
+from qupyt import set_up
+from qupyt.hardware.awg_sequence import (
+    DEFAULT_MAX_SEQUENCE_STEPS,
+    DEFAULT_MAX_STEP_REPEAT,
+    build_logical_awg_steps,
+    get_awg_sequence_options,
+    infer_child_repetitions,
+    validate_awg_limit,
+    validate_awg_metadata_lengths,
+    validate_awg_repeat_count,
+    validate_repeated_child_region,
+)
+from qupyt.hardware.visa_handler import VisaObject
+from qupyt.mixins import ConfigurationMixin, PulseSequenceError, UpdateConfigurationType
 from qupyt.pulse_sequences.SequenceDesigner import (
+    PulseBlasterSequence,
     PulseSequenceYaml,
     parse_awg_flag,
-    PulseBlasterSequence,
+    validate_sequence_instructions,
 )
-from pulsestreamer import PulseStreamer
-from pulsestreamer import findPulseStreamers
-from pulsestreamer import TriggerStart, TriggerRearm
-from pulsestreamer import Sequence, OutputState
-from qupyt.hardware.visa_handler import VisaObject
-from qupyt import set_up
-from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType, PulseSequenceError
+from qupyt.set_up import get_seq_dir
+from qupyt.utils.errors import cleanup_after_error, cleanup_on_exit
 
 try:
-    import qupyt.hardware.wrappers.spinapi_adapted as spapi
-except (ImportError, NameError):
+    import qupyt.hardware.wrappers.spinapi_adapted as _spinapi
+
+    spapi: Any = _spinapi
+except ImportError:
     spapi = None
     logging.warning(
         "Could not load spinapi library".ljust(65, ".")
-        + "[failed]\nIf you are not using a Pulse Streamer you do not need this!"
+        + "[failed]\nIf you are not using a PulseBlaster you do not need this!"
     )
 
 
 def _validate_synchroniser_sequence_mode(
-    sequence_instructions: Dict[str, Any],
+    sequence_instructions: dict[str, Any],
     device_type: str,
     supported_modes: tuple[str, ...],
 ) -> str:
@@ -57,7 +75,6 @@ def _validate_synchroniser_sequence_mode(
     reject unsupported modes explicitly so a Tek-only YAML option is not
     silently ignored.
     """
-
     mode = str(sequence_instructions.get("awg_sequence_mode", "flat"))
     if mode not in supported_modes:
         message = (
@@ -66,170 +83,136 @@ def _validate_synchroniser_sequence_mode(
         )
         logging.error(message)
         raise ValueError(message)
-    logging.info(
-        "%s accepted awg_sequence_mode=%s", device_type, mode
-    )
+    logging.info("%s accepted awg_sequence_mode=%s", device_type, mode)
     return mode
 
 
-def _validate_awg_limit(value: Any, key: str, device_type: str) -> int:
-    """Validate an AWG hardware limit from synchroniser.config.
-
-    Defaults are assigned in the synchroniser __init__; this helper is only
-    called when the YAML provides an override for another AWG model.
-    """
-
-    try:
-        limit = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{key} must be an integer AWG limit for {device_type}, got {value!r}."
-        ) from exc
-    if limit <= 0:
-        raise ValueError(
-            f"{key} must be a positive AWG limit for {device_type}, got {limit}."
-        )
-    logging.info("%s configured %s=%s", device_type, key, limit)
-    return limit
-
-
 class SynchroniserFactory:
-    """
-    Synchroniser Factory responsible for creating and returning an instance of the
-    requested synchroniser. All synchronisers created from this factory will adhere to
-    an interface specified in :class:`Synchroniser`. This ensures, that all synchronisers
-    can be used interchangeably in the measurement code.
+    """Factory for devices that implement the common Synchroniser interface.
 
-    Methods:
-        - :meth:`create_synchroniser`: This method creates the appropriate synchroniser
-          instance and configures it. **Note for non programmers**: create_synchroniser
-          is a static method. This means you don't have to create a class
-          instance to call it.
+    Call create_synchroniser directly without constructing a factory instance.
 
-    Example:
-        >>> cam = SynchroniserFactory.create_synchroniser('TekAWG', {'address': 'TCPIP::ipaddress::INSTR'}, {'LASER': 1, 'READ': 2})
+    Examples
+    --------
+    >>> sync = SynchroniserFactory.create_synchroniser(
+    ...     "MockSynchroniser", {}, {"LASER": 1, "READ": 2}
+    ... )
     """
 
     @staticmethod
     def create_synchroniser(
-        sync_type: str, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+        sync_type: str, configuration: dict[str, Any], channel_mapping: dict[str, Any]
     ) -> Synchroniser:
+        """Create and configure the requested synchroniser.
+
+        Parameters
+        ----------
+        sync_type : str
+            Synchroniser model: SwabInstPS, TekAWG, MockSynchroniser, or PulseBlaster.
+        configuration : dict[str, Any]
+            Parameters supported by the selected synchroniser.
+        channel_mapping : dict[str, Any]
+            Mapping from logical channel names to device ports.
+
+        Returns
+        -------
+        Synchroniser
+            Configured instance of the requested synchroniser.
+
+        Raises
+        ------
+        ValueError
+            If the synchroniser type is unknown.
         """
-        :param sync_type: Synchroniser model identifier e.g. 'TekAWG'.
-         Current models include: SwabInstPS, TekAWG, MockSynchroniser, PulseBlaster.
-        :type sync_type: string
-        :param configuration: configuration parameters for the synchroniser.
-         Provided parameters need to match those available for the synchroniser.
-         Please check the specific synchronisers for more information.
-        :type configuration: dict
-        :param channel_mapping: Matches channel descriptors to ports on the device.
-        :type channel_mapping: dict
-        :return: Instance of the requested synchroniser.
-        :rtype: Synchroniser
-        :raises ValueError:
-        """
-        if sync_type == "SwabInstPS":
-            return PStreamer(configuration, channel_mapping)
-        if sync_type == "TekAWG":
-            return AWGenerator(configuration, channel_mapping)
-        if sync_type == "MockSynchroniser":
-            return MockGenerator(configuration, channel_mapping)
-        if sync_type == "PulseBlaster":
-            return PulseBlaster(configuration, channel_mapping)
-        raise ValueError(f"Unknown synchroniser type {sync_type}")
+        logging.info("Creating synchroniser type=%s", sync_type)
+        try:
+            synchroniser_types: dict[
+                str, Callable[[dict[str, Any], dict[str, Any]], Synchroniser]
+            ] = {
+                "SwabInstPS": PStreamer,
+                "TekAWG": AWGenerator,
+                "MockSynchroniser": MockGenerator,
+                "PulseBlaster": PulseBlaster,
+            }
+            if sync_type not in synchroniser_types:
+                raise ValueError(f"Unknown synchroniser type {sync_type}")
+            synchroniser = synchroniser_types[sync_type](configuration, channel_mapping)
+        except Exception:
+            logging.exception("Could not create synchroniser type=%s", sync_type)
+            raise
+        logging.info("Created synchroniser type=%s", sync_type)
+        return synchroniser
 
 
 class Synchroniser(ABC, ConfigurationMixin):
-    """Abstract Base Class for all synchronisers. All synchronisers implemented in QuPyt
-    should inherit from this class. This helps ensure compliance with the
-    synchroniser API.
+    """Abstract interface for coordinating a measurement through a pulse sequence.
 
-    Synchronisers handle the interplay of all other devices during
-    one measurement step. To do this they need a pulse sequence they are
-    supposed to play during the measurement. This pulse sequence is read
-    from a yaml file from its default location
-    (~/.qupyt/sequences/sequence_0.yaml). The specifics of how a pulse sequence
-    is played depends on the synchroniser (Tektronix AWG, PulseStreamer, ...)
-    and have to be dealt with in the implementation of this class for the
-    synchroniser in question.
+    Concrete devices parse and play the pulse sequence using their own hardware
+    instructions. The default sequence file is ~/.qupyt/sequences/sequence_0.yaml.
 
-    **Note**: The attributes listed below are never explicitly set by the user.
-    Please use the ``configuration`` constructor argument to configure the sensor.
+    Attributes
+    ----------
+    address : str
+        Device address, supplied through the concrete synchroniser's configuration.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
-
-          Possible configuration values:
-            - **address** (str): Address used to open a connection to the device.
-              For VISA devices this could for example be: "TCPIP::<idaddress>::INSTR".
-
-          Concrete sensor classes may have additional configuration values.
+    Notes
+    -----
+    Configure concrete synchronisers through their configuration dictionaries.
+    VISA addresses can use a form such as TCPIP::<ipaddress>::INSTR; available
+    settings depend on the selected device.
     """
 
     attribute_map: UpdateConfigurationType
 
     def __init__(self) -> None:
         self.address: str
-        self.attribute_map = {
-            "address": self._set_address,
-        }
+        self.attribute_map = {"address": self._set_address}
 
     def _set_address(self, address: str) -> None:
         self.address = address
 
     @abstractmethod
-    def load_sequence(self, ps_yaml_file: Path) -> None:
-        """
-        Load the YAML formatted pulse sequence from its default location
-        (see above), and parse it to the specifics of the synchroniser. Finally
-        it uploads the instructions to the hardware.
+    def load_sequence(self, ps_yaml_file: str | Path) -> None:
+        """Read, compile, and upload a YAML pulse sequence.
+
+        Parameters
+        ----------
+        ps_yaml_file : str or pathlib.Path
+            Pulse-sequence file to load. Concrete devices resolve relative names in
+            the default sequence directory.
         """
 
     @abstractmethod
     def run(self) -> None:
-        """
-        Activates all output channels on the devices and starts playing.
-        This command does not yet start the measurement sequence. Sometimes
-        this step is needed to avoid slow ramp up times and undesired pulses
-        some synchronisers emit when they first start.
-        For some sychronisers this step is unecessary. However, it still needs
-        to be implemented for compatibility reasons.
+        """Enable the outputs and prepare playback.
+
+        Some devices need this step to avoid slow output ramp-up or startup pulses.
+        Concrete devices define whether run also plays the sequence or waits for a
+        subsequent trigger.
         """
 
     @abstractmethod
     def open(self) -> None:
-        """
-        Establishes the connection to the :class:`Synchroniser` and
-        runs configuration.
-        """
+        """Establish the synchroniser connection and apply its configuration."""
 
     @abstractmethod
     def trigger(self) -> None:
-        """
-        Sends a command to the synchroniser to play the measurement sequence
-        once. Note that this may include however many readouts or repetitions
-        as desired per measurement burst.
+        """Start one playback of the measurement sequence.
+
+        One sequence can contain multiple readouts or repeated measurement blocks.
         """
 
     @abstractmethod
     def stop(self) -> None:
-        """
-        Deactivates all outputs of the synchroniser. An stops the
-        execution of the pulse sequence.
-        """
+        """Stop pulse-sequence playback and deactivate the outputs."""
 
     @abstractmethod
     def close(self) -> None:
-        """
-        Closes the connection to the synchroniser.
-        """
+        """Close the synchroniser connection."""
 
 
 class AWGenerator(VisaObject, Synchroniser):
-    """
-    Synchroniser implementation for Tektronix AWGs.
+    """Synchroniser implementation for Tektronix AWGs.
 
     Flat mode preserves the existing Tek AWG behavior. repeated_child mode uses
     Tek AWG70000-series sequence-asset SCPI and was tested on AWG70001B.
@@ -248,7 +231,7 @@ class AWGenerator(VisaObject, Synchroniser):
         flags: tuple[str, ...]
 
     def __init__(
-        self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+        self, configuration: dict[str, Any], channel_mapping: dict[str, Any]
     ) -> None:
         self.device_type: str = "TekAWG"
         self.samprate: float = 5e9
@@ -257,31 +240,36 @@ class AWGenerator(VisaObject, Synchroniser):
 
         self.wavenames: list[str]
         self.seqrepeats: list[int]
-        self.waveform_block: np.ndarray
-        self.sequence_options: Dict[str, Any] = {}
+        self.waveform_block: NDArray[Any]
+        self.sequence_options: dict[str, Any] = {}
         self.analog_amplitude: float = 1.0
         self.marker_amplitude: float = 1.75
         self.dac_resolution: int = 12
         self.channels: list[int] = [1, 2]
         self.marker_channels: list[int] = [1, 2, 3, 4]
-        self.awg_max_sequence_steps: int = 16_384
-        self.awg_max_step_repeat: int = 1_048_576
+        self.awg_max_sequence_steps: int = DEFAULT_MAX_SEQUENCE_STEPS
+        self.awg_max_step_repeat: int = DEFAULT_MAX_STEP_REPEAT
 
         Synchroniser.__init__(self)
         self.attribute_map["device_type"] = self._set_device_type
         self.attribute_map["sampling_rate"] = self._set_sampling_rate_attribute
         self.attribute_map["channels"] = self._set_channels_attribute
-        self.attribute_map["awg_max_sequence_steps"] = (
-            self._set_awg_max_sequence_steps
-        )
+        self.attribute_map["awg_max_sequence_steps"] = self._set_awg_max_sequence_steps
         self.attribute_map["awg_max_step_repeat"] = self._set_awg_max_step_repeat
         if configuration is not None:
             self._update_from_configuration(configuration)
         VisaObject.__init__(self, self.address, self.device_type)
-        self.instance.timeout = 20000
-        self._limit_channels_to_available_outputs()
+        try:
+            self.instance.timeout = 20000
+            self._limit_channels_to_available_outputs()
+        except BaseException:
+            logging.exception("AWG initialization failed at %s", self.address)
+            cleanup_after_error(
+                lambda: VisaObject.close(self), "AWG initialization cleanup"
+            )
+            raise
 
-    def _extract_flags(self, channel_mapping: Dict[str, Union[int, str]]) -> list[str]:
+    def _extract_flags(self, channel_mapping: dict[str, int | str]) -> list[str]:
         selectors = []
         for value in channel_mapping.values():
             if isinstance(value, int):
@@ -301,25 +289,25 @@ class AWGenerator(VisaObject, Synchroniser):
         self._configure()
 
     def close(self) -> None:
-        """Passing"""
+        """Keep the VISA connection available for reuse between measurements."""
+        logging.debug("AWG cleanup leaves the VISA connection open for reuse")
 
     def run(self) -> None:
         self.instance.write("awgcontrol:run:immediate")
-        logging.info("Turned on AWG output to RUN immediate".ljust(
-            65, ".") + "[done]")
+        logging.info("Turned on AWG output to RUN immediate".ljust(65, ".") + "[done]")
         self.opc_wait()
 
     def stop(self) -> None:
         self.instance.write("awgcontrol:stop:immediate")
-        logging.info("Turned on AWG output to STOP immediate".ljust(
-            65, ".") + "[done]")
+        logging.info("Turned on AWG output to STOP immediate".ljust(65, ".") + "[done]")
         self.opc_wait()
 
     def trigger(self) -> None:
         self.instance.write("trigger:immediate atrigger")
-        logging.info("Sent trigger to AWG".ljust(65, ".") + "[done]")
+        logging.debug("Sent trigger to AWG".ljust(65, ".") + "[done]")
 
-    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
+    def load_sequence(self, ps_yaml_file: str | Path = "sequence_0.yaml") -> None:
+        logging.info("Loading AWG sequence from %s", ps_yaml_file)
         self._limit_channels_to_available_outputs()
         self._validate_flag_channels()
         self.stop()
@@ -327,7 +315,11 @@ class AWGenerator(VisaObject, Synchroniser):
         self._clear_awg()
         self.sequence_options = self._load_awg_sequence_options(ps_yaml_file)
         sequence_translator = PulseSequenceYaml(
-            self.channel_mapping, self.channels, samprate=self.samprate, yaml_file = ps_yaml_file)
+            self.channel_mapping,
+            self.channels,
+            samprate=self.samprate,
+            yaml_file=ps_yaml_file,
+        )
         sequence_translator.translate_yaml_to_numeric_instructions()
         self._load_sequence_block(get_seq_dir() / "sequence.npz")
         self._get_logical_awg_steps()  # Validate cached flag metadata before upload.
@@ -335,10 +327,7 @@ class AWGenerator(VisaObject, Synchroniser):
         self._raise_on_awg_errors("waveform upload")
         self._sequence("autoseq", nongatereps=1)
         self._raise_on_awg_errors("sequencer construction")
-        logging.info(
-            "Loaded and sequenced current pulse sequence".ljust(
-                65, ".") + "[done]"
-        )
+        logging.info("Loaded and sequenced AWG pulse sequence from %s", ps_yaml_file)
         self.opc_wait()
 
     def _configure(self) -> None:
@@ -348,15 +337,19 @@ class AWGenerator(VisaObject, Synchroniser):
             self._set_analog_amplitude(channel, self.analog_amplitude)
             self._set_output_on(channel)
             for marker in self.marker_channels:
-                self._set_marker_amplitude(
-                    channel, marker, self.marker_amplitude)
+                self._set_marker_amplitude(channel, marker, self.marker_amplitude)
         print("\nConfiguring AWG".ljust(65, ".") + colored(" [done]", "green"))
+        logging.info(
+            "Configured AWG at %s: channels=%s, sampling_rate=%s",
+            self.address,
+            self.channels,
+            self.samprate,
+        )
 
-    def _upload_waveform(self, wavename: str, waveform: np.ndarray) -> None:
+    def _upload_waveform(self, wavename: str, waveform: NDArray[Any]) -> None:
         self.instance.write('wlist:waveform:delete "' + wavename + '"')
         self.instance.write(
-            'wlist:waveform:new "' + wavename +
-            '",' + str(waveform.shape[1]) + ",real"
+            'wlist:waveform:new "' + wavename + '",' + str(waveform.shape[1]) + ",real"
         )
         self.instance.write_binary_values(
             'wlist:waveform:data "' + wavename + '",', waveform[0, :]
@@ -387,29 +380,32 @@ class AWGenerator(VisaObject, Synchroniser):
         )
 
     def _sequence_flat(
-        self, seqname: str, logical_steps: list[AWGenerator.AWGSequenceStep], nongatereps: int = 1
+        self,
+        seqname: str,
+        logical_steps: list[AWGenerator.AWGSequenceStep],
+        nongatereps: int = 1,
     ) -> None:
         if len(logical_steps) > self.awg_max_sequence_steps:
             raise ValueError(
                 f"Expanded AWG sequence has {len(logical_steps)} steps, exceeding "
                 f"the configured AWG limit of {self.awg_max_sequence_steps}. Enable "
                 "awg_sequence_mode: repeated_child or reduce the sequence."
-        )
+            )
         summary = f"Tek AWG sequence mode: flat\nLogical steps: {len(logical_steps)}"
         print(summary)
-        logging.info("Tek AWG sequence mode: flat; logical_steps=%s", len(logical_steps))
+        logging.info(
+            "Tek AWG sequence mode: flat; logical_steps=%s", len(logical_steps)
+        )
         print("Setting up sequencer".ljust(65, "."), end="")
         # AWG70K sequence assets have one or more tracks. Each active AWG output
         # is assigned one track of the same sequence asset via SOURCE:CASS.
         tracks = len(self.channels)
-        self.instance.write(f'slist:sequence:delete "sub"')
+        self.instance.write('slist:sequence:delete "sub"')
         self.instance.write(f'slist:sequence:new "sub",{len(logical_steps)},{tracks}')
-        self.instance.write(f'slist:sequence:event:jtiming "sub", immediate')
+        self.instance.write('slist:sequence:event:jtiming "sub", immediate')
         for i, step in enumerate(logical_steps, start=1):
             for track, channel in enumerate(self.channels, start=1):
-                self._configure_waveform_step(
-                    "sub", i, step, channel, track
-                )
+                self._configure_waveform_step("sub", i, step, channel, track)
 
         self.instance.write(f'slist:sequence:delete "{seqname}"')
         self.instance.write(f'slist:sequence:new "{seqname}",2,{tracks}')
@@ -426,21 +422,26 @@ class AWGenerator(VisaObject, Synchroniser):
             )
 
         # for actual seq
-        self.instance.write(
-            f'slist:sequence:step2:rcount "{seqname}", {nongatereps}'
-        )
+        self.instance.write(f'slist:sequence:step2:rcount "{seqname}", {nongatereps}')
         for track in range(1, tracks + 1):
             self.instance.write(f'SLIS:SEQ:STEP2:TASS{track}:SEQ "{seqname}","sub"')
 
         for track, channel in enumerate(self.channels, start=1):
-            self.instance.write(
-                f'SOURCE{channel}:CASS:SEQUENCE "{seqname}",{track}'
-            )
+            self.instance.write(f'SOURCE{channel}:CASS:SEQUENCE "{seqname}",{track}')
         self.opc_wait()
         print(colored(" [done]", "green"))
+        logging.info(
+            "Configured flat AWG sequencer %s: logical_steps=%s, tracks=%s",
+            seqname,
+            len(logical_steps),
+            tracks,
+        )
 
     def _sequence_repeated_child(
-        self, seqname: str, logical_steps: list[AWGenerator.AWGSequenceStep], nongatereps: int = 1
+        self,
+        seqname: str,
+        logical_steps: list[AWGenerator.AWGSequenceStep],
+        nongatereps: int = 1,
     ) -> None:
         # This parent/child sequencer upload uses Tek AWG70000-series SCPI and
         # was tested on TEKTRONIX AWG70001B firmware FV:8.1.0266.0. Similar Tek
@@ -493,20 +494,14 @@ class AWGenerator(VisaObject, Synchroniser):
         for step_index, step in enumerate(child, start=1):
             for track, channel in enumerate(self.channels, start=1):
                 self._configure_waveform_step(
-                    child_sequence,
-                    step_index,
-                    step,
-                    channel,
-                    track,
+                    child_sequence, step_index, step, channel, track
                 )
 
         self.instance.write(f'slist:sequence:delete "{top_sequence}"')
         self.instance.write(
             f'slist:sequence:new "{top_sequence}",{top_level_steps},{tracks}'
         )
-        self.instance.write(
-            f'slist:sequence:event:jtiming "{top_sequence}", immediate'
-        )
+        self.instance.write(f'slist:sequence:event:jtiming "{top_sequence}", immediate')
         self.instance.write(f'slist:sequence:step1:goto "{top_sequence}", first')
         self.instance.write(f'slist:sequence:step1:ejinput "{top_sequence}", ATR')
         self.instance.write(f'slist:sequence:step1:ejump "{top_sequence}", 2')
@@ -548,6 +543,12 @@ class AWGenerator(VisaObject, Synchroniser):
             )
         self.opc_wait()
         print(colored(" [done]", "green"))
+        logging.info(
+            "Configured repeated-child AWG sequencer %s: top_level_steps=%s, child_steps=%s",
+            seqname,
+            top_level_steps,
+            len(child),
+        )
 
     def _configure_waveform_step(
         self,
@@ -566,12 +567,14 @@ class AWGenerator(VisaObject, Synchroniser):
         # Resolve physical channels to tracks through the configured ordering.
         # Combine overlapping legacy/qualified selectors before writing each flag.
         targeted_flags = {
-            flag for selector in self.flag_channels
+            flag
+            for selector in self.flag_channels
             for flag, source in [parse_awg_flag(selector, self.channels)]
             if source is None or source == channel
         }
         present_flags = {
-            flag for selector in step.flags
+            flag
+            for selector in step.flags
             for flag, source in [parse_awg_flag(selector, self.channels)]
             if source is None or source == channel
         }
@@ -585,151 +588,59 @@ class AWGenerator(VisaObject, Synchroniser):
         return str(self.sequence_options.get("awg_sequence_mode", "flat"))
 
     def _get_logical_awg_steps(self) -> list[AWGenerator.AWGSequenceStep]:
-        if len(self.wavenames) != len(self.seqrepeats):
-            raise ValueError(
-                "Tek AWG sequence metadata mismatch: "
-                f"{len(self.wavenames)} waveform names but "
-                f"{len(self.seqrepeats)} repeat counts."
-            )
+        validate_awg_metadata_lengths(self.wavenames, self.seqrepeats, "Tek AWG")
         self._validate_flag_channels()
         for selectors in self.flag_values.values():
             for selector in selectors:
                 parse_awg_flag(selector, self.channels)
-        steps = []
-        for wavename, repeat in zip(self.wavenames, self.seqrepeats):
-            repeat = int(repeat)
-            self._validate_awg_repeat_count(repeat, f"step {len(steps) + 1}")
-            steps.append(
-                AWGenerator.AWGSequenceStep(
-                    waveform=str(wavename),
-                    repeat=repeat,
-                    flags=tuple(sorted(self.flag_values.get(wavename, []))),
-                )
-            )
-        return steps
+        return build_logical_awg_steps(
+            self.wavenames,
+            self.seqrepeats,
+            AWGenerator.AWGSequenceStep,
+            max_step_repeat=self.awg_max_step_repeat,
+            device_type="Tek AWG",
+            flag_values=self.flag_values,
+        )
 
     def _validate_awg_repeat_count(self, repeat: int, context: str) -> None:
-        if repeat <= 0:
-            raise ValueError(f"Tek AWG {context} repeat count must be positive.")
-        if repeat > self.awg_max_step_repeat:
-            raise ValueError(
-                f"Tek AWG {context} repeat count {repeat} exceeds the "
-                f"configured AWG limit of {self.awg_max_step_repeat}."
-            )
+        validate_awg_repeat_count(repeat, self.awg_max_step_repeat, context, "Tek AWG")
 
     def _validate_repeated_child_region(
         self, steps: list[AWGenerator.AWGSequenceStep]
-    ) -> tuple[list[AWGenerator.AWGSequenceStep], list[AWGenerator.AWGSequenceStep], int, list[AWGenerator.AWGSequenceStep]]:
-        config = self.sequence_options.get("awg_repeated_child", {})
-        if not isinstance(config, dict):
-            raise ValueError(
-                "awg_repeated_child must be a mapping with prefix_steps, "
-                "child_steps, and optionally repetitions."
-            )
-        try:
-            prefix_steps = int(config.get("prefix_steps", 0))
-            child_steps = int(config["child_steps"])
-        except KeyError as exc:
-            raise ValueError(
-                "awg_repeated_child requires child_steps for repeated_child mode."
-            ) from exc
-        repetitions_config = config.get("repetitions")
-        if prefix_steps < 0:
-            raise ValueError(
-                f"awg_repeated_child prefix_steps must be >= 0, got {prefix_steps}."
-            )
-        if child_steps <= 0:
-            raise ValueError(
-                f"awg_repeated_child child_steps must be > 0, got {child_steps}."
-            )
-        if child_steps > self.awg_max_sequence_steps:
-            raise ValueError(
-                f"Repeated child sequence has {child_steps} steps, exceeding "
-                f"the configured AWG limit of {self.awg_max_sequence_steps}."
-            )
-        if prefix_steps + child_steps > len(steps):
-            raise ValueError(
-                "awg_repeated_child prefix_steps + child_steps exceeds the "
-                f"logical sequence length: {prefix_steps} + {child_steps} > "
-                f"{len(steps)}."
-            )
-        child = steps[prefix_steps : prefix_steps + child_steps]
-        if repetitions_config is None:
-            repetitions = self._infer_child_repetitions(steps, prefix_steps, child)
-        else:
-            repetitions = int(repetitions_config)
-            if repetitions <= 0:
-                raise ValueError(
-                    "awg_repeated_child repetitions must be > 0, got "
-                    f"{repetitions}."
-                )
-            expected_end = prefix_steps + repetitions * child_steps
-            if expected_end > len(steps):
-                available_steps = len(steps) - prefix_steps
-                max_complete_repetitions = available_steps // child_steps
-                raise ValueError(
-                    "awg_repeated_child does not match the expanded logical "
-                    "sequence. The configured repeated region would end after "
-                    f"{prefix_steps} + {repetitions} * {child_steps} = "
-                    f"{expected_end} steps, but the generated sequence has only "
-                    f"{len(steps)} steps. After the {prefix_steps} prefix steps, "
-                    f"only {available_steps} steps remain, which can contain at "
-                    f"most {max_complete_repetitions} complete child repetitions "
-                    f"of {child_steps} steps. Check that n_meas/repetitions and "
-                    "len(cycle_order)/child_steps are calculated from the same "
-                    "sequence that is written to sequencing_order."
-                )
-            for repetition_index in range(repetitions):
-                start = prefix_steps + repetition_index * child_steps
-                current_child = steps[start : start + child_steps]
-                if current_child != child:
-                    raise ValueError(
-                        "Repeated child block mismatch at repetition "
-                        f"{repetition_index + 1}. Waveform names, repeat counts, "
-                        "and flags must match exactly for repeated_child mode."
-                    )
-        self._validate_awg_repeat_count(repetitions, "child-sequence parent")
-        suffix_start = prefix_steps + repetitions * child_steps
-        suffix = steps[suffix_start:]
-        compact_body_steps = prefix_steps + 1 + len(suffix)
-        if compact_body_steps > self.awg_max_sequence_steps:
-            raise ValueError(
-                f"Compact AWG parent/body sequence has {compact_body_steps} steps, "
-                f"exceeding the configured AWG limit of {self.awg_max_sequence_steps}."
-            )
-        return steps[:prefix_steps], child, repetitions, suffix
+    ) -> tuple[
+        list[AWGenerator.AWGSequenceStep],
+        list[AWGenerator.AWGSequenceStep],
+        int,
+        list[AWGenerator.AWGSequenceStep],
+    ]:
+        return validate_repeated_child_region(
+            steps,
+            self.sequence_options.get("awg_repeated_child", {}),
+            max_sequence_steps=self.awg_max_sequence_steps,
+            max_step_repeat=self.awg_max_step_repeat,
+            device_type="Tek AWG",
+        )
 
     def _infer_child_repetitions(
-        self, steps: list[AWGenerator.AWGSequenceStep], prefix_steps: int, child: list[AWGenerator.AWGSequenceStep]
+        self,
+        steps: list[AWGenerator.AWGSequenceStep],
+        prefix_steps: int,
+        child: list[AWGenerator.AWGSequenceStep],
     ) -> int:
-        child_steps = len(child)
-        repetitions = 0
-        start = prefix_steps
-        while steps[start : start + child_steps] == child:
-            repetitions += 1
-            start += child_steps
-        if repetitions < 2:
-            raise ValueError(
-                "Could not infer awg_repeated_child repetitions: at least two "
-                "identical child occurrences are required."
-            )
-        return repetitions
+        return infer_child_repetitions(steps, prefix_steps, child)
 
-    def _load_awg_sequence_options(self, ps_yaml_file: Path) -> Dict[str, Any]:
+    def _load_awg_sequence_options(self, ps_yaml_file: str | Path) -> dict[str, Any]:
         yaml_file = Path(ps_yaml_file)
         if not yaml_file.is_absolute():
             yaml_file = get_seq_dir() / yaml_file
         with open(yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
-        return {
-            key: sequence_instructions[key]
-            for key in ("awg_sequence_mode", "awg_repeated_child")
-            if key in sequence_instructions
-        }
+        validate_sequence_instructions(sequence_instructions)
+        return get_awg_sequence_options(sequence_instructions)
 
     def _read_awg_errors(self) -> list[str]:
         errors = []
-        while True:
+        for _ in range(100):
             response = str(self.instance.query("SYSTEM:ERROR?")).strip()
             code_text, _, message = response.partition(",")
             try:
@@ -740,24 +651,30 @@ class AWGenerator(VisaObject, Synchroniser):
             if code == 0:
                 break
             errors.append(f"{code},{message}".rstrip(","))
+        else:
+            errors.append("AWG error queue did not drain after 100 reads")
         return errors
 
     def _raise_on_awg_errors(self, context: str) -> None:
         errors = self._read_awg_errors()
         if errors:
+            logging.error(
+                "Tektronix AWG reported errors during %s: %s",
+                context,
+                "; ".join(errors),
+            )
             raise RuntimeError(
-                f"Tektronix AWG reported errors during {context}: "
-                + "; ".join(errors)
+                f"Tektronix AWG reported errors during {context}: " + "; ".join(errors)
             )
 
     def _load_sequence_block(self, seqname: Path) -> None:
         block = np.load(seqname)
-        self.waveform_block = block["arr_0"]
-        self.seqrepeats = list(block["arr_1"])
-        self.wavenames = list(block["arr_2"])
-        self.flag_values = pickle.loads(block["arr_5"])
-        logging.info("loaded wave sequence from file".ljust(
-            65, ".") + f"{seqname}")
+        with cleanup_on_exit(block.close, "numeric sequence file close"):
+            self.waveform_block = block["arr_0"]
+            self.seqrepeats = list(block["arr_1"])
+            self.wavenames = list(block["arr_2"])
+            self.flag_values = pickle.loads(block["arr_5"])
+        logging.info("loaded wave sequence from file".ljust(65, ".") + f"{seqname}")
 
     def _clear_awg(self) -> None:
         self.instance.write("slist:sequence:delete all")
@@ -777,8 +694,7 @@ class AWGenerator(VisaObject, Synchroniser):
             for channel_index, channel in enumerate(self.channels):
                 self._upload_waveform(
                     f"{wavename}_{channel}",
-                    self.waveform_block[i, channel_index *
-                                        2: (channel_index * 2) + 2],
+                    self.waveform_block[i, channel_index * 2 : (channel_index * 2) + 2],
                 )
                 self.opc_wait()
         logging.info(
@@ -790,8 +706,7 @@ class AWGenerator(VisaObject, Synchroniser):
 
     def _set_output_on(self, channel: int) -> None:
         self.instance.write(f"outp{channel} on")
-        logging.info(f"Set channel{channel} output to on".ljust(
-            65, ".") + "[done]")
+        logging.info(f"Set channel{channel} output to on".ljust(65, ".") + "[done]")
 
     def _set_daq_resolution(self, channel: int, dac_resolution: int) -> None:
         self.instance.write(f"source{channel}:dac:resolution {dac_resolution}")
@@ -838,24 +753,24 @@ class AWGenerator(VisaObject, Synchroniser):
         self.channels = channels
 
     def _set_awg_max_sequence_steps(self, max_sequence_steps: int) -> None:
-        self.awg_max_sequence_steps = _validate_awg_limit(
-            max_sequence_steps,
-            "awg_max_sequence_steps",
-            "Tek AWG",
+        self.awg_max_sequence_steps = validate_awg_limit(
+            max_sequence_steps, "awg_max_sequence_steps", "Tek AWG"
         )
 
     def _set_awg_max_step_repeat(self, max_step_repeat: int) -> None:
-        self.awg_max_step_repeat = _validate_awg_limit(
-            max_step_repeat,
-            "awg_max_step_repeat",
-            "Tek AWG",
+        self.awg_max_step_repeat = validate_awg_limit(
+            max_step_repeat, "awg_max_step_repeat", "Tek AWG"
         )
 
     def _limit_channels_to_available_outputs(self) -> None:
         try:
             identity = self._query_awg_identity()
         except Exception:
-            return
+            logging.warning(
+                "Could not query AWG identity for output channel detection",
+                exc_info=True,
+            )
+            raise
         available_channels = self._detect_awg70000_available_channels(identity)
         if available_channels is None:
             return
@@ -886,7 +801,6 @@ class AWGenerator(VisaObject, Synchroniser):
         For unknown models, return None and leave the user-configured channels
         unchanged instead of guessing hardware capabilities.
         """
-
         if "AWG70001" in identity:
             return [1]
         if "AWG70002" in identity:
@@ -900,7 +814,11 @@ class AWGenerator(VisaObject, Synchroniser):
         try:
             identity = self._query_awg_identity()
         except Exception:
-            return
+            logging.warning(
+                "Could not query AWG identity for repeated-child model verification",
+                exc_info=True,
+            )
+            raise
         if "AWG5202" in identity:
             message = (
                 "awg_sequence_mode: repeated_child is not enabled for detected "
@@ -915,14 +833,12 @@ class AWGenerator(VisaObject, Synchroniser):
             raise ValueError(message)
 
     def plot_waveform(self, wavename: str) -> None:
-        """
-        Convenience function to query and plot the values that were previously
-        uploaded to the AWG. This can be very usefull to verify, that
-        the upload worked as expected.
+        """Query and plot an uploaded AWG waveform and its markers.
 
-        :param wavename: Identifier of the
-         uploaded sequence block to query and plot.
-        :type wavename: str
+        Parameters
+        ----------
+        wavename : str
+            Identifier of the uploaded waveform block to inspect.
         """
         marker = self.instance.query_binary_values(
             'wlist:waveform:marker:data? "' + wavename + '"', datatype="B"
@@ -938,7 +854,7 @@ class AWGenerator(VisaObject, Synchroniser):
                 for j in range(1, 5):
                     try:
                         markers[-j, i] = int(num[-(j + 4)])
-                    except Exception:
+                    except (IndexError, ValueError):
                         break
 
         plt.plot(np.asarray((analog)) * 0.5 + 4)
@@ -951,7 +867,7 @@ class AWGenerator(VisaObject, Synchroniser):
 
 class PStreamer(Synchroniser):
     def __init__(
-        self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+        self, configuration: dict[str, Any], channel_mapping: dict[str, Any]
     ) -> None:
         super().__init__()
         self.channel_mapping = channel_mapping
@@ -969,48 +885,44 @@ class PStreamer(Synchroniser):
     def _find_pulse_streamers(self) -> None:
         devices = findPulseStreamers()
         if devices:
+            logging.info(
+                "Detected PulseStreamer devices: %s; selecting %s",
+                devices,
+                devices[0][0],
+            )
             print("Detected PulseStreamer: ")
             print(devices)
             print("----------------------------------------------------\n")
             self.address = devices[0][0]
         else:
             print("No PulseStreamers found by autodetect.\n-------------------\n")
-            logging.info("Pulse Streamer not found".ljust(
-                65, ".") + "[failed]")
+            raise ConnectionError("No PulseStreamer devices found by autodetect")
 
     def open(self) -> None:
-        """
-        Opens the connection with the given device of IP = ip_address.
-        If an IP is not introduced -- search a device in the network.
-        If an IP is introduced -- checks if correct and tries to connect.
-        """
+        """Connect to the PulseStreamer at its configured address."""
         # if no IP adress is provided, try to detect one:
         try:
             self.pulser = PulseStreamer(self.address)
             logging.info(
-                f"Pulse Streamer connected at {self.address}".ljust(
-                    65, ".") + "[done]"
+                f"Pulse Streamer connected at {self.address}".ljust(65, ".") + "[done]"
             )
             print("Connected.\n-------------------------------------------\n")
-        except AssertionError:
-            logging.exception(
-                f"No pulse streamer with the IP address {self.address}".ljust(
-                    65, ".")
-                + "[failed]"
-            )
+        except Exception:
+            logging.exception("Failed to connect PulseStreamer at %s", self.address)
+
+            raise
 
     def close(self) -> None:
+        """Record cleanup without closing a PulseStreamer connection.
+
+        Notes
+        -----
+        The driver exposes no explicit connection-close operation.
         """
-        There is no function for closing the connection of the device. We have
-        tested that running thousands of connections does not slow down the
-        execution, we assume we can call pass on the close function.
-        """
+        logging.debug("PulseStreamer cleanup requires no explicit connection close")
 
     def stop(self) -> None:
-        """
-        Function that stofull_pulse_list the playing sequence and sets all
-        the channels to a ZERO state (0V).
-        """
+        """Stop playback and force the configured final output state."""
         try:
             # define the final state of the Pulsestreamer
             _ = OutputState.ZERO()
@@ -1020,42 +932,48 @@ class PStreamer(Synchroniser):
             if not self.pulser.isStreaming():
                 print("Stop PulseStreamer: The sequence has been stoped.")
                 logging.info(
-                    "Pulse Streamer: stopped pulse sequence execution".ljust(
-                        65, ".")
+                    "Pulse Streamer: stopped pulse sequence execution".ljust(65, ".")
                     + "[done]"
                 )
             else:
-                logging.warning(
-                    "Warning full_pulse_listtreamer.stop(): The sequence could\
-                            not be stoped".ljust(
-                        65, "."
-                    )
-                    + "[done]"
+                raise RuntimeError(
+                    "PulseStreamer is still streaming after forceFinal()"
                 )
 
-        except AttributeError:
+        except Exception:
             logging.exception(
                 "Pulse Streamer: error stopping pulse sequence".ljust(65, ".")
-                + "[done]"
+                + "[failed]"
             )
 
-    def writeDigSeq(self, channel_key: str) -> List[Tuple[int, int]]:
-        """
+            raise
+
+    def writeDigSeq(self, channel_key: str) -> list[tuple[int, int]]:
+        """Compile the pulses for one PulseStreamer channel.
+
         Parameters
         ----------
         channel_key : str
-            channel_key of the pulse to be written (LASER, MW or READ)
+            Logical channel name, such as LASER, MW, or READ.
 
-        Recieves a dictionary of pulses and returns sequence for the
-        PulseStreamer of the given channel: LASER, MW or READ.
+        Returns
+        -------
+        list[tuple[int, int]]
+            Pairs of duration in nanoseconds and digital output level.
+
+        Raises
+        ------
+        KeyError
+            If the requested channel is absent from the pulse list.
+        PulseSequenceError
+            If the pulses exceed the configured total sequence duration.
         """
         self.channel_key = channel_key
         self.seq = []  # sequence of the channel
         pointer_i = 0  # pointer in time
         # Check if the asked channel_key exists in the file
         if self.channel_key not in list(self.pulse_list.keys()):
-            logging.error("KeyError: No element named " +
-                          str(self.channel_key) + ".")
+            logging.error("KeyError: No element named " + str(self.channel_key) + ".")
             raise KeyError
 
         for i in range(len(self.pulse_list[self.channel_key])):
@@ -1149,18 +1067,16 @@ class PStreamer(Synchroniser):
         # Check if the sequence is longer than the defined total time.
         if pointer_i > self.total_duration and self.total_duration_unparsed != "ignore":
             logging.error(
-                f"Error: {self.channel_key} duration exceeds the defined total time."
+                "Error: %s duration exceeds the defined total time.", self.channel_key
             )
             raise PulseSequenceError
         # Add the final low to make the sequence last its length
         if self.total_duration_unparsed != "ignore":
-            self.seq.append((self.total_duration - pointer_i, 0))
+            self.seq.append((int(self.total_duration - pointer_i), 0))
         return self.seq
 
     def plot_sequence(self) -> None:
-        """
-        From the given file plots the defined sequences
-        """
+        """Plot the loaded sequence if the PulseStreamer is streaming."""
         # check if the sequence has been loaded.
         if self.pulser.isStreaming() is True:
             self.sequence.plot()
@@ -1169,16 +1085,21 @@ class PStreamer(Synchroniser):
                 "Warning (plot_sequence()): No sequence is streaming in the PulseStreamer."
             )
 
-    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
-        """
-        Calls the WriteDigSig() function and loads the corresponding sequences
-        to the respective channels.
+    def load_sequence(self, ps_yaml_file: str | Path = "sequence_0.yaml") -> None:
+        """Compile the YAML pulse sequence into the PulseStreamer channel program.
+
+        Parameters
+        ----------
+        ps_yaml_file : str or pathlib.Path, optional
+            Pulse-sequence path, defaulting to sequence_0.yaml in the sequence directory.
         """
         try:
             # Selected folder:
             self.yaml_file = set_up.get_seq_dir() / ps_yaml_file
+            logging.info("Loading PulseStreamer sequence from %s", self.yaml_file)
             with open(self.yaml_file, "r", encoding="utf-8") as file:
-                full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
+                full_pulse_list = yaml.safe_load(file)
+            validate_sequence_instructions(full_pulse_list)
             # PulseStreamer consumes the expanded pulse program directly; it
             # does not implement Tek AWG parent/child sequencer compression.
             _validate_synchroniser_sequence_mode(
@@ -1192,8 +1113,7 @@ class PStreamer(Synchroniser):
             if total_duration_unparsed == "ignore":
                 self.total_duration = np.inf
             if total_duration_unparsed != "ignore":
-                total_duration = float(
-                    total_duration_unparsed) * 1e3  # convert to ns
+                total_duration = float(total_duration_unparsed) * 1e3  # convert to ns
                 if total_duration - round(total_duration) != 0:
                     logging.warning(
                         "Warning: The total duration is not multiple of the\
@@ -1215,27 +1135,38 @@ class PStreamer(Synchroniser):
                 self.check_types(self.pulse_list)
                 for channel in self.pulse_list:
                     sequences_to_write[block].setDigital(
-                        self.channel_mapping[channel], self.writeDigSeq(
-                            channel)
+                        self.channel_mapping[channel], self.writeDigSeq(channel)
                     )
             self.sequence = Sequence()
             for block, repetitions in zip(sequence_order, sequencing_repeats):
                 self.sequence += repetitions * sequences_to_write[block]
+            logging.info(
+                "Prepared PulseStreamer sequence from %s: blocks=%s, sequencing_steps=%s",
+                self.yaml_file,
+                len(sequences_to_write),
+                len(sequence_order),
+            )
 
-        except AttributeError:
-            logging.exception("pulseseqeunce upload failed")
+        except Exception:
+            logging.exception(
+                "Failed to load PulseStreamer sequence from %s", ps_yaml_file
+            )
 
-    def check_types(self, pulse_list) -> None:
+            raise
+
+    def check_types(self, pulse_list: dict[str, dict[str, dict[str, Any]]]) -> None:
         for channel in pulse_list:
             for pulse, pulse_params in pulse_list[channel].items():
                 for par, par_value in pulse_params.items():
                     pulse_list[channel][pulse][par] = float(par_value)
 
     def run(self) -> None:
-        """
-        Function that triggers the device:
-        send trigger + play sequence one time.
-        For now pass, write it later.
+        """Stream the sequence once and wait for playback to finish.
+
+        Raises
+        ------
+        TimeoutError
+            If playback exceeds the sequence duration plus ten seconds.
         """
         try:
             # never runs the seq
@@ -1254,50 +1185,49 @@ class PStreamer(Synchroniser):
 
             # upload the sequence and arm the device
             self.pulser.stream(self.sequence, n_runs, final)
+            deadline = monotonic() + self.sequence.getDuration() * 1e-9 + 10
             while self.pulser.isStreaming():
-                pass
+                if monotonic() >= deadline:
+                    raise TimeoutError(
+                        "PulseStreamer did not finish within the sequence duration plus 10 seconds"
+                    )
+                sleep(0.01)
             # check if the sequence has been started correctly.
-            logging.info("Pulse Strearmer: sent run signal".ljust(
-                65, ".") + "[done]")
+            logging.info("Pulse Strearmer: sent run signal".ljust(65, ".") + "[done]")
 
-        except AttributeError:
+        except Exception:
             logging.exception(
-                "Pulse Strearmer: problem setting to run".ljust(
-                    65, ".") + "[done]"
+                "Pulse Strearmer: problem setting to run".ljust(65, ".") + "[failed]"
             )
+            cleanup_after_error(self.stop, "PulseStreamer run cleanup")
+            raise
 
     def trigger(self) -> None:
-        """
-        Function that sets the Pulser  to do one loop of the previously-
-        defined sequence. It does not ask for a Trigger. It sets the final
-        state to the ZERO state. Resets the channels before re-streaming.
-        """
+        """Rearm the PulseStreamer and start the uploaded sequence immediately."""
         self.pulser.rearm()
         self.pulser.startNow()
-        logging.info(
-            "Pulse Strearmer: Sent signal to play sequence".ljust(
-                65, ".") + "[done]"
+        logging.debug(
+            "Pulse Strearmer: Sent signal to play sequence".ljust(65, ".") + "[done]"
         )
 
 
 class MockGenerator(Synchroniser):
-    def __init__(self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]):
+    def __init__(
+        self, configuration: dict[str, Any], channel_mapping: dict[str, Any]
+    ) -> None:
         self.channel_mapping = channel_mapping
         self.device_type: str = "MockGenerator"
-        self.max_sequence_steps: int = 16_384
-        self.max_step_repeat: int = 1_048_576
+        self.max_sequence_steps: int = DEFAULT_MAX_SEQUENCE_STEPS
+        self.max_step_repeat: int = DEFAULT_MAX_STEP_REPEAT
 
         Synchroniser.__init__(self)
         # Retain TekAWG YAML keys so the mock can dry-run the same config.
-        self.attribute_map["awg_max_sequence_steps"] = (
-            self._set_max_sequence_steps
-        )
+        self.attribute_map["awg_max_sequence_steps"] = self._set_max_sequence_steps
         self.attribute_map["awg_max_step_repeat"] = self._set_max_step_repeat
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
-        logging.info("MockSynchroniser instance created".ljust(
-            65, ".") + "[done]")
+        logging.info("MockSynchroniser instance created".ljust(65, ".") + "[done]")
 
     def __repr__(self) -> str:
         return f"MockGenerator(configuration: {self.initial_configuration_dict}, channel_mapping: {self.channel_mapping})"
@@ -1308,11 +1238,13 @@ class MockGenerator(Synchroniser):
     def open(self) -> None:
         logging.info("Opened MockSynchroniser".ljust(65, ".") + "[done]")
 
-    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
+    def load_sequence(self, ps_yaml_file: str | Path = "sequence_0.yaml") -> None:
         try:
             self.yaml_file = set_up.get_seq_dir() / ps_yaml_file
+            logging.info("Loading MockSynchroniser sequence from %s", self.yaml_file)
             with open(self.yaml_file, "r", encoding="utf-8") as file:
-                full_pulse_list = yaml.load(file, Loader=yaml.FullLoader)
+                full_pulse_list = yaml.safe_load(file)
+            validate_sequence_instructions(full_pulse_list)
             total_duration = (
                 float(full_pulse_list["total_duration"]) * 1e3
             )  # convert to ns
@@ -1335,21 +1267,20 @@ class MockGenerator(Synchroniser):
             else:
                 self.total_duration = int(total_duration)
 
-            logging.info(
-                "Loaded sequence for MockSynchroniser".ljust(
-                    65, ".") + "[done]"
-            )
+            logging.info("Loaded sequence for MockSynchroniser from %s", self.yaml_file)
 
         except AttributeError:
             logging.exception(
                 "Caught attribute error when writing loading from yaml pulse sequence"
             )
 
+            raise
+
     def _validate_awg_sequence_options(
         self,
-        full_pulse_list: Dict[str, Any],
-        sequence_order: List[str],
-        sequencing_repeats: List[int],
+        full_pulse_list: dict[str, Any],
+        sequence_order: list[str],
+        sequencing_repeats: list[int],
     ) -> None:
         """Dry-run TekAWG sequence-mode metadata for mock measurements.
 
@@ -1358,7 +1289,6 @@ class MockGenerator(Synchroniser):
         repeated_child parent/child layout, so mock measurements catch the same
         configuration mistakes before the YAML is sent to a real AWG.
         """
-
         mode = str(full_pulse_list.get("awg_sequence_mode", "flat"))
         if mode == "flat":
             logging.info("MockSynchroniser AWG sequence mode: flat")
@@ -1369,25 +1299,16 @@ class MockGenerator(Synchroniser):
                 "Supported values are 'flat' and 'repeated_child'."
             )
 
-        if len(sequence_order) != len(sequencing_repeats):
-            raise ValueError(
-                "MockSynchroniser sequence metadata mismatch: "
-                f"{len(sequence_order)} sequence entries but "
-                f"{len(sequencing_repeats)} repeat counts."
-            )
-
         previous_options = getattr(self, "sequence_options", {})
-        self.sequence_options = {
-            key: full_pulse_list[key]
-            for key in ("awg_sequence_mode", "awg_repeated_child")
-            if key in full_pulse_list
-        }
+        self.sequence_options = get_awg_sequence_options(full_pulse_list)
         try:
-            logical_steps = []
-            for block, repeat in zip(sequence_order, sequencing_repeats):
-                repeat = int(repeat)
-                self._validate_awg_repeat_count(repeat, f"step {len(logical_steps) + 1}")
-                logical_steps.append(AWGenerator.AWGSequenceStep(str(block), repeat, ()))
+            logical_steps = build_logical_awg_steps(
+                sequence_order,
+                sequencing_repeats,
+                AWGenerator.AWGSequenceStep,
+                max_step_repeat=self.max_step_repeat,
+                device_type="MockSynchroniser AWG",
+            )
             prefix, child, repetitions, suffix = self._validate_repeated_child_region(
                 logical_steps
             )
@@ -1415,135 +1336,49 @@ class MockGenerator(Synchroniser):
         )
 
     def _validate_awg_repeat_count(self, repeat: int, context: str) -> None:
-        if repeat <= 0:
-            raise ValueError(f"MockSynchroniser AWG {context} repeat count must be positive.")
-        if repeat > self.max_step_repeat:
-            raise ValueError(
-                f"MockSynchroniser AWG {context} repeat count {repeat} exceeds "
-                f"the configured AWG limit of {self.max_step_repeat}."
-            )
+        validate_awg_repeat_count(
+            repeat, self.max_step_repeat, context, "MockSynchroniser AWG"
+        )
 
     def _set_max_sequence_steps(self, max_sequence_steps: int) -> None:
-        self.max_sequence_steps = _validate_awg_limit(
-            max_sequence_steps,
-            "awg_max_sequence_steps",
-            "MockSynchroniser",
+        self.max_sequence_steps = validate_awg_limit(
+            max_sequence_steps, "awg_max_sequence_steps", "MockSynchroniser"
         )
 
     def _set_max_step_repeat(self, max_step_repeat: int) -> None:
-        self.max_step_repeat = _validate_awg_limit(
-            max_step_repeat,
-            "awg_max_step_repeat",
-            "MockSynchroniser",
+        self.max_step_repeat = validate_awg_limit(
+            max_step_repeat, "awg_max_step_repeat", "MockSynchroniser"
         )
 
     def _validate_repeated_child_region(
         self, steps: list[AWGenerator.AWGSequenceStep]
-    ) -> tuple[list[AWGenerator.AWGSequenceStep], list[AWGenerator.AWGSequenceStep], int, list[AWGenerator.AWGSequenceStep]]:
-        config = self.sequence_options.get("awg_repeated_child", {})
-        if not isinstance(config, dict):
-            raise ValueError(
-                "awg_repeated_child must be a mapping with prefix_steps, "
-                "child_steps, and optionally repetitions."
-            )
-        try:
-            prefix_steps = int(config.get("prefix_steps", 0))
-            child_steps = int(config["child_steps"])
-        except KeyError as exc:
-            raise ValueError(
-                "awg_repeated_child requires child_steps for repeated_child mode."
-            ) from exc
-
-        repetitions_config = config.get("repetitions")
-        if prefix_steps < 0:
-            raise ValueError(
-                f"awg_repeated_child prefix_steps must be >= 0, got {prefix_steps}."
-            )
-        if child_steps <= 0:
-            raise ValueError(
-                f"awg_repeated_child child_steps must be > 0, got {child_steps}."
-            )
-        if child_steps > self.max_sequence_steps:
-            raise ValueError(
-                f"Repeated child sequence has {child_steps} steps, exceeding "
-                f"the configured AWG limit of {self.max_sequence_steps}."
-            )
-        if prefix_steps + child_steps > len(steps):
-            raise ValueError(
-                "awg_repeated_child prefix_steps + child_steps exceeds the "
-                f"logical sequence length: {prefix_steps} + {child_steps} > "
-                f"{len(steps)}."
-            )
-
-        child = steps[prefix_steps : prefix_steps + child_steps]
-        if repetitions_config is None:
-            repetitions = self._infer_child_repetitions(steps, prefix_steps, child)
-        else:
-            repetitions = int(repetitions_config)
-            if repetitions <= 0:
-                raise ValueError(
-                    "awg_repeated_child repetitions must be > 0, got "
-                    f"{repetitions}."
-                )
-            expected_end = prefix_steps + repetitions * child_steps
-            if expected_end > len(steps):
-                available_steps = len(steps) - prefix_steps
-                max_complete_repetitions = available_steps // child_steps
-                raise ValueError(
-                    "awg_repeated_child does not match the expanded logical "
-                    "sequence. The configured repeated region would end after "
-                    f"{prefix_steps} + {repetitions} * {child_steps} = "
-                    f"{expected_end} steps, but the generated sequence has only "
-                    f"{len(steps)} steps. After the {prefix_steps} prefix steps, "
-                    f"only {available_steps} steps remain, which can contain at "
-                    f"most {max_complete_repetitions} complete child repetitions "
-                    f"of {child_steps} steps. Check that n_meas/repetitions and "
-                    "len(cycle_order)/child_steps are calculated from the same "
-                    "sequence that is written to sequencing_order."
-                )
-            for repetition_index in range(repetitions):
-                start = prefix_steps + repetition_index * child_steps
-                current_child = steps[start : start + child_steps]
-                if current_child != child:
-                    raise ValueError(
-                        "Repeated child block mismatch at repetition "
-                        f"{repetition_index + 1}. Sequence names and repeat "
-                        "counts must match exactly for repeated_child mode."
-                    )
-
-        self._validate_awg_repeat_count(repetitions, "child-sequence parent")
-        suffix_start = prefix_steps + repetitions * child_steps
-        suffix = steps[suffix_start:]
-        compact_body_steps = prefix_steps + 1 + len(suffix)
-        if compact_body_steps > self.max_sequence_steps:
-            raise ValueError(
-                f"Compact AWG parent/body sequence has {compact_body_steps} steps, "
-                f"exceeding the configured AWG limit of {self.max_sequence_steps}."
-            )
-        return steps[:prefix_steps], child, repetitions, suffix
+    ) -> tuple[
+        list[AWGenerator.AWGSequenceStep],
+        list[AWGenerator.AWGSequenceStep],
+        int,
+        list[AWGenerator.AWGSequenceStep],
+    ]:
+        return validate_repeated_child_region(
+            steps,
+            self.sequence_options.get("awg_repeated_child", {}),
+            max_sequence_steps=self.max_sequence_steps,
+            max_step_repeat=self.max_step_repeat,
+            device_type="MockSynchroniser AWG",
+        )
 
     def _infer_child_repetitions(
-        self, steps: list[AWGenerator.AWGSequenceStep], prefix_steps: int, child: list[AWGenerator.AWGSequenceStep]
+        self,
+        steps: list[AWGenerator.AWGSequenceStep],
+        prefix_steps: int,
+        child: list[AWGenerator.AWGSequenceStep],
     ) -> int:
-        child_steps = len(child)
-        repetitions = 0
-        start = prefix_steps
-        while steps[start : start + child_steps] == child:
-            repetitions += 1
-            start += child_steps
-        if repetitions < 2:
-            raise ValueError(
-                "Could not infer awg_repeated_child repetitions: at least two "
-                "identical child occurrences are required."
-            )
-        return repetitions
+        return infer_child_repetitions(steps, prefix_steps, child)
 
     def run(self) -> None:
         logging.info("Sent run to MockSynchroniser".ljust(65, ".") + "[done]")
 
     def trigger(self) -> None:
-        logging.info("Sent trigger from MockSynchroniser".ljust(
-            65, ".") + "[done]")
+        logging.debug("Sent trigger from MockSynchroniser".ljust(65, ".") + "[done]")
 
     def stop(self) -> None:
         logging.info("Stopped MockSynchroniser".ljust(65, ".") + "[done]")
@@ -1553,75 +1388,52 @@ class MockGenerator(Synchroniser):
 
 
 class PulseBlaster(Synchroniser):
-    """
-    Class to represent PulseBlaster card.
+    """PulseBlaster card synchroniser controlled through SpinAPI.
+
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Board settings. sampling_rate selects the core clock in MHz;
+        min_instr_clk_cycles selects the minimum instruction duration in clock cycles.
+    channel_mapping : dict[str, Any]
+        Mapping from logical pulse-channel names to board output bit positions.
 
     Attributes
     ----------
-    int PBclk:
-        PulseBlaster clock frequency (in MHz)
-    int PB_min_instr_clk_cycles:
-        minimum instruction time, in clock periods
-    int PB_STARTtrig:
-        PB channel bit to DAQ start trigger
-    int PB_DAQ:
-        PB channel bit to DAQ gate/ sample clock
-    int PB_AOM:
-        PB channel bit to TTL of AOM driver
-    int PB_MW:
-        PB channel bit to TTL of microwave switch
+    samprate : float
+        Board core clock frequency in MHz, defaulting to 500.
+    pb_min_instr_clk_cycles : int
+        Minimum instruction duration in core-clock cycles, defaulting to 5.
 
-    Methods
-    -------
-    error_catcher(int status):
-        Catches error in PB board status
-    configure_pb():
-        Configures PB board
-    int status pb_inst_pbonly(int bit flags, int instruction,
-        int instruction_data, int pulse_length):
-        Create single instruction for the pulse program
-    create_json_sequence(pulseseq_file_name):
-        Loads sequence array from npz file and save the decomposed
-        data (PB channel bit masks and pulse durations) into json file
-    decompose_sequence_array(seq_array, pulseseq_file_name):
-        Decomposes seq_array into PB channel bit masks
-        and corresponding pulse durations
-    decompose_sequence(sequence):
-        Decompose single sequence into PB channel
-        bit masks and its pulse durations
-    get_int_powers_of_two(sequence):
-        Finds integer list of powers of 2 for each bit sequence
-    load_sequence(pulseseq_file_name):
-        Loads Pb channel bit masks and pulse durations from json file
-        to pulse program memory
-    start_programming():
-        Starts the programming of PB pulse program
-    stop_programming():
-        Stops the programming of PB pulse program
-    program_pb(channel_bit_masks, pulse_duration_list):
-        Program pulse program memory using
-        PB channel bits and pulse durations
-    run():
-        Triggers/starts the execution of the Pulse Program
-    close():
-        Closes the communication with the PB board
-    stop():
-        Stops the execution of the Pulse Program and closes
-        the communication. TTL outputs will return to zero.
+    Notes
+    -----
+    load_sequence compiles a YAML pulse sequence into bit masks and durations.
+    program_pb uploads these instructions; run starts playback and stop halts it.
+    close releases communication with the board.
     """
 
     def __init__(
-        self, configuration: Dict[str, Any], channel_mapping: Dict[str, Any]
+        self, configuration: dict[str, Any], channel_mapping: dict[str, Any]
     ) -> None:
-        """
-        Configure the PB board core clock frequency,
-        minimum instruction clock cycle and PB channel connections.
+        """Initialize the board clock, instruction limits, and channel mapping.
 
+        Parameters
+        ----------
+        configuration : dict[str, Any]
+            Board configuration, including sampling_rate and min_instr_clk_cycles.
+        channel_mapping : dict[str, Any]
+            Mapping from logical channel names to output bit positions.
+
+        Raises
+        ------
+        RuntimeError
+            If SpinAPI is unavailable.
         """
         if spapi is None:
             raise RuntimeError(
                 "This class requires 'spinapi' by SpinCore to be installed and functional"
             )
+        self._is_open = False
         self.device_type: str = "PulseBlaster"
         self.samprate: float = 500  # MHz
         self.pb_min_instr_clk_cycles = 5
@@ -1642,106 +1454,122 @@ class PulseBlaster(Synchroniser):
     def open(self) -> None:
         self.configure_pb()
 
-    def load_sequence(self, ps_yaml_file: str = "sequence_0.yaml") -> None:
+    def load_sequence(self, ps_yaml_file: str | Path = "sequence_0.yaml") -> None:
         yaml_file = Path(ps_yaml_file)
         if not yaml_file.is_absolute():
             yaml_file = get_seq_dir() / yaml_file
+        logging.info("Loading PulseBlaster sequence from %s", yaml_file)
         with open(yaml_file, "r", encoding="utf-8") as file:
             # PulseBlaster also consumes the expanded program directly. Keep
             # Tek-only upload modes out of this path with a clear error.
             _validate_synchroniser_sequence_mode(
                 yaml.safe_load(file) or {}, "PulseBlaster", ("flat",)
             )
-        yaml_sequence_transpiler = PulseBlasterSequence(self.channel_mapping, ps_yaml_file)
+        yaml_sequence_transpiler = PulseBlasterSequence(self.channel_mapping, yaml_file)
         yaml_sequence_transpiler.parse_pulse_sequence_file()
         channel_bit_mask, pulse_duration_list = yaml_sequence_transpiler.compile()
         self.program_pb(channel_bit_mask, pulse_duration_list)
+        logging.info("Loaded PulseBlaster pulse sequence from %s", yaml_file)
 
     def close(self) -> None:
-        """
-        Releases the PulseBlasterESR-PRO board
-        and check the current status of PB board.
-        """
+        """Release communication with the PulseBlaster board and check its status."""
         # Close the communication with the PB board
+        if not self._is_open:
+            return
         status = spapi.pb_close()
         self.error_catcher(status)
+        self._is_open = False
+        logging.info("Closed PulseBlaster board connection")
 
     def run(self) -> None:
-        """
-        Triggers/starts the execution of the Pulse Program
-        and closes communication with the board.
-        However, Pulse Program execution will continue.
+        """Start the pulse program and close communication with the board.
+
+        Notes
+        -----
+        Program execution continues after the communication channel is closed.
         """
         # Returns a 0 on success or a negative number on an error.
         status = spapi.pb_start()
         self.error_catcher(status)
-        print(colored("Started execution of Pulseblaster card pulse program!", "green"))
+        logging.info("Started execution of PulseBlaster pulse program")
 
     def trigger(self) -> None:
         status = spapi.pb_start()
         self.error_catcher(status)
-        print(colored("Started execution of Pulseblaster card pulse program!", "green"))
+        logging.debug("Triggered PulseBlaster pulse program")
 
     def stop(self) -> None:
-        """
-        Stops the execution of the Pulse Program and closes the
-        communication. TTL outputs will return to zero.
-        """
+        """Stop the pulse program."""
         # Returns a 0 on success or a negative number on an error.
         status = spapi.pb_stop()
         self.error_catcher(status)
-        print(colored("Stopped execution of Pulseblaster card pulse program!", "green"))
+        logging.info("Stopped execution of PulseBlaster pulse program")
 
     def error_catcher(self, status: int) -> None:
-        """
-        Checks the status of the PulseBlasterESR.
-        PB returns a negative number on an error,
-        and 0 or the instruction number on success.
-        If error, prints the error message.
+        """Check a SpinAPI status and report board errors.
 
-        Parameters:
-            int status: current status of PB board
+        Parameters
+        ----------
+        status : int
+            SpinAPI result: a negative value indicates an error; zero or a positive
+            instruction address indicates success.
+
+        Raises
+        ------
+        RuntimeError
+            If status is negative; the error includes the available board diagnostics.
         """
         if status < 0:
-            print("Error: ", spapi.pb_get_error())
-            sys.exit()
+            try:
+                detail = spapi.pb_get_error()
+            except Exception:
+                logging.warning(
+                    "Could not retrieve PulseBlaster error details", exc_info=True
+                )
+                detail = "error details unavailable"
+            message = f"PulseBlaster returned status={status}: {detail}"
+            logging.error(message)
+            raise RuntimeError(message)
 
     def configure_pb(self) -> None:
-        """
-        Initializes the PulseBlasterESR-PRO board and set
-        the core clock frequency of the board.
-        """
+        """Initialize the board connection and set its core clock frequency."""
         # 1 - Enable the spincore log file, appears as log.txt in current working directory
         spapi.pb_set_debug(0)
         # Initializing communication with the PulseBlasterESR-PRO board
-        status = spapi.pb_init()
-        # catch error if any and exit the program
-        self.error_catcher(status)
+        if not self._is_open:
+            status = spapi.pb_init()
+            self.error_catcher(status)
+            self._is_open = True
         # Configure the core clock frequency (in MHz)
         spapi.pb_core_clock(self.samprate)
+        logging.info("Initialized PulseBlaster board: core_clock=%s MHz", self.samprate)
 
-    def pb_inst_pbonly(flags, instruction, instruction_data, pulse_length):
+    @staticmethod
+    def pb_inst_pbonly(
+        flags: int, instruction: int, instruction_data: int, pulse_length: float
+    ) -> int:
+        """Write one instruction to the PulseBlaster pulse program.
+
+        Parameters
+        ----------
+        flags : int
+            Bit mask defining the state of each TTL output.
+        instruction : int
+            SpinAPI instruction opcode.
+        instruction_data : int
+            Data associated with the instruction opcode.
+        pulse_length : float
+            Instruction duration in nanoseconds.
+
+        Returns
+        -------
+        int
+            Instruction address on success or a negative error code. -99 indicates
+            an invalid parameter.
         """
-        Create single instruction to send to the pulse program. It returns a negative number on an error, or the instruction number upon success.
-        If the function returns -99, an invalid parameter was passed to the function.
-
-        Instruction format:
-            int status pb_inst_pbonly(int bit flags, int instruction, int instruction_data, int pulse_length)
-
-        Parameters:
-            int bit flags: state of each TTL output bit.
-            int instruction: type of instruction is to be executed.
-            int instruction_data: data to be used with the instruction field.
-            int pulse_length: duration of this pulse program instruction
-
-        Returns:
-            int status: current PB board status
-        """
-        return spapi.spinapi.pb_inst_pbonly(
-            ct.c_uint(flags),
-            ct.c_int(instruction),
-            ct.c_int(instruction_data),
-            ct.c_double(pulse_length),
+        return cast(
+            int,
+            spapi.pb_inst_pbonly(flags, instruction, instruction_data, pulse_length),
         )
 
     def check_pulse_length_short(
@@ -1749,124 +1577,148 @@ class PulseBlaster(Synchroniser):
     ) -> float:
         if pulse_duration != current_option:
             logging.warning(
-                f"pulse duration of {pulse_duration} not possible with PB card. Setting to {current_option}"
+                "pulse duration of %s not possible with PB card. Setting to %s",
+                pulse_duration,
+                current_option,
             )
             pulse_duration = current_option
             return pulse_duration
         return pulse_duration
 
     def program_pb(
-        self, channel_bit_masks: List[int], pulse_duration_list: List[float]
+        self, channel_bit_masks: list[int], pulse_duration_list: list[float]
     ) -> None:
-        """
-        Program the PB pulse program memory by sending instructions
-        for each channel bit mask and corresponding pulse duration.
-        Channel bit mask can be a decimal, hexadecimal or binary.
-        """
-        self.start_programming()
+        """Upload the channel bit masks and their corresponding pulse durations.
 
-        # Send instructions to the pulse program
-        # Instruction format:
-        # int status pb_inst_pbonly(int bit flags, int instruction,
-        # int instruction_data, int pulse_length)
-        for i, pulse_duration in zip(
-            range(len(channel_bit_masks)), pulse_duration_list
+        Parameters
+        ----------
+        channel_bit_masks : list[int]
+            TTL output bit masks for the instruction sequence.
+        pulse_duration_list : list[float]
+            Matching instruction durations in microseconds.
+
+        Raises
+        ------
+        ValueError
+            If the lists are empty, have different lengths, or contain durations that
+            are not finite and positive.
+        """
+        if not channel_bit_masks or len(channel_bit_masks) != len(pulse_duration_list):
+            raise ValueError(
+                "PulseBlaster requires nonempty, equally sized bit masks and durations"
+            )
+        if any(
+            not np.isfinite(duration) or duration <= 0
+            for duration in pulse_duration_list
         ):
-            # All pulse duration checks in mus.
-            if pulse_duration >= 0.01:
-                channel_bit_mask = channel_bit_masks[i]
-            else:
-                # Short Pulse Feature:
-                # bits 23-21 controls the number of clock periods
-                if 0 < pulse_duration <= 0.003:
-                    # 001 for 1 clock period, 2ns for 500 MHz
-                    pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.002
-                    )
-                    channel_bit_mask = channel_bit_masks[i] + 2**21
-                elif 0.003 < pulse_duration <= 0.005:
-                    # 010 for 2 clock periods
-                    pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.004
-                    )
-                    channel_bit_mask = channel_bit_masks[i] + 2**22
-                elif 0.005 < pulse_duration <= 0.007:
-                    # 011 for 3 clock periods
-                    pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.006
-                    )
-                    channel_bit_mask = channel_bit_masks[i] + 2**21 + 2**22
-                elif 0.007 < pulse_duration <= 0.009:
-                    # 100 for 4 clock periods
-                    pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.008
-                    )
-                    channel_bit_mask = channel_bit_masks[i] + 2**23
-                elif 0.009 < pulse_duration < 0.01:
-                    # 100 for 4 clock periods
-                    pulse_duration = self.check_pulse_length_short(
-                        pulse_duration, 0.01)
+            raise ValueError("PulseBlaster pulse durations must be finite and positive")
+        self.start_programming()
+        with cleanup_on_exit(self.stop_programming, "PulseBlaster programming stop"):
+
+            # Send instructions to the pulse program
+            # Instruction format:
+            # int status pb_inst_pbonly(int bit flags, int instruction,
+            # int instruction_data, int pulse_length)
+            for i, pulse_duration in zip(
+                range(len(channel_bit_masks)), pulse_duration_list
+            ):
+                # All pulse duration checks in mus.
+                if pulse_duration >= 0.01:
                     channel_bit_mask = channel_bit_masks[i]
+                else:
+                    # Short Pulse Feature:
+                    # bits 23-21 controls the number of clock periods
+                    if 0 < pulse_duration <= 0.003:
+                        # 001 for 1 clock period, 2ns for 500 MHz
+                        pulse_duration = self.check_pulse_length_short(
+                            pulse_duration, 0.002
+                        )
+                        channel_bit_mask = channel_bit_masks[i] + 2**21
+                    elif 0.003 < pulse_duration <= 0.005:
+                        # 010 for 2 clock periods
+                        pulse_duration = self.check_pulse_length_short(
+                            pulse_duration, 0.004
+                        )
+                        channel_bit_mask = channel_bit_masks[i] + 2**22
+                    elif 0.005 < pulse_duration <= 0.007:
+                        # 011 for 3 clock periods
+                        pulse_duration = self.check_pulse_length_short(
+                            pulse_duration, 0.006
+                        )
+                        channel_bit_mask = channel_bit_masks[i] + 2**21 + 2**22
+                    elif 0.007 < pulse_duration <= 0.009:
+                        # 100 for 4 clock periods
+                        pulse_duration = self.check_pulse_length_short(
+                            pulse_duration, 0.008
+                        )
+                        channel_bit_mask = channel_bit_masks[i] + 2**23
+                    elif 0.009 < pulse_duration < 0.01:
+                        # 100 for 4 clock periods
+                        pulse_duration = self.check_pulse_length_short(
+                            pulse_duration, 0.01
+                        )
+                        channel_bit_mask = channel_bit_masks[i]
 
-                # Shortest minimum instruction time is 5 clock periods
-                # i.e. 10 ns for 500 MHz
-                pulse_duration = self.pb_min_instr_clk_cycles
+                    # Shortest minimum instruction time is 5 clock periods
+                    # i.e. 10 ns for 500 MHz
+                    pulse_duration = self.pb_min_instr_clk_cycles
 
-            # Time resolution of PulseBlaster, given by 1/(clock frequency):
-            # t_min = 1e3/self.samprate  # in ns
-            # upload times as is
-            t_min = 1
+                # Time resolution of PulseBlaster, given by 1/(clock frequency):
+                # t_min = 1e3/self.samprate  # in ns
+                # upload times as is
+                t_min = 1
 
-            # Instructions for pulse sequence
-            if i == 0:
-                start_instr_num = spapi.pb_inst_pbonly(
-                    channel_bit_mask,
-                    spapi.Inst.CONTINUE,
-                    0,
-                    pulse_duration * t_min * spapi.us,
-                )
-                self.error_catcher(start_instr_num)
-            elif i != len(channel_bit_masks) - 1:
-                status = spapi.pb_inst_pbonly(
-                    channel_bit_mask,
-                    spapi.Inst.CONTINUE,
-                    0,
-                    pulse_duration * t_min * spapi.us,
-                )
-                self.error_catcher(status)
-            else:
-                status = spapi.pb_inst_pbonly(
-                    channel_bit_mask,
-                    spapi.Inst.BRANCH,
-                    start_instr_num,
-                    pulse_duration * t_min * spapi.us,
-                )
-                self.error_catcher(status)
+                # Instructions for pulse sequence
+                if i == 0:
+                    start_instr_num = spapi.pb_inst_pbonly(
+                        channel_bit_mask,
+                        spapi.Inst.CONTINUE,
+                        0,
+                        pulse_duration * t_min * spapi.us,
+                    )
+                    self.error_catcher(start_instr_num)
+                elif i != len(channel_bit_masks) - 1:
+                    status = spapi.pb_inst_pbonly(
+                        channel_bit_mask,
+                        spapi.Inst.CONTINUE,
+                        0,
+                        pulse_duration * t_min * spapi.us,
+                    )
+                    self.error_catcher(status)
+                else:
+                    status = spapi.pb_inst_pbonly(
+                        channel_bit_mask,
+                        spapi.Inst.BRANCH,
+                        start_instr_num,
+                        pulse_duration * t_min * spapi.us,
+                    )
+                    self.error_catcher(status)
 
-        status = spapi.pb_inst_pbonly(
-            0, spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * spapi.us
+            status = spapi.pb_inst_pbonly(
+                0, spapi.Inst.STOP, 0, self.pb_min_instr_clk_cycles * t_min * spapi.us
+            )
+            self.error_catcher(status)
+
+        logging.info(
+            "Programmed PulseBlaster board: pulse_instructions=%s",
+            len(channel_bit_masks),
         )
-        self.error_catcher(status)
-
-        self.stop_programming()
-        print(colored("Pulse sequence is loaded to Pulseblaster card!", "green"))
 
     def start_programming(self) -> None:
-        """
-        Starts the programming of PB pulse program
-        """
+        """Start programming the PulseBlaster pulse memory."""
         # Returns a 0 on success or a negative number on an error.
         status = spapi.pb_start_programming(spapi.PULSE_PROGRAM)
         self.error_catcher(status)
+        logging.debug("Entered PulseBlaster programming mode")
 
     def stop_programming(self) -> None:
-        """
-        Stops the programming of PB pulse program
-        """
+        """Stop programming the PulseBlaster pulse memory."""
         status = (
             spapi.pb_stop_programming()
         )  # Returns a 0 on success or a negative number on an error.
         self.error_catcher(status)
+
+        logging.debug("Exited PulseBlaster programming mode")
 
     def _set_sampling_rate_attribute(self, samprate: int) -> None:
         self.samprate = samprate

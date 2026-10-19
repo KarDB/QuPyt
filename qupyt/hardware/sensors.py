@@ -1,36 +1,37 @@
 # pylint: disable=logging-format-interpolation
 # pylint: disable=logging-not-lazy
-"""
-Sensor Module handling the creation and usage of sensors.
-"""
+"""Create, configure, and acquire data from measurement sensors."""
+
 from __future__ import annotations
-import sys
-import os
+
+import ctypes
 import gc
 import logging
-import traceback
-from time import time
+import os
+import sys
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List
-import ctypes
+from collections.abc import Callable
+from time import monotonic, time
+from typing import Any
 
 import numpy as np
-from pypylon import pylon
 from harvesters.core import Harvester
+from numpy.typing import NDArray
+from pypylon import pylon
 
 try:
     from egrabber import (
-        EGenTL,
+        BUFFER_INFO_BASE,
+        BUFFER_INFO_CUSTOM_NUM_PARTS,
+        BUFFER_INFO_CUSTOM_PART_SIZE,
+        BUFFER_INFO_TIMESTAMP,
+        INFO_DATATYPE_PTR,
+        INFO_DATATYPE_SIZET,
+        INFO_DATATYPE_UINT64,
         Buffer,
+        EGenTL,
         EGrabber,
         EGrabberDiscovery,
-        BUFFER_INFO_BASE,
-        INFO_DATATYPE_PTR,
-        BUFFER_INFO_CUSTOM_PART_SIZE,
-        BUFFER_INFO_CUSTOM_NUM_PARTS,
-        INFO_DATATYPE_SIZET,
-        BUFFER_INFO_TIMESTAMP,
-        INFO_DATATYPE_UINT64,
     )
 except ImportError:
     logging.warning(
@@ -39,12 +40,17 @@ except ImportError:
     )
 
 from qupyt.hardware.synchronisers import Synchroniser
-from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType, ConfigurationError
+from qupyt.mixins import ConfigurationError, ConfigurationMixin, UpdateConfigurationType
+from qupyt.utils.decorators import log_sensor_acquisition
+from qupyt.utils.errors import (
+    cleanup_after_error,
+    cleanup_on_exit,
+    close_on_initialization_error,
+)
 
 # Imports for HeliCam
 if sys.platform == "win32":
     # from msvcrt import getch
-    prgPath = os.environ["PROGRAMFILES"]
     prgPath = r"C:\Program Files"
     sys.path.insert(0, prgPath + r"\Heliotis\heliCam\Python\wrapper")
 else:
@@ -60,10 +66,10 @@ except ImportError:
 try:
     import nidaqmx
     from nidaqmx.constants import (
-        Edge,
         AcquisitionType,
-        VoltageUnits,
+        Edge,
         TerminalConfiguration,
+        VoltageUnits,
     )
 except ImportError:
     logging.warning(
@@ -77,96 +83,92 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 
 # pylint: disable=too-few-public-methods
 class SensorFactory:
-    """
-    Sensor Factory responsible for creating and returning an instance of the
-    requested sensor. All sensors created from this factory will adhere to
-    an interface specified in :class:`Sensor`. This ensures, that all sensors
-    can be used interchangeably in the measurement code.
+    """Factory for sensors that implement the common Sensor interface.
 
-    Methods:
-        - :meth:`create_sensor`: This method creates the appropriate sensor
-          instance and configures it. **Note for non programmers**: create_sensor
-          is a static method. This means you don't have to create a class
-          instance to call it.
+    Call create_sensor directly without constructing a factory instance.
 
-    Example:
-        >>> cam = SensorFactory.create_sensor('EoSense1.1CXP', {'number_measurements_referenced': 10})
+    Examples
+    --------
+    >>> cam = SensorFactory.create_sensor("MockCam", {"number_measurements": 10})
     """
 
     @staticmethod
-    def create_sensor(sensor_type: str, configuration: Dict[str, Any]) -> Sensor:
+    def create_sensor(sensor_type: str, configuration: dict[str, Any]) -> Sensor:
+        """Create and configure the requested sensor.
+
+        Parameters
+        ----------
+        sensor_type : str
+            Sensor model identifier, such as Basler1920, DAQ, or MockCam.
+        configuration : dict[str, Any]
+            Parameters supported by the selected sensor. See its class documentation.
+
+        Returns
+        -------
+        Sensor
+            Configured instance of the requested sensor.
+
+        Raises
+        ------
+        ValueError
+            If the sensor type is unknown.
+        ImportError
+            If the selected sensor's optional driver is unavailable.
         """
-        :param sensor_type: Sensor model identifier e.g. 'Baserl1920'.
-        :type sensor_type: string
-        :param configuration: configuration parameters for the sensor.
-         Provided parameters need to match those available for the sensor.
-         Please check the specific sensors for more information.
-        :type configuration: dict
-        :return: Instance of the requested sensor.
-        :rtype: Sensor
-        :raises ValueError:
-        """
+        logging.info("Creating sensor type=%s", sensor_type)
         try:
-            if sensor_type == "Basler1920":
-                return BaslerCam(configuration)
-            if sensor_type == "EoSense1.1CXP":
-                return GenICamHarvester(configuration)
-            if sensor_type == "PhantomS710":
-                return GenICamPhantom(configuration)
-            if sensor_type == "HeliC3":
-                return HeliCam(configuration)
-            if sensor_type == "DAQ":
-                return DAQ(configuration)
-            if sensor_type == "MockCam":
-                return MockCam(configuration)
-            raise ValueError(
-                f"Requested sensor type {sensor_type} does not exists")
-        except Exception as exc:
-            logging.exception(
-                "Could not open desired camera".ljust(65, ".") + "[failed]"
-            )
-            traceback.print_exc()
-            raise exc
+            sensor_types: dict[str, Callable[[dict[str, Any]], Sensor]] = {
+                "Basler1920": BaslerCam,
+                "EoSense1.1CXP": GenICamHarvester,
+                "PhantomS710": GenICamPhantom,
+                "HeliC3": HeliCam,
+                "DAQ": DAQ,
+                "MockCam": MockCam,
+            }
+            if sensor_type not in sensor_types:
+                raise ValueError(f"Requested sensor type {sensor_type} does not exists")
+            dependencies = {"PhantomS710": "EGenTL", "HeliC3": "heli", "DAQ": "nidaqmx"}
+            dependency = dependencies.get(sensor_type)
+            if dependency is not None and globals().get(dependency) is None:
+                raise ImportError(
+                    f"Sensor {sensor_type} requires the unavailable {dependency} driver"
+                )
+            sensor = sensor_types[sensor_type](configuration)
+        except Exception:
+            logging.exception("Could not create sensor type=%s", sensor_type)
+            raise
+        logging.info("Created sensor type=%s", sensor_type)
+        return sensor
 
 
 class Sensor(ABC, ConfigurationMixin):
-    """
-    Abstract Base Class for all sensors. All sensors implemented in QuPyt
-    should inherit from this class. This helps ensure compliance with the
-    sensor API.
+    """Abstract interface for interchangeable measurement sensors.
 
-    Note:
-        The attributes listed below are never explicitly set by the user.
-        Please use the ``configuration`` constructor argument to configure the sensor.
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Configuration for the concrete sensor. Common keys are number_measurements
+        and target_data_type; subclasses may accept additional keys.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
+    Attributes
+    ----------
+    roi_shape : list[int]
+        Dimensions of one sensor readout, derived from the concrete sensor settings.
+    target_data_type : type
+        Acquisition data type, chosen to be compatible with the data container.
+    number_measurements : int
+        Number of images or samples acquired in one burst.
 
-          Possible configuration values:
-            - **number_measurements** (int, even): Set the number of
-              images or measurements the sensor will acquire in one go.
-
-          Concrete sensor classes may have additional configuration values.
-
-    Attributes:
-        - **roi_shape** (list[int]): Specifies the shape (Region Of Interest)
-          thats read out from the sensor. This attribute is present to
-          communicate the sensor dimensions to other parts of the code.
-          It should not be actively set by the user.
-          Check the configuration options for the individual sensors.
-        - **target_data_type** (int): Datatype returned by the sensor.
-          It should match or at least be compatible with the datatype of the
-          data container. Not settable for all sensors.
-        - **number_measurements** (int): Set by the number_measurements
-          attribute in the configuration dict.
+    Notes
+    -----
+    Configure sensors through the configuration dictionary rather than setting
+    these attributes directly.
     """
 
     attribute_map: UpdateConfigurationType
 
     def __init__(
-        self, configuration: Dict[str, Any]
+        self, configuration: dict[str, Any]
     ) -> None:  # pylint: disable=unused-argument
         # configuration is not used in the ABC, however
         # all child classes must take it as input.
@@ -180,74 +182,67 @@ class Sensor(ABC, ConfigurationMixin):
 
     @abstractmethod
     def open(self) -> None:
-        """
-        Implements the discovery and establishes the connection
-        to a sensor.
-        """
+        """Discover the sensor and establish its connection."""
 
     @abstractmethod
-    def acquire_data(self, synchroniser: Optional[Synchroniser]) -> np.ndarray:
-        """
-        Returns measurements in an array of shape
-        [self.number_measurements, \\*self.roi_shape].
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
+        """Acquire one measurement burst.
 
-        :param synchroniser: Synchronisers instance.
-         Sensor and Synchroniser are in most cases the devices that
-         need the most amount of configuration. To avoid problems
-         with one device beeing ready first, the synchronisers
-         is prepared first. Next the sensor is made ready. Once
-         ready, the sensor sends a trigger signal to the
-         synchronisers to kick-off the measurement.
-        :type synchroniser: Optional[Synchroniser]
+        Parameters
+        ----------
+        synchroniser : Synchroniser or None, optional
+            Prepared synchroniser to trigger after the sensor is ready. None permits
+            acquisition without a synchroniser.
+
+        Returns
+        -------
+        numpy.ndarray
+            Measurements with shape ``(number_measurements, *roi_shape)``.
+
+        Notes
+        -----
+        Prepare the synchroniser before the sensor. The sensor can then trigger the
+        sequence when acquisition is ready.
         """
 
     @abstractmethod
     def close(self) -> None:
-        """
-        Closes and if necessary destroys the sensor instance.
-        """
+        """Close the connection and release the sensor instance."""
 
 
 class GenICamPhantom(Sensor):
-    """
-    Sensor class implementation for the PhantomS710 GenICam compliant camera.
-    It builds on the EGrabber library provided by Euresys.
-    Therefore, it will only work with the Framegrabber / Camera combination.
+    """Phantom S710 sensor using the Euresys EGrabber library.
 
-    Note:
-        You will need to install the egrabber software and the egrabber python
-        wheel provided on the Euresys website for this class to work.
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Sensor configuration extending the common Sensor settings.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
+        Supported keys:
 
-          Possible configuration values:
-            - **exposure_time** (int, µs)
-            - **image_roi** (list[int]):
-              Region Of Interest of the sensor in
-              the following format: [height, width, x_offset, y_offset]. The roi_shape attribute of the :class:`Sensor` base class will
-              be derived from this. The Phantom S710 only supports size adjustment with height (32 to 800 in steps of 8)
-              and width (128 to 1280 in steps of 128), but does not support a ROI that is off-center
-              (thus ignoring these input values). The offset input is kept nevertheless to keep it structurally alike other camera inputs.
-            - **pixel_bits** (string): Sets number of bits per pixel.
-              E.g. 'Mono8', 'Mono12' or 'Mono16'.
-              Note that we currently do not support the "bayer" pixel format.
-            - **trigger_mode** (string): Sets camera in triggered mode.
-              ['On', 'on', 'ON', 'Off', 'off', "OFF"]
-            - **trigger_source** (string): Sets input for the camera trigger.
-              E.g. 'GPIO0', 'GPIO1'
+        * exposure_time: exposure in microseconds.
+        * image_roi: [height, width, x_offset, y_offset]. Height supports 32 to
+          800 in steps of 8; width supports 128 to 1280 in steps of 128. Offsets
+          are ignored because this camera supports only a centered ROI.
+        * pixel_bits: Mono8, Mono12, or Mono16; Bayer formats are unsupported.
+        * trigger_mode: On or Off, with the supported capitalization variants.
+        * trigger_source: camera trigger input, such as GPIO0 or GPIO1.
 
-          Note that these configuration attributes extend those from the
-          :class:`Sensor` base class.
+    Raises
+    ------
+    ConfigurationError
+        If a sensor setting is invalid.
 
-    Raises (__init__):
-
-        - ConfigurationError
+    Notes
+    -----
+    Install the Euresys egrabber software and Python wheel. This implementation
+    requires a compatible frame grabber and camera.
     """
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    @close_on_initialization_error
+    def __init__(self, configuration: dict[str, Any]) -> None:
+        if globals().get("EGenTL") is None:
+            raise ImportError("GenICamPhantom requires the egrabber driver")
         self.cam, self.cam_instance = self._discover_and_setup()
         super().__init__(configuration)
         # self.cam.remote_device.node_map.OffsetX.value = 0
@@ -255,7 +250,7 @@ class GenICamPhantom(Sensor):
         self.cam.remote.set("Height", 200)
         self.cam.remote.set("Width", 1280)
         self.cam.remote.set("PixelFormat", "Mono8")
-        self.image_dtype = np.uint8
+        self.image_dtype: type[np.unsignedinteger[Any]] = np.uint8
         self.cam.remote.set("TriggerSource", "GPIO0")
         self.cam.remote.set("TriggerMode", "TriggerModeOn")
         self.cam.remote.set("ExposureTime", 20)
@@ -282,7 +277,7 @@ class GenICamPhantom(Sensor):
     def __str__(self) -> str:
         return f"Phantom S710 camera instance: GenICamPhantom(configuration: {self.initial_configuration_dict})"
 
-    def _discover_and_setup(self) -> EGrabber:
+    def _discover_and_setup(self) -> Any:
         gentl = EGenTL()
         discovery = EGrabberDiscovery(gentl)
         discovery.discover()
@@ -291,30 +286,47 @@ class GenICamPhantom(Sensor):
         return self.grabber, cam
 
     def _set_trigger_source(self, trigger_source: str) -> None:
-        """e.g. GPIO0, GPIO1, ..."""
+        """Set the camera trigger input.
+
+        Parameters
+        ----------
+        trigger_source : str
+            Camera input selector, such as GPIO0 or GPIO1.
+        """
         self.cam.remote.set("TriggerSource", trigger_source)
 
     def _set_trigger_mode(self, trigger_mode: str) -> None:
-        """
-        e.g. On of Off
+        """Set whether the camera uses an external trigger.
 
-        Raises:
-            - ConfigurationError
+        Parameters
+        ----------
+        trigger_mode : str
+            On or Off, with supported capitalization variants.
+
+        Raises
+        ------
+        ConfigurationError
+            If the trigger mode is unsupported.
         """
         if trigger_mode.lower() == "on":
             self.cam.remote.set("TriggerMode", "TriggerModeOn")
         elif trigger_mode.lower() == "off":
             self.cam.remote.set("TriggerMode", "TriggerModeOff")
         else:
-            raise ConfigurationError(
-                "trigger_mode", trigger_mode, ["on", "off"])
+            raise ConfigurationError("trigger_mode", trigger_mode, ["on", "off"])
 
     def _set_pixel_bits(self, pixel_bits: str) -> None:
-        """
-        e.g. Mono8, Mono12 or Mono16
+        """Set the monochrome pixel format.
 
-        Raises:
-            - ConfigurationError
+        Parameters
+        ----------
+        pixel_bits : str
+            One of Mono8, Mono12, or Mono16.
+
+        Raises
+        ------
+        ConfigurationError
+            If the pixel format is unsupported.
         """
         if pixel_bits.lower() == "mono8":
             self.image_dtype = np.uint8
@@ -333,105 +345,125 @@ class GenICamPhantom(Sensor):
     # def _set_gain(self, gain: int) -> None:
     #     self.cam.remote_device.node_map.Gain.value = gain
 
-    def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
-        """
-        This functions sets the range of interest (ROI) of the camera.
-        Hardware specific limitations include:
-            - Currently it is not possible to change the position of the field of view (FOV).
-            Thus, the values for the offsets are completely ignored independent of the chosen value.
-            A warning is logged though if they are set to something else than 0.
-            - The height can be set from 32 to 800 in steps of 8. The camera will accept values with an integer
-            of 4 without any warning/error but will internally change them upon a measurement.
-            - The width can be set from 128 to 1280 in steps of 128.
-        """
+    def _set_roi(self, roi_shape_and_offset: list[int]) -> None:
+        """Set the centered region of interest on the Phantom camera.
 
+        Parameters
+        ----------
+        roi_shape_and_offset : list[int]
+            [height, width, x_offset, y_offset]; offsets are ignored.
+
+        Notes
+        -----
+        Height supports 32 to 800 in steps of 8. Some heights in steps of 4 may be
+        accepted by the driver but adjusted during acquisition. Width supports 128 to
+        1280 in steps of 128. Nonzero offsets produce a warning.
+        """
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         if roi_shape_and_offset[2] or roi_shape_and_offset[3]:
-            logging.warning(f"Offset X:{roi_shape_and_offset[2]} and Y:{roi_shape_and_offset[3]} are ignored, as the Phantom S710\n" +
-                            f"does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
+            logging.warning(
+                f"Offset X:{roi_shape_and_offset[2]} and Y:{roi_shape_and_offset[3]} are ignored, as the Phantom S710\n"
+                + "does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
                     65, "."
                 )
-                + "[warning]" )
+                + "[warning]"
+            )
 
         # Checking size compatibility of chosen FOV.
         if roi_shape_h_and_w[0] % 8 != 0:
-            raise ValueError("ROI Height for the Phantom S710 has to be a multiple of 8")
+            raise ValueError(
+                "ROI Height for the Phantom S710 has to be a multiple of 8"
+            )
 
         roi_shape_h_and_w[0] = int(np.round(roi_shape_h_and_w[0] / 4))
 
         if roi_shape_h_and_w[1] % 128 != 0:
-            raise ValueError(f"ROI Width for the Phantom S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified")
+            raise ValueError(
+                f"ROI Width for the Phantom S710 has to be a multiple of 128px; {roi_shape_h_and_w[1]}px was specified"
+            )
         if roi_shape_h_and_w[1] < 128:
-            raise ValueError(f"ROI Width for the Phantom S710 has to be at least 128px; {roi_shape_h_and_w[1]}px was specified")
+            raise ValueError(
+                f"ROI Width for the Phantom S710 has to be at least 128px; {roi_shape_h_and_w[1]}px was specified"
+            )
         if roi_shape_h_and_w[1] > 1280:
-            raise ValueError(f"ROI Width for the Phantom S710 has to be at most 1280px; {roi_shape_h_and_w[1]}px was specified")
+            raise ValueError(
+                f"ROI Width for the Phantom S710 has to be at most 1280px; {roi_shape_h_and_w[1]}px was specified"
+            )
 
         if roi_shape_h_and_w[0] > 200:
-            raise ValueError(f"ROI Height for the Phantom S710 has to be at most 800px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+            raise ValueError(
+                f"ROI Height for the Phantom S710 has to be at most 800px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified"
+            )
         if roi_shape_h_and_w[0] < 8:
-            raise ValueError(f"ROI Height for the Phantom S710 has to be at least 32px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified")
+            raise ValueError(
+                f"ROI Height for the Phantom S710 has to be at least 32px; {roi_shape_h_and_w[0]*4}px  ({roi_shape_h_and_w[0]}px per Sensor) was specified"
+            )
 
         try:
             self.cam.remote.set("Height", roi_shape_h_and_w[0])
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
-            self.roi_shape = [roi_shape_h_and_w[0]*4, roi_shape_h_and_w[1]]
+            self.roi_shape = [roi_shape_h_and_w[0] * 4, roi_shape_h_and_w[1]]
             logging.info(
                 f"Set Sensor roi to height: {roi_shape_h_and_w[0]*4} and width: {roi_shape_h_and_w[1]}\n".ljust(
                     65, "."
                 )
                 + "[done]"
             )
-        except Exception as exc:
+        except Exception:
             logging.exception(
                 f"Failed to set roi of height: {roi_shape_h_and_w[0]*4} and width: {roi_shape_h_and_w[1]}\n".ljust(
                     65, "."
                 )
                 + "[failed]"
             )
-            raise exc
+            raise
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
-        """
-        See :meth:`Sensor.acquire_data`.
-        """
-
+    @log_sensor_acquisition
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
+        """See :meth:`Sensor.acquire_data`."""
         height = self.cam.remote.get("Height")
         width = self.cam.remote.get("Width")
 
         self.cam.realloc_buffers(self.number_measurements)
-        self.cam.start()
-        data = np.zeros((self.number_measurements,
-                        height * 4, width), dtype=np.uint32)
-        timesteps = np.zeros(self.number_measurements, dtype=np.float64)
-        if synchroniser is not None:
-            synchroniser.trigger()
-        for i in range(self.number_measurements):
-            with Buffer(self.cam) as buffer:
-                buffer_ptr, image_size, part_num, timestep = self._grab_frame_info(
-                    buffer)
-                raw_frame = self._move_frame_from_pool(
-                    buffer_ptr, image_size, part_num)
-                data[i] += raw_frame
-                timesteps[i] += timestep
-        self.cam.stop()
+        with cleanup_on_exit(self.cam.stop, "Phantom acquisition stop"):
+            self.cam.start()
+            data = np.zeros(
+                (self.number_measurements, height * 4, width), dtype=np.uint32
+            )
+            timesteps = np.zeros(self.number_measurements, dtype=np.float64)
+            if synchroniser is not None:
+                synchroniser.trigger()
+            for i in range(self.number_measurements):
+                with Buffer(self.cam) as buffer:
+                    buffer_ptr, image_size, part_num, timestep = self._grab_frame_info(
+                        buffer
+                    )
+                    raw_frame = self._move_frame_from_pool(
+                        buffer_ptr, image_size, part_num
+                    )
+                    data[i] += raw_frame
+                    timesteps[i] += timestep
 
-        logging.info(f"The real framerate calculated by the timing of the camera is {1/((timesteps[self.number_measurements-1]-timesteps[0])*1e-6/(self.number_measurements-1))} Hz".ljust(
-                65, ".") + "[info]")
+        if self.number_measurements > 1 and timesteps[-1] > timesteps[0]:
+            logging.debug(
+                "Camera measured framerate: %s Hz",
+                (self.number_measurements - 1)
+                / ((timesteps[-1] - timesteps[0]) * 1e-6),
+            )
 
         return data
 
-    def _grab_frame_info(self, buffer: Buffer):
+    def _grab_frame_info(self, buffer: Any) -> tuple[int, int, int, int]:
         buffer_ptr = buffer.get_info(BUFFER_INFO_BASE, INFO_DATATYPE_PTR)
-        image_size = buffer.get_info(
-            BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
-        part_num = buffer.get_info(
-            BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
-        time_stamp = buffer.get_info(
-            BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
+        image_size = buffer.get_info(BUFFER_INFO_CUSTOM_PART_SIZE, INFO_DATATYPE_SIZET)
+        part_num = buffer.get_info(BUFFER_INFO_CUSTOM_NUM_PARTS, INFO_DATATYPE_SIZET)
+        time_stamp = buffer.get_info(BUFFER_INFO_TIMESTAMP, INFO_DATATYPE_UINT64)
 
         return buffer_ptr, image_size, part_num, time_stamp
 
-    def _move_frame_from_pool(self, buffer_ptr, image_size, part_num) -> np.array:
+    def _move_frame_from_pool(
+        self, buffer_ptr: int | ctypes.c_void_p, image_size: int, part_num: int
+    ) -> NDArray[Any]:
         frame = np.empty(
             (part_num * self.roi_shape[0], self.roi_shape[1]), dtype=self.image_dtype
         )
@@ -440,75 +472,66 @@ class GenICamPhantom(Sensor):
         return frame
 
     def open(self) -> None:
-        """
-        This function simply passes, since all necessary setup happens
-        in __init__. This is necessary to configure the camera.
-        """
+        """Keep the camera connection established during initialization."""
+        logging.info("GenICamPhantom camera ready (configured during initialization)")
 
     def close(self) -> None:
+        """Destroy the camera instance and release its exclusive connection.
+
+        A new instance can be created after the current connection is released.
         """
-        Destroys the camera instance.
-        Without this, you won't be able to make a new camera instance,
-        as the camera will be exclusively owned by this one.
-        """
+        if all(
+            getattr(self, name, None) is None
+            for name in ("cam", "cam_instance", "grabber")
+        ):
+            return
         self.cam = None
         self.cam_instance = None
         self.grabber = None
         gc.collect()
-        logging.info("Closed GenICam camera connection".ljust(
-            65, ".") + "[done]")
+        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
 
 
 class GenICamHarvester(Sensor):
-    """
-    Sensor class implementation for all simple GenICam compliant cameras.
-    This class relies on the excellent
-    `harvesters <https://github.com/genicam/harvesters>`_ library.
-    You will need to provide your own GenTL producer file for this to work.
-    Check the recommendations `here <https://github.com/genicam/harvesters>`_
-    or get it from your GenICam compliant camera manufacturer.
+    """GenICam sensor using the Harvester library and a supplied GenTL producer.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Sensor configuration extending the common Sensor settings.
 
-          Possible configuration values:
-            - **exposure_time** (int, µs)
-            - **image_roi** (list[int]): Region Of Interest of the sensor in
-              the following format: [height, width, x_offset, y_offset].
-              The roi_shape attribute of the :class:`Sensor` base class will
-              be derived from this.
-            - **GenTL_producer_cti** (string): Path to the GenTL producer (cti)
-              file on your computer.
+        Supported keys:
 
-          Note that these configuration attributes extend those from the
-          :class:`Sensor` base class.
+        * exposure_time: exposure in microseconds.
+        * image_roi: [height, width, x_offset, y_offset].
+        * GenTL_producer_cti: path to the GenTL producer CTI file.
 
-    Note:
-        Currently this class preconfigures the following:
-          - **CXP link configuration**: CXP12_X4. This means the frame grabber expects
-            to communicate via CoaXPress 12 on 4 lanes.
-          - **pixel_format**: Mono10
-          - **trigger_source**: Line0
-          - **trigger_mode**: FrameStart
+    Raises
+    ------
+    FileNotFoundError
+        If the configured CTI file is missing.
 
-    Raises (__init__):
-        - **FileNotFoundError**
+    Notes
+    -----
+    Supply a GenTL producer from the camera or frame-grabber manufacturer. See
+    `Harvester <https://github.com/genicam/harvesters>`_ for producer guidance.
+
+    The implementation preconfigures CXP12_X4, Mono10, trigger source Line0,
+    and trigger selector FrameStart.
     """
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    @close_on_initialization_error
+    def __init__(self, configuration: dict[str, Any]) -> None:
         self.harvester = Harvester()
         self.cti_file = configuration["GenTL_producer_cti"]
         try:
             self.harvester.add_file(self.cti_file)
-        except (FileNotFoundError, OSError) as err:
+        except OSError:
             logging.exception(
-                "Could not find GenTL producer file (.cti)".ljust(
-                    65, ".") + "[failed]"
+                "Could not find GenTL producer file (.cti)".ljust(65, ".") + "[failed]"
             )
-            logging.exception(f"Tried to locate file at {self.cti_file}")
-            raise err
+            logging.exception("Tried to locate file at %s", self.cti_file)
+            raise
         self.harvester.update()
         self.cam = self.harvester.create()
         super().__init__(configuration)
@@ -542,7 +565,7 @@ class GenICamHarvester(Sensor):
         return f"GenICam Harvester compliant camera instance: GenICamHarvester(configuration: {self.initial_configuration_dict})"
 
     def _throw_away_cti(self, cti_file: str) -> None:
-        """cti must be set at the start. It is therefore ignored here."""
+        """Keep the GenTL producer chosen during initialization."""
 
     def _set_exposure_time(self, exposure_time: int) -> None:
         self.cam.remote_device.node_map.ExposureTime.value = exposure_time
@@ -550,28 +573,18 @@ class GenICamHarvester(Sensor):
     def _set_gain(self, gain: int) -> None:
         self.cam.remote_device.node_map.Gain.value = gain
 
-    def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
-        """
-        Set the region of interest (ROI) on the camera sensor.
+    def _set_roi(self, roi_shape_and_offset: list[int]) -> None:
+        """Set the camera region of interest and offsets.
 
-        This method configures the ROI on the camera sensor by setting the height, width,
-        and the X and Y offsets. The ROI shape and offsets are specified in a list.
+        Parameters
+        ----------
+        roi_shape_and_offset : list[int]
+            [height, width, x_offset, y_offset].
 
-        Args:
-            roi_shape_and_offset (List[int]): A list containing four integers:
-                - The first two integers specify the height and width of the ROI.
-                - The last two integers specify the X and Y offsets of the ROI.
-
-        Raises:
-            Exception: If setting any of the ROI parameters on the camera fails, an exception is logged and raised.
-
-        Example:
-            roi_shape_and_offset = [height, width, offsetX, offsetY]
-            _set_roi(roi_shape_and_offset)
-
-        The method logs the outcome of setting the ROI:
-            - On success: Logs the height, width, and offsets along with a "[done]" status.
-            - On failure: Logs the height, width, and offsets along with a "[failed]" status and raises the exception.
+        Raises
+        ------
+        Exception
+            If the driver rejects an ROI setting; the failure is logged and propagated.
         """
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         roi_offset_x_and_y = roi_shape_and_offset[2:]
@@ -593,7 +606,7 @@ class GenICamHarvester(Sensor):
                 )
                 + "[done]"
             )
-        except Exception as exc:
+        except Exception:
             logging.exception(
                 "Failed to set roi of height: {} and width: {}\n\
                                with offset X: {} and Y: {}".format(
@@ -606,84 +619,78 @@ class GenICamHarvester(Sensor):
                 )
                 + "[failed]"
             )
-            raise exc
+            raise
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
-        """
-        See :meth:`Sensor.acquire_data`.
-        """
+    @log_sensor_acquisition
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
+        """See :meth:`Sensor.acquire_data`."""
         time_1 = time()
         height = self.cam.remote_device.node_map.Height.value
         width = self.cam.remote_device.node_map.Width.value
-        self.cam.start()
-        data = np.zeros((self.number_measurements,
-                        height * width), dtype=np.uint32)
-        if synchroniser is not None:
-            synchroniser.trigger()
-        for i in range(self.number_measurements):
-            with self.cam.fetch() as buffer:
-                component = buffer.payload.components[0]
-                data[i] = component.data
-        self.cam.stop()
+        with cleanup_on_exit(self.cam.stop, "Harvester acquisition stop"):
+            self.cam.start()
+            data = np.zeros((self.number_measurements, height * width), dtype=np.uint32)
+            if synchroniser is not None:
+                synchroniser.trigger()
+            for i in range(self.number_measurements):
+                with self.cam.fetch() as buffer:
+                    component = buffer.payload.components[0]
+                    data[i] = component.data
         time_2 = time()
-        logging.info(
-            f"Data acquisition took {time_2-time_1} s".ljust(
-                65, ".") + "[done]"
+        logging.debug(
+            f"Data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
         )
         return data.reshape((self.number_measurements, height, width))
 
     def open(self) -> None:
-        """
-        This function simply passes, since all necessary setup happens
-        in __init__. This is necessary to configure the camera.
-        """
+        """Keep the camera connection established during initialization."""
+        logging.info("GenICamHarvester camera ready (configured during initialization)")
 
     def close(self) -> None:
+        """Destroy the camera instance and reset Harvester.
+
+        Release the exclusive camera connection so a new instance can be created.
         """
-        Destroys the camera instance, and resets Harvester.
-        Without this, you won't be able to make a new camera instance,
-        as the camera will be exclusively owned by this one.
-        """
-        self.cam.destroy()
-        self.harvester.reset()
-        logging.info("Closed GenICam camera connection".ljust(
-            65, ".") + "[done]")
+        cam = getattr(self, "cam", None)
+        harvester = getattr(self, "harvester", None)
+
+        def reset_harvester() -> None:
+            if harvester is not None:
+                harvester.reset()
+                self.harvester = None
+
+        with cleanup_on_exit(reset_harvester, "Harvester reset"):
+            if cam is not None:
+                cam.destroy()
+                self.cam = None
+        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
 
 
 class BaslerCam(Sensor):
-    """
-    Sensor class implementation for all Basler Mono cameras.
-    While (most or all) Basler cameras are fully GenICam compliant
-    and will work with the :class:`GenICam_Harvester` class, some
-    users might prefer to use `pypylon <https://github.com/basler/pypylon>`_,
-    which is provieded by Basler direclty. Note that Baser strongly
-    recommends you install
-    `pylon <https://www.baslerweb.com/en/products/basler-pylon-camera-software-suite/>`_
-    from their website.
+    """Basler monochrome sensor using the pypylon library.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Sensor configuration extending the common Sensor settings.
 
-          Possible configuration values:
-            - **exposure_time** (int, µs)
-            - **image_roi** (list[int]): Region Of Interest of the sensor in
-              the following format: [height, width, x_offset, y_offset].
-              The roi_shape attribute of the :class:`Sensor` base class will
-              be derived from this.
-            - **binning_horizontal** (string): Options typically are 1, 2, 3 or 4.
-              However, this might depend on your specific camera model.
-            - **binning_vertical** (string): Options are typically 1, 2, 3 or 4.
-              However, this might depend on your specific camera model.
-            - **binning_mode_horizontal** (string): Options are `'sum'` or `'average'`
-            - **binning_mode_vertical** (string): Options are `'sum'` or `'average'`
+        Supported keys:
 
-          Note that these configuration attributes extend those from the
-          :class:`Sensor` base class.
+        * exposure_time: exposure in microseconds.
+        * image_roi: [height, width, x_offset, y_offset].
+        * binning_horizontal and binning_vertical: supported binning factors,
+          typically 1, 2, 3, or 4, depending on the camera model.
+        * binning_mode_horizontal and binning_mode_vertical: sum or average.
+
+    Notes
+    -----
+    Install Basler's pylon software and the
+    `pypylon <https://github.com/basler/pypylon>`_ package.
+    GenICam-compatible Basler cameras can also use GenICamHarvester.
     """
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    @close_on_initialization_error
+    def __init__(self, configuration: dict[str, Any]) -> None:
         self.cam = pylon.InstantCamera(
             pylon.TlFactory.GetInstance().CreateFirstDevice()
         )
@@ -734,30 +741,33 @@ class BaslerCam(Sensor):
         self.cam.PixelFormat.SetValue("Mono12")
         self.cam.ExposureMode.SetValue("Timed")
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
-        """
-        See :meth:`Sensor.acquire_data`.
-        """
+    @log_sensor_acquisition
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
+        """See :meth:`Sensor.acquire_data`."""
         time_1 = time()
         arr = np.zeros((self.number_measurements, *self.roi_shape))
-        self.cam.StartGrabbingMax(self.number_measurements)
-        if synchroniser is not None:
-            synchroniser.trigger()
-        for i in range(self.number_measurements):
-            grab_result = self.cam.RetrieveResult(
-                int(5000), pylon.TimeoutHandling_ThrowException
-            )
-            frame = np.asarray(grab_result.Array)
-            arr[i] = frame
-            grab_result.Release()
+        with cleanup_on_exit(self.cam.StopGrabbing, "Basler acquisition stop"):
+            self.cam.StartGrabbingMax(self.number_measurements)
+            if synchroniser is not None:
+                synchroniser.trigger()
+            for i in range(self.number_measurements):
+                grab_result = self.cam.RetrieveResult(
+                    int(5000), pylon.TimeoutHandling_ThrowException
+                )
+                with cleanup_on_exit(grab_result.Release, "Basler frame release"):
+                    if not grab_result.GrabSucceeded():
+                        raise RuntimeError(
+                            f"Basler frame grab failed: {grab_result.ErrorDescription}"
+                        )
+                    frame = np.asarray(grab_result.Array)
+                    arr[i] = frame
         time_2 = time()
-        logging.info(
-            f"Basler data acquisition took {time_2-time_1} s".ljust(
-                65, ".") + "[done]"
+        logging.debug(
+            f"Basler data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
         )
         return arr
 
-    def _set_trigger_line(self, trigger_line):
+    def _set_trigger_line(self, trigger_line: str) -> None:
         self.cam.TriggerSelector.SetValue("FrameStart")
         self.cam.TriggerMode.SetValue("On")
         self.cam.TriggerSource.SetValue(trigger_line)
@@ -771,8 +781,7 @@ class BaslerCam(Sensor):
         elif trigger_mode.lower() == "off":
             self.cam.TriggerMode.SetValue("Off")
         else:
-            raise ConfigurationError(
-                "trigger_mode", trigger_mode, ["on", "off"])
+            raise ConfigurationError("trigger_mode", trigger_mode, ["on", "off"])
 
     def _set_exposure_time(self, exposure_time: int) -> None:
         self.cam.ExposureTime.SetValue(exposure_time)
@@ -789,28 +798,18 @@ class BaslerCam(Sensor):
     def _set_mode_binning_vertical(self, mode_binning_vertical: str) -> None:
         self.cam.BinningVerticalMode.SetValue(mode_binning_vertical)
 
-    def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
-        """
-        Set the region of interest (ROI) on the camera sensor.
+    def _set_roi(self, roi_shape_and_offset: list[int]) -> None:
+        """Set the camera region of interest and offsets.
 
-        This method configures the ROI on the camera sensor by setting the height, width,
-        and the X and Y offsets. The ROI shape and offsets are specified in a list.
+        Parameters
+        ----------
+        roi_shape_and_offset : list[int]
+            [height, width, x_offset, y_offset].
 
-        Args:
-            roi_shape_and_offset (List[int]): A list containing four integers:
-                - The first two integers specify the height and width of the ROI.
-                - The last two integers specify the X and Y offsets of the ROI.
-
-        Raises:
-            Exception: If setting any of the ROI parameters on the camera fails, an exception is logged and raised.
-
-        Example:
-            roi_shape_and_offset = [height, width, offsetX, offsetY]
-            _set_roi(roi_shape_and_offset)
-
-        The method logs the outcome of setting the ROI:
-            - On success: Logs the height, width, and offsets along with a "[done]" status.
-            - On failure: Logs the height, width, and offsets along with a "[failed]" status and raises the exception.
+        Raises
+        ------
+        Exception
+            If the driver rejects an ROI setting; the failure is logged and propagated.
         """
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         roi_offset_x_and_y = roi_shape_and_offset[2:]
@@ -830,7 +829,7 @@ class BaslerCam(Sensor):
                 )
                 + "[done]"
             )
-        except Exception as exc:
+        except Exception:
             logging.exception(
                 "Failed to set roi of height: {} and width {}\n\
                                with offset X: {} and Y: {}".format(
@@ -843,62 +842,61 @@ class BaslerCam(Sensor):
                 )
                 + "[failed]"
             )
-            raise exc
+            raise
 
-    def _set_roi_shape(self, roi_shape_h_and_w: List[int]) -> None:
+    def _set_roi_shape(self, roi_shape_h_and_w: list[int]) -> None:
         self.cam.Height.SetValue(roi_shape_h_and_w[0])
         self.cam.Width.SetValue(roi_shape_h_and_w[1])
 
-    def _set_roi_offset_x_and_y(self, roi_offset_x_and_y: List[int]) -> None:
+    def _set_roi_offset_x_and_y(self, roi_offset_x_and_y: list[int]) -> None:
         self.cam.OffsetX.SetValue(roi_offset_x_and_y[0])
         self.cam.OffsetY.SetValue(roi_offset_x_and_y[1])
 
     def open(self) -> None:
-        """Opens camera."""
-        logging.info("Opening Balser".ljust(65, ".") + "[done]")
+        """Open the camera connection."""
+        logging.info("Opened Basler camera".ljust(65, ".") + "[done]")
 
     def close(self) -> None:
-        """Closes the the camera.
-        A new camera instance may now be created."""
-        self.cam.Close()
-        logging.info("Closed Basler camera connection".ljust(
-            65, ".") + "[done]")
+        """Close the camera connection.
+
+        A new camera instance can be created after the connection is released.
+        """
+        if getattr(self, "cam", None) is None:
+            return
+        with cleanup_on_exit(self.cam.Close, "Basler connection close"):
+            if self.cam.IsGrabbing():
+                self.cam.StopGrabbing()
+        self.cam = None
+        logging.info("Closed Basler camera connection".ljust(65, ".") + "[done]")
 
 
 class HeliCam(Sensor):
-    """
-    `Heliotis <https://www.heliotis.com>`_ builds highly specialised lock-in
-    cameras which are very powerfull for specific applications.
-    This class focusses on the implementation of their heliCam C3 and its
-    raw readout mode.
+    """Heliotis heliCam C3 sensor operating in raw readout mode.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Sensor configuration extending the common Sensor settings.
 
-          Possible configuration values:
-            - **exposure_time** (int/float, µs): This value will get converted
-              to heliCam clock cycles. While float values are possible, and may
-              provide more fine grained controll, the number of clock cycles will
-              be rounded. Therefore, I advise to stick with integer values.
-            - **SensNavM2** (list[int]): This is a special parameter used in
-              Heliotis cameras. This parameters must be set, as it is vital to
-              the operation of the camera. However, we refer to Helioti's
-              documentation for the parameters explanation.
-            - **number_measurements** (int, even): HeliCam overwrites
-              the base :class:`Sensor` class's
-              set_number_measurements logic, because every frame produced
-              by the heliCam C3 contains two sub frames. We reshape this nested
-              frame structure into a flat array of frames in accordance to all
-              other camers. However, this implied that internally, the
-              configuration for the number of frames works slighly differently.
+        Supported keys:
 
-          Note that these configuration attributes extend those from the
-          :class:`Sensor` base class.
+        * exposure_time: exposure in microseconds, converted to rounded camera
+          clock cycles. Integer values avoid implying finer timing precision.
+        * SensNavM2: required Heliotis-specific list of integers; see the
+          manufacturer's documentation for its meaning.
+        * number_measurements: even number of frames. Each native frame contains
+          two subframes, which are flattened to the common sensor array format.
+
+    Notes
+    -----
+    See `Heliotis <https://www.heliotis.com>`_ for camera and SDK documentation.
     """
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    @close_on_initialization_error
+    def __init__(self, configuration: dict[str, Any]) -> None:
+        self._is_open = False
+        if globals().get("heli") is None:
+            raise ImportError("HeliCam requires the libHeLIC driver")
         self.settings = {
             "CamMode": 0,
             "SensNavM2": 6,
@@ -941,37 +939,46 @@ class HeliCam(Sensor):
         self.number_measurements = int(number_measurements)
 
     def open(self) -> None:
+        """Open the camera, load firmware, and prepare acquisition settings.
+
+        Flush the camera buffer and initialize the camera attribute map.
         """
-        Opens the camera and loads the firmware.
-        Flushes the camera buffer, and sets the cameras attribute map.
-        """
-        self.he_sys.Open(0, sys="c3cam_sl70")
-        res = 1
-        while res > 0:
-            res = self.he_sys.Acquire()
-        for key, value in self.settings.items():
-            setattr(self.he_sys.map, key, value)
-        self.he_sys.AllocCamData(
-            1, heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
-        self.he_sys.SetTimeout(10000)
+        if self._is_open:
+            return
+        try:
+            self.he_sys.Open(0, sys="c3cam_sl70")
+            self._is_open = True
+            self.he_sys.SetTimeout(10000)
+            deadline = monotonic() + 10
+            res = 1
+            while res > 0:
+                if monotonic() >= deadline:
+                    raise TimeoutError(
+                        "HeliCam buffer flush did not finish within 10 seconds"
+                    )
+                res = self.he_sys.Acquire()
+            for key, value in self.settings.items():
+                setattr(self.he_sys.map, key, value)
+            self.he_sys.AllocCamData(1, heli.LibHeLIC.CamDataFmt["DF_I16Q16"], 0, 0, 0)
+        except BaseException:
+            logging.exception("HeliCam setup failed")
+            cleanup_after_error(self.close, "HeliCam setup cleanup")
+            raise
         logging.info("Heli C3 opened".ljust(65, ".") + "[done]")
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
-        """
-        Reads frames from the camera and reshuffels from the
-        heliCam specific format to the structure
-        we expect from other sensors.
+    @log_sensor_acquisition
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
+        """Acquire frames and flatten the heliCam subframe layout.
 
-        See :meth:`Sensor.acquire_data`.
+        See :meth:`Sensor.acquire_data` for the common acquisition interface.
         """
         time_1 = time()
         if synchroniser is not None:
             synchroniser.trigger()
         res = self.he_sys.Acquire()
         if res < 0:
-            logging.warning(
-                "Your camera appears to have timed out".ljust(
-                    65, ",") + "[done]"
+            raise TimeoutError(
+                f"HeliCam acquisition failed or timed out (status={res})"
             )
         _ = self.he_sys.ProcessCamData(1, 0, 0)
         meta = self.he_sys.CamDataMeta()
@@ -985,60 +992,54 @@ class HeliCam(Sensor):
         return_frames[::2] = raw_frames[:, :, :, 0]
         return_frames[1::2] = raw_frames[:, :, :, 1]
         time_2 = time()
-        logging.info(
-            f"HeliCam C3 data acquisition took {time_2-time_1} s".ljust(
-                65, ".")
+        logging.debug(
+            f"HeliCam C3 data acquisition took {time_2-time_1} s".ljust(65, ".")
             + "[done]"
         )
         return return_frames
 
     def close(self) -> None:
-        """Closes the the camera.
-        A new camera instance may now be created."""
+        """Close the camera connection.
+
+        A new camera instance can be created after the connection is released.
+        """
+        if not getattr(self, "_is_open", False):
+            return
         self.he_sys.Close()
+        self._is_open = False
         logging.info("HeliCam C3 closed".ljust(65, ".") + "[done]")
 
 
 class DAQ(Sensor):
-    """
-    This class interfaces with Data Acquisition Units from National Instruments.
-    It specifically focusses on devices that use the
-    `nidaqmx <https://github.com/ni/nidaqmx-python/>`_ library.
+    """National Instruments analog-input sensor using nidaqmx.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Sensor configuration extending the common Sensor settings.
 
-          Possible configuration values:
-            - **number_measurements** (int, even): HeliCam overwrites
-              the base :class:`Sensor` class's
-              set_number_measurements logic, because every frame produced
-              by the heliCam C3 contains two sub frames. We reshape this nested
-              frame structure into a flat array of frames in accordance to all
-              other camers. However, this implied that internally, the
-              configuration for the number of frames works slighly differently.
-            - **min_voltage** (float): Mininmum voltage level for the DAQ to digitise.
-              For the specific range of your device please consult your manual.
-            - **max_voltage** (float): Maximum voltage level for the DAQ to digitise.
-              For the specific range of your device please consult your manual.
-            - **apd_input** (str): Descriptor of the device and input port to use.
-              Default is "Dev3/ai0". The Dev3 part is negotiated when you plug in
-              your device. Please consult e.g. the NI software to find this value.
-              the "ai0" selects the channel on your device which you will read from.
-            - **sample_clk** (str): Selects the channel on the DAQ board used to
-              time acquisition. e.g. (default) "PFI1". PFI stands for Programmable
-              Function Interface.
-            - **start_trig** (str): Selects the channel on the DAQ board to recieve
-              a trigger to start the measurement process ('default "PFI0").
-            - **max_samp_rate** (float): Sets the max sampling rate of the DAQ device.
+        Supported keys:
 
-          Note that these configuration attributes extend those from the
-          :class:`Sensor` base class.
+        * number_measurements: number of samples acquired in one burst.
+        * min_voltage and max_voltage: analog input limits in volts; consult the
+          device manual for supported ranges.
+        * apd_input: device and input port, defaulting to Dev3/ai0. The device
+          identifier is assigned when the DAQ is connected.
+        * sample_clk: sampling-clock input, defaulting to PFI1.
+        * start_trig: acquisition start-trigger input, defaulting to PFI0.
+        * max_samp_rate: maximum sampling rate in samples per second.
+
+    Notes
+    -----
+    Requires the `nidaqmx <https://github.com/ni/nidaqmx-python/>`_ library and
+    National Instruments drivers.
     """
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    def __init__(self, configuration: dict[str, Any]) -> None:
         self.type: str = "DAQ"
+        self.daq_task: Any = None
+        if globals().get("nidaqmx") is None:
+            raise ImportError("DAQ requires the nidaqmx driver")
         # configure various input ports ->
         # see inside NI-DAQ hardware for assignment.
         self.daq_apd_input: str = "Dev3/ai0"
@@ -1068,10 +1069,9 @@ class DAQ(Sensor):
         return f"NI-DAQ sensor instance (nidaqmx): DAQ(configuration: {self.initial_configuration_dict})"
 
     def open(self) -> None:
-        """
-        Configures an analog input voltage channel,
-        sample clock and start trigger.
-        """
+        """Configure the analog input channel, sampling clock, and start trigger."""
+        # Release an earlier task when opening the next pulse-sequence step.
+        self.close()
         try:
             self.NsampsPerDAQread: float = self.number_measurements
             self.daq_task = nidaqmx.Task()
@@ -1079,14 +1079,12 @@ class DAQ(Sensor):
             self._configure_sample_clock()
             self._configure_analog_input_trigger()
             logging.info("DAQ opened and created read task".ljust(65, "."))
-        except Exception:
-            self.close()
-            logging.exception("An error occured while trying opening the DAQ")
-            traceback.print_exc()
-            raise Exception(
-                "An error Occured while opening and configureing the DAQ.\
-                        Please make sure the DAQ is connected and powered on"
+        except BaseException:
+            logging.exception(
+                "Failed to open or configure DAQ input %s", self.daq_apd_input
             )
+            cleanup_after_error(self.close, "DAQ setup cleanup")
+            raise
 
     def _create_analog_input_channel(self) -> None:
         # create analog channel to measure voltage
@@ -1108,8 +1106,7 @@ class DAQ(Sensor):
         read_start_trig = self.daq_task.triggers.start_trigger
         # Configures the task to start acquiring samples
         # on the active edge of a digital signal.
-        read_start_trig.cfg_dig_edge_start_trig(
-            self.daq_start_trig, Edge.RISING)
+        read_start_trig.cfg_dig_edge_start_trig(self.daq_start_trig, Edge.RISING)
 
     def _configure_sample_clock(self) -> None:
         # Configure sample clock : Sets the clock source, the clock rate,
@@ -1123,29 +1120,34 @@ class DAQ(Sensor):
             self.NsampsPerDAQread,
         )
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
-        """
-        Reads all samples at onec from the configure sensor.
+    @log_sensor_acquisition
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
+        """Read the configured number of analog samples in one burst.
 
-        See :meth:`Sensor.acquire_data`.
+        See :meth:`Sensor.acquire_data` for the common acquisition interface.
         """
-        if synchroniser is not None:
-            self.daq_task.start()
-            synchroniser.trigger()
+        if self.daq_task is None:
+            raise RuntimeError("DAQ must be opened before acquiring data")
+        stage = "task start"
         try:
-            samples = self.daq_task.read(
-                self.NsampsPerDAQread, self.daq_timeout)
-            self.daq_task.stop()
-        except Exception as excpt:
-            print(
-                """Error: could not read DAQ.
-                Please check your DAQ's connections.
-                Exception details:""",
-                type(excpt).__name__,
-                ".",
-                excpt,
+            with cleanup_on_exit(self.daq_task.stop, "DAQ acquisition stop"):
+                if synchroniser is not None:
+                    self.daq_task.start()
+                    stage = "trigger"
+                    synchroniser.trigger()
+                stage = "read"
+                samples = self.daq_task.read(self.NsampsPerDAQread, self.daq_timeout)
+                stage = "task stop"
+        except Exception:
+            logging.exception(
+                "DAQ acquisition failed during %s: input=%s, samples=%s, timeout=%ss",
+                stage,
+                self.daq_apd_input,
+                self.NsampsPerDAQread,
+                self.daq_timeout,
             )
-            sys.exit()
+            raise
+        logging.debug("DAQ acquisition completed: samples=%s", len(samples))
         return np.asarray(samples).reshape((len(samples), 1))
 
     def _set_min_voltage(self, min_voltage: float) -> None:
@@ -1167,44 +1169,29 @@ class DAQ(Sensor):
         self.daq_sample_clk = sample_clk
 
     def close(self) -> None:
-        """
-        See :meth:`Sensor.close`
-        """
-        if not hasattr(self, "daq_task"):
-            # Setup can fail before DAQ.open() creates the task; close should not
-            # hide the original setup error with a secondary AttributeError.
+        """Close the DAQ task if a task is active."""
+        if getattr(self, "daq_task", None) is None:
             return
         self.daq_task.close()
+        self.daq_task = None
         logging.info("DAQ closed".ljust(65, "."))
 
 
 class MockCam(Sensor):
-    """
-    To ensure users can test their code and the general logic without having
-    to buy expensive lab equipment, most devices in QuPyt implement
-    mocking behoviour. Mock devices do not talk to any real hardware.
-    They implement a dummy interface, where API functions either pass,
-    sleep or return noise.
-    This is the mock variant of a sensor.
+    """Mock sensor that produces noise without communicating with hardware.
 
-    Arguments:
-        - **configuration** (dict): Configuration dictionary. Keys will be used
-          to select setter methods from an attribute map dicionary to set
-          associated values.
+    Parameters
+    ----------
+    configuration : dict[str, Any]
+        Sensor configuration extending the common Sensor settings.
 
-          Possible configuration values:
-            - **image_roi** (list[int]): Region Of Interest of the sensor in
-              the following format: [height, width, x_offset, y_offset].
-              The roi_shape attribute of the :class:`Sensor` base class will
-              be derived from this.
+        Supported keys:
 
-          Possible configuration values:
-
-          Note that these configuration attributes extend those from the
-          :class:`Sensor` base class.
+        * image_roi: [height, width, x_offset, y_offset]. Only height and width
+          affect the returned noise array.
     """
 
-    def __init__(self, configuration: Dict[str, Any]) -> None:
+    def __init__(self, configuration: dict[str, Any]) -> None:
         super().__init__(configuration)
         self.roi_shape = [200, 200]
         self.attribute_map["image_roi"] = self._set_roi
@@ -1218,37 +1205,43 @@ class MockCam(Sensor):
     def __str__(self) -> str:
         return f"MockCam sensor instance: DAQ(configuration: {self.initial_configuration_dict})"
 
-    def _set_roi(self, roi_shape_and_offset: List[int]) -> None:
-        """
-        This function emulates the current behaviour of the GenICam and Basler camera sensor.
-        ROI values are extracted from combined input of the ROI and offset values.
+    def _set_roi(self, roi_shape_and_offset: list[int]) -> None:
+        """Extract the mock image dimensions from the ROI configuration.
+
+        Parameters
+        ----------
+        roi_shape_and_offset : list[int]
+            [height, width, x_offset, y_offset]. Offsets are ignored.
         """
         self.roi_shape = roi_shape_and_offset[:2]
         _ = roi_shape_and_offset[2:]
 
     def open(self) -> None:
-        """
-        passes since there is no device to open.
-        """
+        """Mark the mock sensor ready for acquisition."""
+        logging.info("MockCam sensor ready")
 
-    def acquire_data(self, synchroniser: Optional[Synchroniser] = None) -> np.ndarray:
-        """
-        Sends tigger signal to synchroniser if there is one.
-        Returns an array of shape ``[number_measrurements, height, witdh]``
-        as specified in configuration. Array contains Poisson distributed values
-        with k=15000
+    @log_sensor_acquisition
+    def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
+        """Trigger the synchroniser and return Poisson-distributed mock images.
 
-        See :meth:`Sensor.acquire_data`.
+        Parameters
+        ----------
+        synchroniser : Synchroniser or None, optional
+            Synchroniser to trigger, or None for acquisition without a synchroniser.
+
+        Returns
+        -------
+        numpy.ndarray
+            Noise with shape (number_measurements, height, width) and Poisson mean
+            15,000, using the configured image dimensions.
         """
         if synchroniser is not None:
             synchroniser.trigger()
         noise = np.random.poisson(
-            15_000,
-            size=(self.number_measurements, *self.roi_shape),
+            15_000, size=(self.number_measurements, *self.roi_shape)
         )
         return noise
 
     def close(self) -> None:
-        """
-        Passes since there is no device to close.
-        """
+        """Record completion of mock sensor cleanup."""
+        logging.info("MockCam sensor cleanup completed")
