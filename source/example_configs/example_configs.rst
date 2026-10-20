@@ -10,3 +10,4 @@ Below you find example configuration files:
    :caption: Contents:
   
    ODMR
+   variable_blocks

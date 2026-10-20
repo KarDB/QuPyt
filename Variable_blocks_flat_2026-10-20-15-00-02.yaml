@@ -1,0 +1,54 @@
+averages: 1
+body_duration_us: 13.92
+data:
+  averaging_mode: spread
+  dynamic_steps: 1
+  ps_steps: 1
+  reference_channels: 1
+dynamic_devices: {}
+dynamic_steps: 1
+experiment_type: Variable_blocks_flat
+filename: Variable_blocks_flat_2026-10-20-15-00-02
+measurement_status: success
+ps_path: source/example_pulse_sequences/variable_blocks.py
+pulse_sequence:
+  awg_sequence_mode: flat
+  block_durations:
+    done: 1.2
+    drive: 2.4
+    prep: 1.2
+    readout: 0.96
+  include_flags: true
+  pulse_sequence_steps: 1
+  sampling_rate: 5000000000.0
+  second_source: true
+pulse_sequence_steps: 1
+qupyt_version: 0.2.1.dev65+gcf419cf89.d20261010
+sensor:
+  config:
+    image_roi:
+    - 2
+    - 2
+    - 0
+    - 0
+    number_measurements: 2
+    target_data_type: int64
+  type: MockCam
+sleep: 0
+static_devices: {}
+synchroniser:
+  channel_mapping:
+    DRIVE_ACTIVE: A1
+    LASER: 5
+    MW: 0
+    READ: 1
+    READOUT_ACTIVE: B2
+    SYNC: 6
+  config:
+    address: TCPIP::mock::INSTR
+    channels:
+    - 1
+    - 2
+    sampling_rate: 5000000000.0
+  type: MockSynchroniser
+  upload: true

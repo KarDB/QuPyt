@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import logging
-import pickle
-import re
+import os
+import tempfile
+from collections.abc import Callable, Mapping
+from numbers import Real
 from pathlib import Path
 from typing import Any, cast
 
@@ -12,10 +13,17 @@ import yaml
 from numpy.typing import NDArray
 from termcolor import colored
 
+from qupyt.pulse_sequences.awg_archive import (
+    CompiledBlock,
+    CompiledSequence,
+    write_awg_archive,
+)
+from qupyt.pulse_sequences.awg_archive import parse_awg_flag as parse_awg_flag
 from qupyt.set_up import get_seq_dir
+from qupyt.utils.errors import cleanup_after_error
 
 # Bump when numeric compilation changes so older artifacts are regenerated.
-NUMERIC_SEQUENCE_CACHE_VERSION = 1
+NUMERIC_SEQUENCE_CACHE_VERSION = 2
 
 
 def validate_sequence_instructions(instructions: object) -> None:
@@ -36,32 +44,93 @@ def validate_sequence_instructions(instructions: object) -> None:
     for block, repeat in zip(order, repeats):
         if not isinstance(block, str) or not isinstance(instructions.get(block), dict):
             raise ValueError(f"Missing or invalid pulse-sequence block {block!r}")
-        if not isinstance(repeat, int) or repeat < 1:
+        if isinstance(repeat, bool) or not isinstance(repeat, int) or repeat < 1:
             raise ValueError(
                 f"Repeat count for block {block!r} must be a positive integer; got {repeat!r}"
             )
 
 
-def parse_awg_flag(selector: str, channels: list[int]) -> tuple[str, int | None]:
-    """Parse a flag selector; its suffix is a physical AWG source channel."""
-    if (
-        not isinstance(selector, str)
-        or re.fullmatch(r"[ABCD](?:[12])?", selector) is None
-    ):
+def validate_awg_duration(value: object, context: str) -> float:
+    """Require a finite positive duration in microseconds."""
+    if isinstance(value, bool) or not isinstance(value, Real):
         raise ValueError(
-            f"Invalid AWG flag selector {selector!r}; expected A, B, C, D "
-            "or a flag followed by physical AWG channel 1 or 2 (for example A2)."
+            f"{context} must be a finite and positive duration in us; got {value!r}"
         )
-    channel = int(selector[1]) if len(selector) == 2 else None
-    if channel is not None and channel not in channels:
+    try:
+        numeric = float(value)
+    except (OverflowError, ValueError) as exc:
         raise ValueError(
-            f"AWG flag selector {selector!r} requests inactive AWG channel "
-            f"{channel}; active channels are {channels}."
+            f"{context} must be a finite and positive duration in us"
+        ) from exc
+    if not np.isfinite(numeric) or numeric <= 0:
+        raise ValueError(
+            f"{context} must be a finite and positive duration in us; got {value!r}"
         )
-    return selector[0], channel
+    return numeric
+
+
+def resolve_awg_block_durations(instructions: Mapping[str, Any]) -> dict[str, float]:
+    """Resolve AWG block durations using the scalar default and named overrides.
+
+    Parameters
+    ----------
+    instructions : Mapping[str, Any]
+        Validated logical pulse-sequence instructions, with durations in microseconds.
+
+    Returns
+    -------
+    dict[str, float]
+        Effective duration for each distinct referenced block in sorted order.
+
+    Raises
+    ------
+    ValueError
+        If a duration is invalid or an override references an unsequenced block.
+    """
+    default_duration = instructions.get("total_duration")
+    # Preserve legacy numeric strings, including exponent literals parsed as
+    # strings by PyYAML. The new overrides and setter require numeric values.
+    if isinstance(default_duration, str):
+        try:
+            default_duration = float(default_duration)
+        except ValueError as exc:
+            raise ValueError(
+                "total_duration must contain a positive numeric duration"
+            ) from exc
+    duration = validate_awg_duration(default_duration, "total_duration")
+    overrides = instructions.get("block_durations", {})
+    if not isinstance(overrides, dict):
+        raise ValueError(
+            "block_durations must be a mapping of block names to durations in us"
+        )
+    names = sorted(set(instructions["sequencing_order"]))
+    for name, value in overrides.items():
+        if not isinstance(name, str) or name not in names:
+            raise ValueError(
+                f"block_durations references an unsequenced block {name!r}"
+            )
+        validate_awg_duration(value, f"block_durations[{name!r}]")
+    return {name: float(overrides.get(name, duration)) for name in names}
 
 
 class PulseSequenceYaml:
+    """Compile logical AWG YAML into a versioned collection of numeric blocks.
+
+    Parameters
+    ----------
+    channel_mapping : dict[str, Any]
+        Existing numeric channel indices or physical sequencer flag selectors.
+    awg_sources : list[int]
+        Active physical sources in the order used by numeric channel indices.
+    samprate : float
+        Sampling rate in samples per second.
+    yaml_file : str or pathlib.Path, optional
+        Source YAML; relative paths are resolved in the user's sequence directory.
+    sample_count_validator : callable, optional
+        Validate a block name and its rounded sample count before any allocation.
+        This check also runs when the numeric cache is reused.
+    """
+
     def __init__(
         self,
         #  Channel list as you think about them
@@ -73,6 +142,8 @@ class PulseSequenceYaml:
         awg_sources: list[int],
         samprate: float,  # = 5e9,
         yaml_file: str | Path | None = None,
+        *,
+        sample_count_validator: Callable[[str, int], None] | None = None,
     ) -> None:
         self.yaml_file = Path("sequence_0.yaml" if yaml_file is None else yaml_file)
         if not self.yaml_file.is_absolute():
@@ -80,6 +151,7 @@ class PulseSequenceYaml:
         self.awg_sources = awg_sources
         self.channel_mapping = channel_mapping
         self.samp_rate = float(samprate)  # samples per second
+        self.sample_count_validator = sample_count_validator
 
     def _sequence_didnt_change(self) -> bool:
         with open(self.yaml_file, "r", encoding="utf-8") as file:
@@ -119,14 +191,33 @@ class PulseSequenceYaml:
     def _record_compiled_sequence(self) -> None:
         """Record a cache hit only after the numeric artifact was saved successfully."""
         artifact = (get_seq_dir() / "sequence.npz").stat()
-        with self._cache_path.open("w", encoding="utf-8") as file:
-            yaml.safe_dump(
-                {
-                    "instructions": self._cache_instructions,
-                    "artifact": [artifact.st_mtime_ns, artifact.st_size],
-                },
-                file,
-            )
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self._cache_path.parent,
+                prefix=self._cache_path.name + ".",
+                suffix=".tmp",
+                delete=False,
+            ) as file:
+                temporary_path = Path(file.name)
+                yaml.safe_dump(
+                    {
+                        "instructions": self._cache_instructions,
+                        "artifact": [artifact.st_mtime_ns, artifact.st_size],
+                    },
+                    file,
+                )
+            os.replace(temporary_path, self._cache_path)
+        except BaseException:
+            if temporary_path is not None:
+                path_to_remove = temporary_path
+                cleanup_after_error(
+                    lambda: path_to_remove.unlink(missing_ok=True),
+                    "pulse-sequence cache temporary file cleanup",
+                )
+            raise
 
     def translate_yaml_to_numeric_instructions(self) -> None:
         logging.info(
@@ -137,26 +228,36 @@ class PulseSequenceYaml:
         for selector in self.channel_mapping.values():
             if isinstance(selector, str):
                 parse_awg_flag(selector, self.awg_sources)
-        if self._sequence_didnt_change():
+        unchanged = self._sequence_didnt_change()
+        # Compile the same parsed input that was used to establish cache identity.
+        sequence_instructions = cast(
+            dict[str, Any], self._cache_instructions["sequence"]
+        )
+        durations = resolve_awg_block_durations(sequence_instructions)
+        if not np.isfinite(self.samp_rate) or self.samp_rate <= 0:
+            raise ValueError("Pulse sequence requires a positive sampling rate")
+        for block, duration in durations.items():
+            points = self.samp_rate * duration * 1e-6
+            if not np.isfinite(points) or round(points) < 1:
+                raise ValueError(
+                    f"Block {block!r} must contain at least one sampling point"
+                )
+            if self.sample_count_validator is not None:
+                self.sample_count_validator(block, int(round(points)))
+        if unchanged:
             logging.info(
                 "Reusing cached numeric pulse sequence for unchanged configuration %s",
                 self.yaml_file,
             )
             return
-        with open(self.yaml_file, "r", encoding="utf-8") as file:
-            sequence_instructions = yaml.safe_load(file)
         sequence_order = sequence_instructions["sequencing_order"]
         sequencing_repeats = sequence_instructions["sequencing_repeats"]
-        duration = float(sequence_instructions["total_duration"])
-        sorted_pulse_blocks = sorted(set(sequence_order))
-        seq = PulseSequence(
-            len(sorted_pulse_blocks),
-            duration,
-            self.awg_sources,
-            samprate=self.samp_rate,
-        )
+        blocks: dict[str, CompiledBlock] = {}
         flag_channels: dict[str, list[str]] = {}
-        for i, block in enumerate(sorted_pulse_blocks):
+        for block, duration in durations.items():
+            # Reuse the original sampler so floating-point evaluation, pulse
+            # overwrites, and the established marker packing stay identical.
+            seq = PulseSequence(1, duration, self.awg_sources, samprate=self.samp_rate)
             flag_channels[block] = []
             for channel, pulses in sequence_instructions[block].items():
                 mapped_channel = self.channel_mapping[channel]
@@ -165,7 +266,7 @@ class PulseSequenceYaml:
                     continue
                 for pulse in pulses.values():
                     seq.add_pulse(
-                        i,
+                        0,
                         float(pulse["start"]),
                         float(pulse["duration"]),
                         channel=mapped_channel,
@@ -173,16 +274,37 @@ class PulseSequenceYaml:
                         amplitude=float(pulse["amplitude"]),
                         freq=(float(pulse["frequency"]), float(pulse["phase"])),
                     )
-        seq.flag_channels = pickle.dumps(flag_channels)
-        seq.sequencer = sequencing_repeats
-        seq.sequencernames = sequence_order
-        seq.make("sequence.npz")
+            blocks[block] = CompiledBlock(block, duration, seq.pack_waveforms()[0])
+            logging.debug(
+                "Compiled AWG block %s: requested_duration_us=%s, samples=%s, timing_warnings=%s",
+                block,
+                duration,
+                seq.num_points,
+                seq.warning_counter,
+            )
+        compiled = CompiledSequence(
+            sample_rate_hz=float(self.samp_rate),
+            source_channels=tuple(self.awg_sources),
+            blocks=blocks,
+            step_block_names=tuple(sequence_order),
+            repeat_counts=tuple(sequencing_repeats),
+            flag_values=flag_channels,
+            properties={"Values": "None"},
+        )
+        try:
+            write_awg_archive(get_seq_dir() / "sequence.npz", compiled)
+        except Exception:
+            logging.exception(
+                "Failed to save compiled AWG sequence from %s", self.yaml_file
+            )
+            raise
         self._record_compiled_sequence()
         logging.info(
-            "Translated pulse sequence from %s: blocks=%s, channels=%s",
+            "Translated pulse sequence from %s: blocks=%s, channels=%s, body_duration_s=%s",
             self.yaml_file,
-            len(sorted_pulse_blocks),
+            len(blocks),
             self.awg_sources,
+            compiled.body_duration_s,
         )
 
 
@@ -205,8 +327,11 @@ class PulseSequence:
                 "Pulse sequence requires positive sampling rate, duration, and block count"
             )
         self.samp_rate = samprate  # samples per second
+        self.duration = duration
         self.min_time = 1 / samprate
         points = samprate * duration * 1e-6
+        if not np.isfinite(points):
+            raise ValueError("Pulse sequence sample count must be finite")
         self.num_points = int(round(points))
         if self.num_points < 1:
             raise ValueError("Pulse sequence must contain at least one sampling point")
@@ -235,9 +360,9 @@ class PulseSequence:
         self.pulses = np.zeros((numseqs, 5 * len(self.awg_sources), self.num_points))
         self.sequencer: list[int] | None = None
         self.sequencernames: list[str] | None = None
-        self.flag_channels: Any
+        self.flag_channels: dict[str, list[str]] = {}
         self.warning_counter = 0
-        self.properties = {"Values": "None"}
+        self.properties: dict[str, Any] = {"Values": "None"}
 
     def time_to_index(self, time: float) -> int:
         points = self.samp_rate * time * 1e-6
@@ -306,6 +431,21 @@ class PulseSequence:
             If the pulse is outside the sequence bounds or a block range has other
             than two elements.
         """
+        if (
+            not np.isfinite(start)
+            or not np.isfinite(duration)
+            or not np.isfinite(amplitude)
+            or (freq is not None and not all(np.isfinite(value) for value in freq))
+        ):
+            raise ValueError(
+                "Pulse timing, amplitude, frequency and phase must be finite"
+            )
+        if (
+            isinstance(channel, bool)
+            or not isinstance(channel, int)
+            or not 0 <= channel < 5 * len(self.awg_sources)
+        ):
+            raise ValueError(f"Invalid numeric AWG channel index {channel!r}")
         if inputtype == "time":
             start = self.time_to_index(start)
             duration = self.time_to_index(duration)
@@ -339,11 +479,8 @@ class PulseSequence:
                 amplitude * fr
             )
 
-    def make(self, name: str) -> None:
-        logging.info(
-            "Pulse sequence generation produced %s timing warnings",
-            self.warning_counter,
-        )
+    def pack_waveforms(self) -> NDArray[np.float64]:
+        """Pack uniform numeric blocks using the established marker bit ordering."""
         final = np.zeros((self.numseqs, 2 * len(self.awg_sources), self.num_points))
         for source_index, _source in enumerate(self.awg_sources):
             final[:, 2 * source_index, :] = self.pulses[:, 5 * source_index, :]
@@ -354,37 +491,55 @@ class PulseSequence:
                 + self.pulses[:, 5 * source_index + 4, :] * 2**4
             )
 
-        # These digests identify compiled waveforms for cache reuse.
-        hash1 = hashlib.sha1(final.tobytes(), usedforsecurity=False).hexdigest()
-        hash2 = hashlib.sha1(
-            str(self.sequencer).encode("utf-8"), usedforsecurity=False
-        ).hexdigest()
-        hash3 = hashlib.sha1(
-            str(self.sequencernames).encode("utf-8"), usedforsecurity=False
-        ).hexdigest()
-        hash4 = hash1 + hash2 + hash3
-        finalhash = hashlib.sha1(
-            hash4.encode("utf-8"), usedforsecurity=False
-        ).hexdigest()
+        return final
 
-        file_dir = get_seq_dir()
-        try:
-            np.savez(
-                file_dir / name,
-                final,
-                np.asarray(self.sequencer),
-                np.asarray(self.sequencernames),
-                finalhash,
-                np.asarray(self.properties),
-                self.flag_channels,
+    def make(self, name: str) -> None:
+        """Save uniform blocks in the versioned, pickle-free AWG archive format."""
+        if self.sequencernames is None or self.sequencer is None:
+            raise ValueError(
+                "Set sequencernames and sequencer before saving an AWG sequence"
             )
+        if not isinstance(self.flag_channels, dict):
+            raise ValueError(
+                "flag_channels must be a mapping of block names to selector lists; "
+                "replace legacy pickled bytes with the original mapping"
+            )
+        names = sorted(set(self.sequencernames))
+        if len(names) != self.numseqs:
+            raise ValueError("Unique waveform names must match the numeric block count")
+        if any(
+            isinstance(count, bool) or not isinstance(count, (int, np.integer))
+            for count in self.sequencer
+        ):
+            raise ValueError("sequencer repeat counts must be positive integers")
+        final = self.pack_waveforms()
+        compiled = CompiledSequence(
+            sample_rate_hz=float(self.samp_rate),
+            source_channels=tuple(self.awg_sources),
+            blocks={
+                block_name: CompiledBlock(
+                    block_name, float(self.duration), final[index]
+                )
+                for index, block_name in enumerate(names)
+            },
+            step_block_names=tuple(self.sequencernames),
+            repeat_counts=tuple(int(count) for count in self.sequencer),
+            flag_values=self.flag_channels or {block_name: [] for block_name in names},
+            properties=self.properties,
+        )
+        output_path = get_seq_dir() / (name if name.endswith(".npz") else name + ".npz")
+        try:
+            write_awg_archive(output_path, compiled)
         except Exception:
             logging.exception(
-                "Failed to save numeric pulse sequence to %s", file_dir / name
+                "Failed to save numeric pulse sequence to %s", output_path
             )
             raise
         logging.info(
-            "Saved numeric pulse sequence to %s: shape=%s", file_dir / name, final.shape
+            "Saved numeric pulse sequence to %s: shape=%s, timing_warnings=%s",
+            output_path,
+            final.shape,
+            self.warning_counter,
         )
 
 
@@ -404,6 +559,10 @@ class PulseBlasterSequence:
             get_seq_dir() / "sequence_0.yaml" if yaml_file is None else yaml_file
         )
         self.yaml_sequence: dict[str, Any] = self._load_yaml_sequence(sequence_path)
+        if self.yaml_sequence.get("block_durations"):
+            raise ValueError(
+                "block_durations is supported by the AWG path, not PulseBlaster"
+            )
         self.total_duration = self.yaml_sequence["total_duration"]
 
     def _load_yaml_sequence(self, path: str | Path) -> dict[str, Any]:

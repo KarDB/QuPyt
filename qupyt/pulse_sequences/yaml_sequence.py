@@ -10,15 +10,74 @@ import numpy as np
 import yaml
 
 from qupyt import set_up
+from qupyt.pulse_sequences.SequenceDesigner import (
+    resolve_awg_block_durations,
+    validate_awg_duration,
+    validate_sequence_instructions,
+)
 
 
 class YamlSequence:
-    def __init__(self, duration: float) -> None:
+    """Describe reusable pulse blocks and their logical playback order.
+
+    Parameters
+    ----------
+    duration : float
+        Default duration of each block in microseconds, including trailing idle time.
+    block_durations : dict[str, float], optional
+        AWG-only duration overrides in microseconds. Named blocks are created
+        empty and must appear in sequencing_order before writing the sequence.
+    """
+
+    def __init__(
+        self, duration: float, *, block_durations: dict[str, float] | None = None
+    ) -> None:
         self.pulse_sequence: dict[str, Any] = {}
         self.counter: dict[str, dict[str, int]] = {}
         self.sequencing_order: list[str]
         self.sequencing_repeats: list[int]
         self.pulse_sequence["total_duration"] = duration
+        if block_durations is not None:
+            self.pulse_sequence["block_durations"] = {}
+            for name, block_duration in block_durations.items():
+                self.set_block_duration(name, block_duration)
+
+    def set_block_duration(self, block_name: str, duration: float) -> None:
+        """Set an AWG block's duration, creating an empty block when needed.
+
+        Parameters
+        ----------
+        block_name : str
+            Unique block name used in sequencing_order.
+        duration : float
+            Finite positive block duration in microseconds. Other blocks retain
+            the constructor's scalar duration unless explicitly overridden.
+
+        Raises
+        ------
+        ValueError
+            If the name is reserved or the duration is not finite and positive.
+        """
+        if (
+            not isinstance(block_name, str)
+            or not block_name
+            or block_name
+            in {
+                "total_duration",
+                "block_durations",
+                "sequencing_order",
+                "sequencing_repeats",
+                "awg_sequence_mode",
+                "awg_repeated_child",
+            }
+        ):
+            raise ValueError(f"Invalid or reserved AWG block name {block_name!r}")
+        numeric_duration = validate_awg_duration(duration, "Block duration")
+        self.pulse_sequence.setdefault("block_durations", {})[
+            block_name
+        ] = numeric_duration
+        self.pulse_sequence.setdefault(block_name, {})
+        self.counter.setdefault(block_name, {})
 
     def add_pulse(
         self,
@@ -59,6 +118,9 @@ class YamlSequence:
         file_name = f"sequence_{sequence_number_string}.yaml"
         self.pulse_sequence["sequencing_order"] = self.sequencing_order
         self.pulse_sequence["sequencing_repeats"] = self.sequencing_repeats
+        if "block_durations" in self.pulse_sequence:
+            validate_sequence_instructions(self.pulse_sequence)
+            resolve_awg_block_durations(self.pulse_sequence)
         output_path = file_path / file_name
         try:
             with open(output_path, "w", encoding="utf-8") as file:
@@ -67,11 +129,12 @@ class YamlSequence:
             logging.exception("Failed to write pulse sequence to %s", output_path)
             raise
         logging.info(
-            "Wrote pulse sequence to %s: duration=%s, blocks=%s, sequencing_steps=%s",
+            "Wrote pulse sequence to %s: duration=%s, blocks=%s, sequencing_steps=%s, duration_overrides=%s",
             output_path,
             self.pulse_sequence["total_duration"],
             len(self.counter),
             len(self.sequencing_order),
+            self.pulse_sequence.get("block_durations", {}),
         )
 
 

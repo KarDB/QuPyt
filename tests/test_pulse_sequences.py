@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import pyvisa
 import yaml
+from numpy.lib.npyio import NpzFile
 
 from qupyt.hardware import synchronisers
 from qupyt.hardware.synchronisers import AWGenerator, PStreamer
@@ -47,7 +48,7 @@ def awg_loader(monkeypatch: pytest.MonkeyPatch) -> AWGenerator:
     manager = Mock()
     manager.open_resource.return_value = resource
     monkeypatch.setattr(pyvisa, "ResourceManager", Mock(return_value=manager))
-    return AWGenerator({"address": "test"}, {})
+    return AWGenerator({"address": "test", "sampling_rate": 1e6}, {})
 
 
 def test_yaml_to_numeric_archive_to_awg_loader_preserves_values(
@@ -200,7 +201,7 @@ def test_corrupt_cache_regenerates_valid_archive(
     compiler.translate_yaml_to_numeric_instructions()
     assert compiler._sequence_didnt_change()
     with np.load(get_seq_dir() / "sequence.npz") as archive:
-        np.testing.assert_array_equal(archive["arr_0"][0, 0], [0, 0.25, 0.25, 0])
+        np.testing.assert_array_equal(archive["block_000000"][0], [0, 0.25, 0.25, 0])
 
 
 def test_changed_flag_mapping_invalidates_cache(
@@ -225,7 +226,7 @@ def test_changed_sampling_rate_regenerates_waveform(sequence_files: Path) -> Non
         compiler = designer.PulseSequenceYaml(mapping, [1, 2], rate, sequence_files)
         compiler.translate_yaml_to_numeric_instructions()
         with np.load(get_seq_dir() / "sequence.npz") as archive:
-            np.testing.assert_array_equal(archive["arr_0"][0, 0], expected)
+            np.testing.assert_array_equal(archive["block_000000"][0], expected)
 
 
 def test_corrupt_numeric_artifact_is_recompiled(sequence_files: Path) -> None:
@@ -236,7 +237,7 @@ def test_corrupt_numeric_artifact_is_recompiled(sequence_files: Path) -> None:
     (get_seq_dir() / "sequence.npz").write_bytes(b"broken archive")
     compiler.translate_yaml_to_numeric_instructions()
     with np.load(get_seq_dir() / "sequence.npz") as archive:
-        assert archive["arr_0"].shape == (1, 4, 4)
+        assert archive["block_000000"].shape == (4, 4)
 
 
 def test_archive_read_error_preserved_when_archive_close_also_fails(
@@ -245,7 +246,20 @@ def test_archive_read_error_preserved_when_archive_close_also_fails(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     error = OSError("invalid archive")
-    archive = MagicMock()
+    archive = MagicMock(spec=NpzFile)
+    archive.files = [
+        "format_version",
+        "sample_rate_hz",
+        "source_channels",
+        "block_names",
+        "sample_counts",
+        "requested_durations_us",
+        "step_block_names",
+        "repeat_counts",
+        "flags_json",
+        "properties_json",
+        "block_000000",
+    ]
     archive.__getitem__.side_effect = error
     archive.close.side_effect = OSError("archive close failed")
     monkeypatch.setattr(np, "load", Mock(return_value=archive))
@@ -254,7 +268,7 @@ def test_archive_read_error_preserved_when_archive_close_also_fails(
         loader._load_sequence_block(Path("invalid.npz"))
     assert caught.value is error
     archive.close.assert_called_once_with()
-    assert "Additional error during numeric sequence file close" in caplog.text
+    assert "Additional error during numeric AWG archive close" in caplog.text
 
 
 @pytest.mark.parametrize(

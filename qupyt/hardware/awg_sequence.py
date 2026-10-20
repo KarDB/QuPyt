@@ -8,7 +8,7 @@ from typing import Any, TypeVar
 
 Step = TypeVar("Step")
 
-DEFAULT_MAX_SEQUENCE_STEPS = 16_384
+DEFAULT_MAX_SEQUENCE_STEPS = 16_383
 DEFAULT_MAX_STEP_REPEAT = 1_048_576
 
 
@@ -84,6 +84,62 @@ def get_awg_sequence_options(instructions: Mapping[str, Any]) -> dict[str, Any]:
         for key in ("awg_sequence_mode", "awg_repeated_child")
         if key in instructions
     }
+
+
+def validate_awg_sequence_plan(
+    steps: list[Step],
+    mode: str,
+    config: object,
+    *,
+    max_sequence_steps: int,
+    max_step_repeat: int,
+    device_type: str,
+    nongatereps: int = 1,
+) -> None:
+    """Validate every stored sequence asset before programming the instrument.
+
+    The shared AWG70000 step memory includes the trigger gate and all child
+    assets. Child repetitions consume playback time, but do not allocate more
+    sequence steps. Tracks of one asset share the same stored steps.
+    """
+    if not steps:
+        raise ValueError(f"{device_type} requires at least one logical sequence step.")
+    validate_awg_repeat_count(
+        nongatereps, max_step_repeat, "measurement-body", device_type
+    )
+    if mode == "flat":
+        if len(steps) > max_sequence_steps:
+            raise ValueError(
+                f"Expanded AWG sequence has {len(steps)} steps, exceeding "
+                f"the configured AWG limit of {max_sequence_steps}. Enable "
+                "awg_sequence_mode: repeated_child or reduce the sequence."
+            )
+        stored_steps = len(steps) + 2
+    elif mode == "repeated_child":
+        if nongatereps != 1:
+            raise ValueError(
+                "repeated_child mode supports nongatereps=1 only; outer body "
+                "repetition is not implemented for this upload layout."
+            )
+        prefix, child, _, suffix = validate_repeated_child_region(
+            steps,
+            config,
+            max_sequence_steps=max_sequence_steps,
+            max_step_repeat=max_step_repeat,
+            device_type=device_type,
+        )
+        stored_steps = 1 + len(prefix) + 1 + len(suffix) + len(child)
+    else:
+        raise ValueError(
+            f"Unsupported awg_sequence_mode: {mode!r}. Supported values are "
+            "'flat' and 'repeated_child'."
+        )
+    if stored_steps > max_sequence_steps:
+        raise ValueError(
+            f"{device_type} aggregate stored sequence steps {stored_steps}, including "
+            f"the trigger gate and child assets, exceed the configured AWG limit "
+            f"of {max_sequence_steps}."
+        )
 
 
 def infer_child_repetitions(

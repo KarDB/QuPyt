@@ -529,8 +529,8 @@ def test_alternating_yaml_inputs_cannot_reuse_another_numeric_sequence(
     compiler_b = designer.PulseSequenceYaml({}, [1], 1e6, second)
     for compiler, length in ((compiler_a, 1), (compiler_b, 2), (compiler_a, 1)):
         compiler.translate_yaml_to_numeric_instructions()
-        with np.load(directory / "sequence.npz", allow_pickle=True) as compiled:
-            assert compiled["arr_0"].shape[-1] == length
+        with np.load(directory / "sequence.npz", allow_pickle=False) as compiled:
+            assert compiled["block_000000"].shape[-1] == length
     (directory / "sequence.npz").unlink()
     assert not compiler_a._sequence_didnt_change()
 

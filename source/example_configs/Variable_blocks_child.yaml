@@ -1,0 +1,50 @@
+# Same logical playback as Variable_blocks_flat.yaml, using a repeated child.
+experiment_type: Variable_blocks_child
+averages: 1
+sleep: 0
+pulse_sequence_steps: &ps_steps 1
+dynamic_steps: &dynamic_steps 1
+
+sensor:
+  type: MockCam
+  config:
+    number_measurements: 2
+    target_data_type: int64
+    image_roi: [2, 2, 0, 0]
+
+synchroniser:
+  type: MockSynchroniser
+  upload: true
+  config:
+    address: 'TCPIP::mock::INSTR'
+    sampling_rate: 5.0e+9
+    channels: [1, 2]
+  channel_mapping:
+    MW: 0
+    READ: 1
+    LASER: 5
+    SYNC: 6
+    DRIVE_ACTIVE: A1
+    READOUT_ACTIVE: B2
+
+static_devices: {}
+dynamic_devices: {}
+
+data:
+  averaging_mode: spread
+  dynamic_steps: *dynamic_steps
+  ps_steps: *ps_steps
+  reference_channels: 1
+
+ps_path: 'source/example_pulse_sequences/variable_blocks.py'
+pulse_sequence:
+  pulse_sequence_steps: *ps_steps
+  sampling_rate: 5.0e+9
+  awg_sequence_mode: repeated_child
+  second_source: true
+  include_flags: true
+  block_durations:
+    prep: 1.2
+    drive: 2.4
+    readout: 0.96
+    done: 1.2

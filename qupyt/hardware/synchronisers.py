@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-import pickle
+import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -38,14 +38,17 @@ from qupyt.hardware.awg_sequence import (
     validate_awg_limit,
     validate_awg_metadata_lengths,
     validate_awg_repeat_count,
+    validate_awg_sequence_plan,
     validate_repeated_child_region,
 )
 from qupyt.hardware.visa_handler import VisaObject
 from qupyt.mixins import ConfigurationMixin, PulseSequenceError, UpdateConfigurationType
+from qupyt.pulse_sequences.awg_archive import CompiledSequence, read_awg_archive
 from qupyt.pulse_sequences.SequenceDesigner import (
     PulseBlasterSequence,
     PulseSequenceYaml,
     parse_awg_flag,
+    resolve_awg_block_durations,
     validate_sequence_instructions,
 )
 from qupyt.set_up import get_seq_dir
@@ -240,7 +243,7 @@ class AWGenerator(VisaObject, Synchroniser):
 
         self.wavenames: list[str]
         self.seqrepeats: list[int]
-        self.waveform_block: NDArray[Any]
+        self.compiled_sequence: CompiledSequence
         self.sequence_options: dict[str, Any] = {}
         self.analog_amplitude: float = 1.0
         self.marker_amplitude: float = 1.75
@@ -310,19 +313,48 @@ class AWGenerator(VisaObject, Synchroniser):
         logging.info("Loading AWG sequence from %s", ps_yaml_file)
         self._limit_channels_to_available_outputs()
         self._validate_flag_channels()
+        missing = object()
+        previous = {
+            name: getattr(self, name, missing)
+            for name in (
+                "sequence_options",
+                "compiled_sequence",
+                "wavenames",
+                "seqrepeats",
+                "flag_values",
+            )
+        }
+        try:
+            instructions = self._load_awg_sequence_input(ps_yaml_file)
+            self.sequence_options = get_awg_sequence_options(instructions)
+            sample_count_validator = (
+                self._get_waveform_sample_count_validator(ps_yaml_file)
+                if instructions.get("block_durations")
+                else None
+            )
+            sequence_translator = PulseSequenceYaml(
+                self.channel_mapping,
+                self.channels,
+                samprate=self.samprate,
+                yaml_file=ps_yaml_file,
+                sample_count_validator=sample_count_validator,
+            )
+            sequence_translator.translate_yaml_to_numeric_instructions()
+            self._load_sequence_block(get_seq_dir() / "sequence.npz")
+            # Preflight every asset before stopping the current program.
+            self._validate_awg_sequence_plan(self._get_logical_awg_steps())
+        except BaseException:
+            for name, value in previous.items():
+                if value is missing:
+                    if hasattr(self, name):
+                        delattr(self, name)
+                else:
+                    setattr(self, name, value)
+            logging.exception("Could not prepare AWG sequence from %s", ps_yaml_file)
+            raise
         self.stop()
         self.instance.write("*CLS")
         self._clear_awg()
-        self.sequence_options = self._load_awg_sequence_options(ps_yaml_file)
-        sequence_translator = PulseSequenceYaml(
-            self.channel_mapping,
-            self.channels,
-            samprate=self.samprate,
-            yaml_file=ps_yaml_file,
-        )
-        sequence_translator.translate_yaml_to_numeric_instructions()
-        self._load_sequence_block(get_seq_dir() / "sequence.npz")
-        self._get_logical_awg_steps()  # Validate cached flag metadata before upload.
         self._upload_waveforms()
         self._raise_on_awg_errors("waveform upload")
         self._sequence("autoseq", nongatereps=1)
@@ -347,17 +379,47 @@ class AWGenerator(VisaObject, Synchroniser):
         )
 
     def _upload_waveform(self, wavename: str, waveform: NDArray[Any]) -> None:
+        """Upload one source's analog and packed-marker rows without repacking."""
+        if (
+            waveform.ndim != 2
+            or waveform.shape[0] != 2
+            or waveform.shape[1] < 1
+            or waveform.dtype.kind not in "fiu"
+            or not np.all(np.isfinite(waveform))
+        ):
+            raise ValueError(
+                f"AWG waveform {wavename!r} requires two finite numeric rows "
+                "and at least one sample."
+            )
+        marker_row = waveform[1]
+        if (
+            np.any(marker_row < 0)
+            or np.any(marker_row > 255)
+            or np.any(marker_row != np.floor(marker_row))
+        ):
+            raise ValueError(
+                f"AWG waveform {wavename!r} marker samples must be integers in [0, 255]."
+            )
+        # Preserve the existing float32 wire format and legacy marker byte values.
+        # Only markers require conversion; converting the full array wastes memory.
+        markers = marker_row.astype(np.uint8)
         self.instance.write('wlist:waveform:delete "' + wavename + '"')
         self.instance.write(
             'wlist:waveform:new "' + wavename + '",' + str(waveform.shape[1]) + ",real"
         )
         self.instance.write_binary_values(
-            'wlist:waveform:data "' + wavename + '",', waveform[0, :]
+            'wlist:waveform:data "' + wavename + '",',
+            waveform[0, :],
+            datatype="f",
+            is_big_endian=False,
+            header_fmt="ieee",
         )
         self.instance.write_binary_values(
             'wlist:waveform:marker:data "' + wavename + '",',
-            waveform.astype(np.uint8)[1, :],
+            markers,
             datatype="B",
+            is_big_endian=False,
+            header_fmt="ieee",
         )
         logging.info(f"Uploaded waveform {wavename}".ljust(65, ".") + "[done]")
         self.opc_wait()
@@ -365,11 +427,11 @@ class AWGenerator(VisaObject, Synchroniser):
     def _sequence(self, seqname: str, nongatereps: int = 1) -> None:
         mode = self._get_awg_sequence_mode()
         logical_steps = self._get_logical_awg_steps()
+        self._validate_awg_sequence_plan(logical_steps, nongatereps=nongatereps)
         if mode == "flat":
             self._sequence_flat(seqname, logical_steps, nongatereps=nongatereps)
             return
         if mode == "repeated_child":
-            self._raise_if_repeated_child_is_unverified_model()
             self._sequence_repeated_child(
                 seqname, logical_steps, nongatereps=nongatereps
             )
@@ -587,6 +649,23 @@ class AWGenerator(VisaObject, Synchroniser):
     def _get_awg_sequence_mode(self) -> str:
         return str(self.sequence_options.get("awg_sequence_mode", "flat"))
 
+    def _validate_awg_sequence_plan(
+        self, steps: list[AWGenerator.AWGSequenceStep], nongatereps: int = 1
+    ) -> None:
+        """Check mode, complete resource use, and child layout before upload."""
+        mode = self._get_awg_sequence_mode()
+        validate_awg_sequence_plan(
+            steps,
+            mode,
+            self.sequence_options.get("awg_repeated_child", {}),
+            max_sequence_steps=self.awg_max_sequence_steps,
+            max_step_repeat=self.awg_max_step_repeat,
+            device_type="Tek AWG",
+            nongatereps=nongatereps,
+        )
+        if mode == "repeated_child":
+            self._raise_if_repeated_child_is_unverified_model()
+
     def _get_logical_awg_steps(self) -> list[AWGenerator.AWGSequenceStep]:
         validate_awg_metadata_lengths(self.wavenames, self.seqrepeats, "Tek AWG")
         self._validate_flag_channels()
@@ -630,13 +709,84 @@ class AWGenerator(VisaObject, Synchroniser):
         return infer_child_repetitions(steps, prefix_steps, child)
 
     def _load_awg_sequence_options(self, ps_yaml_file: str | Path) -> dict[str, Any]:
+        return get_awg_sequence_options(self._load_awg_sequence_input(ps_yaml_file))
+
+    def _load_awg_sequence_input(self, ps_yaml_file: str | Path) -> dict[str, Any]:
+        """Read validated YAML for upload options and explicit duration detection."""
         yaml_file = Path(ps_yaml_file)
         if not yaml_file.is_absolute():
             yaml_file = get_seq_dir() / yaml_file
         with open(yaml_file, "r", encoding="utf-8") as file:
             sequence_instructions = yaml.safe_load(file)
         validate_sequence_instructions(sequence_instructions)
-        return get_awg_sequence_options(sequence_instructions)
+        return cast(dict[str, Any], sequence_instructions)
+
+    def _get_waveform_sample_count_validator(
+        self, ps_yaml_file: str | Path
+    ) -> Callable[[str, int], None]:
+        """Query connected waveform limits for explicitly sized AWG blocks.
+
+        Read-only capability queries run before numeric allocation or stopping
+        playback. Legacy scalar-duration sequences retain their existing device
+        call sequence. Returned limits reflect the current instrument mode;
+        unsuitable lengths are rejected without padding or changing durations.
+        """
+        limits = {}
+        for key in ("LMINIMUM", "GRANULARITY", "LMAXIMUM"):
+            command = f"WLIST:WAVEFORM:{key}?"
+            try:
+                response = str(self.instance.query(command)).strip()
+            except Exception as exc:
+                raise ValueError(
+                    f"Cannot validate AWG block lengths for {ps_yaml_file}: "
+                    f"query {command} failed."
+                ) from exc
+            if re.fullmatch(r"\+?[0-9]+", response) is None or int(response) <= 0:
+                raise ValueError(
+                    f"Cannot validate AWG block lengths for {ps_yaml_file}: "
+                    f"query {command} returned {response!r}; expected a positive integer."
+                )
+            limits[key] = int(response)
+        minimum = limits["LMINIMUM"]
+        maximum = limits["LMAXIMUM"]
+        granularity = limits["GRANULARITY"]
+        if minimum > maximum:
+            raise ValueError(
+                f"Cannot validate AWG block lengths for {ps_yaml_file}: "
+                f"reported minimum {minimum} exceeds maximum {maximum}."
+            )
+        logging.info(
+            "AWG waveform limits for %s: minimum=%s, maximum=%s, granularity=%s samples",
+            ps_yaml_file,
+            minimum,
+            maximum,
+            granularity,
+        )
+
+        def validate_sample_count(block_name: str, sample_count: int) -> None:
+            # One REAL sample occupies four bytes. IEEE definite-length binary
+            # blocks have at most nine payload-length digits; chunking requires
+            # an explicit offset-based transfer implementation.
+            single_transfer_maximum = 249_999_999
+            if sample_count > single_transfer_maximum:
+                raise ValueError(
+                    f"AWG block {block_name!r} in {ps_yaml_file} has {sample_count} "
+                    f"samples, exceeding the single-transfer limit of "
+                    f"{single_transfer_maximum} float32 samples. Connected limits: "
+                    f"minimum={minimum}, maximum={maximum}, "
+                    f"granularity={granularity} samples. Chunked waveform uploads "
+                    "are not implemented; reduce the block duration or sampling rate."
+                )
+            if not minimum <= sample_count <= maximum or sample_count % granularity:
+                raise ValueError(
+                    f"AWG block {block_name!r} in {ps_yaml_file} has {sample_count} "
+                    f"samples, which violates connected waveform limits: "
+                    f"minimum={minimum}, maximum={maximum}, "
+                    f"granularity={granularity} samples. Adjust the block duration "
+                    "or sampling rate; automatic padding is disabled."
+                )
+
+        return validate_sample_count
 
     def _read_awg_errors(self) -> list[str]:
         errors = []
@@ -668,13 +818,60 @@ class AWGenerator(VisaObject, Synchroniser):
             )
 
     def _load_sequence_block(self, seqname: Path) -> None:
-        block = np.load(seqname)
-        with cleanup_on_exit(block.close, "numeric sequence file close"):
-            self.waveform_block = block["arr_0"]
-            self.seqrepeats = list(block["arr_1"])
-            self.wavenames = list(block["arr_2"])
-            self.flag_values = pickle.loads(block["arr_5"])
-        logging.info("loaded wave sequence from file".ljust(65, ".") + f"{seqname}")
+        """Validate a pickle-free archive before replacing the loaded state."""
+        try:
+            sequence = read_awg_archive(
+                seqname,
+                expected_source_channels=self.channels,
+                expected_sample_rate_hz=self.samprate,
+            )
+            self._validate_flag_channels()
+            for block_name, selectors in sequence.flag_values.items():
+                for selector in selectors:
+                    try:
+                        parse_awg_flag(selector, self.channels)
+                    except ValueError as exc:
+                        raise ValueError(
+                            f"AWG archive {seqname}, block {block_name!r}: {exc}"
+                        ) from exc
+            build_logical_awg_steps(
+                sequence.step_block_names,
+                sequence.repeat_counts,
+                AWGenerator.AWGSequenceStep,
+                max_step_repeat=self.awg_max_step_repeat,
+                device_type="Tek AWG",
+                flag_values=sequence.flag_values,
+            )
+        except Exception:
+            logging.exception("Could not load AWG archive %s", seqname)
+            raise
+        self.compiled_sequence = sequence
+        self.seqrepeats = list(sequence.repeat_counts)
+        self.wavenames = list(sequence.step_block_names)
+        self.flag_values = sequence.flag_values
+        logging.info(
+            "Loaded AWG archive %s: unique_blocks=%s, body_duration_s=%s",
+            seqname,
+            len(sequence.blocks),
+            sequence.body_duration_s,
+        )
+
+    @property
+    def waveform_block(self) -> NDArray[Any]:
+        """Return the legacy dense view when all blocks have equal sample counts.
+
+        Unequal blocks remain separate arrays in ``compiled_sequence.blocks``.
+        The dense view is constructed on demand rather than kept as a second
+        in-memory copy of every uploaded sample.
+        """
+        blocks = self.compiled_sequence.blocks
+        samples = [blocks[name].samples for name in sorted(blocks)]
+        if len({array.shape[1] for array in samples}) != 1:
+            raise ValueError(
+                "AWG blocks have different sample counts; inspect "
+                "compiled_sequence.blocks[name].samples instead of waveform_block."
+            )
+        return np.stack(samples)
 
     def _clear_awg(self) -> None:
         self.instance.write("slist:sequence:delete all")
@@ -685,8 +882,8 @@ class AWGenerator(VisaObject, Synchroniser):
     def _upload_waveforms(self) -> None:
         time_1 = time()
         sorted_wavenames = sorted(set(self.wavenames))
-        for i, wavename in tqdm(
-            enumerate(sorted_wavenames),
+        for wavename in tqdm(
+            sorted_wavenames,
             total=len(sorted_wavenames),
             ascii=True,
             desc="uploading waveforms",
@@ -694,7 +891,9 @@ class AWGenerator(VisaObject, Synchroniser):
             for channel_index, channel in enumerate(self.channels):
                 self._upload_waveform(
                     f"{wavename}_{channel}",
-                    self.waveform_block[i, channel_index * 2 : (channel_index * 2) + 2],
+                    self.compiled_sequence.blocks[wavename].samples[
+                        channel_index * 2 : (channel_index * 2) + 2
+                    ],
                 )
                 self.opc_wait()
         logging.info(
@@ -710,10 +909,7 @@ class AWGenerator(VisaObject, Synchroniser):
 
     def _set_daq_resolution(self, channel: int, dac_resolution: int) -> None:
         self.instance.write(f"source{channel}:dac:resolution {dac_resolution}")
-        logging.info(
-            f"Set AWG channel{channel} resolution to bit".ljust(65, ".")
-            + "{dac_resolution}"
-        )
+        logging.info("Set AWG channel%s resolution to %s bits", channel, dac_resolution)
 
     def _set_sampling_rate(self) -> None:
         self.instance.write(f"source:frequency {self.samprate}")
@@ -747,7 +943,9 @@ class AWGenerator(VisaObject, Synchroniser):
         self.device_type = device_type
 
     def _set_sampling_rate_attribute(self, sampling_rate: float) -> None:
-        self.samprate = sampling_rate
+        # YAML spellings such as 5.0e9 can arrive as strings; the compiler has
+        # always accepted them by converting to float before numeric sampling.
+        self.samprate = float(sampling_rate)
 
     def _set_channels_attribute(self, channels: list[int]) -> None:
         self.channels = channels
@@ -1100,6 +1298,10 @@ class PStreamer(Synchroniser):
             with open(self.yaml_file, "r", encoding="utf-8") as file:
                 full_pulse_list = yaml.safe_load(file)
             validate_sequence_instructions(full_pulse_list)
+            if full_pulse_list.get("block_durations"):
+                raise ValueError(
+                    "PulseStreamer does not support AWG block_durations overrides."
+                )
             # PulseStreamer consumes the expanded pulse program directly; it
             # does not implement Tek AWG parent/child sequencer compression.
             _validate_synchroniser_sequence_mode(
@@ -1219,11 +1421,16 @@ class MockGenerator(Synchroniser):
         self.device_type: str = "MockGenerator"
         self.max_sequence_steps: int = DEFAULT_MAX_SEQUENCE_STEPS
         self.max_step_repeat: int = DEFAULT_MAX_STEP_REPEAT
+        self.samprate: float = 5e9
+        self.channels: list[int] = [1, 2]
+        self.compiled_sequence: CompiledSequence | None = None
 
         Synchroniser.__init__(self)
         # Retain TekAWG YAML keys so the mock can dry-run the same config.
         self.attribute_map["awg_max_sequence_steps"] = self._set_max_sequence_steps
         self.attribute_map["awg_max_step_repeat"] = self._set_max_step_repeat
+        self.attribute_map["sampling_rate"] = self._set_sampling_rate_attribute
+        self.attribute_map["channels"] = self._set_channels_attribute
         self.initial_configuration_dict = configuration
         if configuration is not None:
             self._update_from_configuration(configuration)
@@ -1256,8 +1463,45 @@ class MockGenerator(Synchroniser):
             _validate_synchroniser_sequence_mode(
                 full_pulse_list, "MockSynchroniser", ("flat", "repeated_child")
             )
+            compiled_sequence = None
+            block_durations = (
+                resolve_awg_block_durations(full_pulse_list)
+                if "block_durations" in full_pulse_list
+                else {
+                    name: float(full_pulse_list["total_duration"])
+                    for name in sorted(set(sequence_order))
+                }
+            )
+            if full_pulse_list.get("block_durations"):
+                compiler = PulseSequenceYaml(
+                    self.channel_mapping,
+                    self.channels,
+                    samprate=self.samprate,
+                    yaml_file=self.yaml_file,
+                )
+                compiler.translate_yaml_to_numeric_instructions()
+                compiled_sequence = read_awg_archive(
+                    get_seq_dir() / "sequence.npz",
+                    expected_source_channels=self.channels,
+                    expected_sample_rate_hz=self.samprate,
+                )
+                body_duration_s = compiled_sequence.body_duration_s
+            else:
+                body_duration_s = sum(
+                    block_durations[name] * count * 1e-6
+                    for name, count in zip(
+                        sequence_order, sequencing_repeats, strict=True
+                    )
+                )
             self._validate_awg_sequence_options(
-                full_pulse_list, sequence_order, sequencing_repeats
+                full_pulse_list,
+                sequence_order,
+                sequencing_repeats,
+                flag_values=(
+                    compiled_sequence.flag_values
+                    if compiled_sequence is not None
+                    else None
+                ),
             )
             if total_duration - round(total_duration) != 0:
                 logging.warning(
@@ -1267,7 +1511,15 @@ class MockGenerator(Synchroniser):
             else:
                 self.total_duration = int(total_duration)
 
-            logging.info("Loaded sequence for MockSynchroniser from %s", self.yaml_file)
+            self.compiled_sequence = compiled_sequence
+            self.block_durations = block_durations
+            self.body_duration_s = body_duration_s
+
+            logging.info(
+                "Loaded sequence for MockSynchroniser from %s: body_duration_s=%s",
+                self.yaml_file,
+                self.body_duration_s,
+            )
 
         except AttributeError:
             logging.exception(
@@ -1281,23 +1533,23 @@ class MockGenerator(Synchroniser):
         full_pulse_list: dict[str, Any],
         sequence_order: list[str],
         sequencing_repeats: list[int],
+        *,
+        flag_values: dict[str, list[str]] | None = None,
     ) -> None:
         """Dry-run TekAWG sequence-mode metadata for mock measurements.
 
-        The mock does not send SCPI commands or compress waveforms. It checks
+        The mock does not send SCPI commands. It checks
         that the expanded logical sequence can be represented by the configured
         repeated_child parent/child layout, so mock measurements catch the same
         configuration mistakes before the YAML is sent to a real AWG.
         """
         mode = str(full_pulse_list.get("awg_sequence_mode", "flat"))
-        if mode == "flat":
-            logging.info("MockSynchroniser AWG sequence mode: flat")
-            return
         if mode != "repeated_child":
-            raise ValueError(
-                f"Unsupported awg_sequence_mode for MockSynchroniser: {mode!r}. "
-                "Supported values are 'flat' and 'repeated_child'."
-            )
+            if mode != "flat":
+                raise ValueError(
+                    f"Unsupported awg_sequence_mode for MockSynchroniser: {mode!r}. "
+                    "Supported values are 'flat' and 'repeated_child'."
+                )
 
         previous_options = getattr(self, "sequence_options", {})
         self.sequence_options = get_awg_sequence_options(full_pulse_list)
@@ -1308,7 +1560,19 @@ class MockGenerator(Synchroniser):
                 AWGenerator.AWGSequenceStep,
                 max_step_repeat=self.max_step_repeat,
                 device_type="MockSynchroniser AWG",
+                flag_values=flag_values,
             )
+            validate_awg_sequence_plan(
+                logical_steps,
+                mode,
+                self.sequence_options.get("awg_repeated_child", {}),
+                max_sequence_steps=self.max_sequence_steps,
+                max_step_repeat=self.max_step_repeat,
+                device_type="MockSynchroniser AWG",
+            )
+            if mode == "flat":
+                logging.info("MockSynchroniser AWG sequence mode: flat")
+                return
             prefix, child, repetitions, suffix = self._validate_repeated_child_region(
                 logical_steps
             )
@@ -1349,6 +1613,12 @@ class MockGenerator(Synchroniser):
         self.max_step_repeat = validate_awg_limit(
             max_step_repeat, "awg_max_step_repeat", "MockSynchroniser"
         )
+
+    def _set_sampling_rate_attribute(self, sampling_rate: float) -> None:
+        self.samprate = float(sampling_rate)
+
+    def _set_channels_attribute(self, channels: list[int]) -> None:
+        self.channels = channels
 
     def _validate_repeated_child_region(
         self, steps: list[AWGenerator.AWGSequenceStep]

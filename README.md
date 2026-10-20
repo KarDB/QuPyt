@@ -160,6 +160,23 @@ python -m pytest tests --cov=qupyt --cov-branch --cov-report=term-missing
 
 The code documentation can be found [here](https://qupyt.readthedocs.io)
 
+### Variable-duration AWG blocks
+
+Tektronix AWG sequences can keep a default `total_duration` per block and
+override individual lengths with `block_durations`. Existing integer channel
+mappings, marker packing, and DAC-resolution behavior are preserved. The new
+versioned NPZ cache stores separate numeric arrays for each block and JSON
+metadata; older caches are regenerated from the original pulse YAML.
+
+Try the mock measurements in
+[Variable_blocks_flat.yaml](source/example_configs/Variable_blocks_flat.yaml) or
+[Variable_blocks_child.yaml](source/example_configs/Variable_blocks_child.yaml),
+which use [variable_blocks.py](source/example_pulse_sequences/variable_blocks.py).
+See the [timing and archive guide](source/example_pulse_sequences/variable_blocks.rst)
+and [launch instructions](source/example_configs/variable_blocks.rst) for details.
+
+### Docstring convention
+
 Use **NumPy-style docstrings following PEP 257** throughout the project. Start
 with a short summary ending in a period; function summaries use the imperative
 form, such as "Acquire one measurement burst." Keep simple descriptions on one

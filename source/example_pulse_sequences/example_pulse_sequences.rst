@@ -8,3 +8,4 @@ Below you find example pulse sequence files:
    :caption: Contents:
   
    odmr
+   variable_blocks
