@@ -8,6 +8,7 @@ import argparse
 import logging
 import os
 import platform
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -17,17 +18,6 @@ from pathlib import Path
 from queue import Empty, Queue
 from time import sleep
 from typing import Any, cast
-
-import yaml
-from watchdog.events import (
-    FileClosedEvent,
-    FileCreatedEvent,
-    FileModifiedEvent,
-    FileMovedEvent,
-    PatternMatchingEventHandler,
-)
-from watchdog.observers import Observer
-from watchdog.observers.api import BaseObserver
 
 from qupyt.set_up import get_home_dir, get_log_dir, get_waiting_room, make_userdirs
 
@@ -60,10 +50,9 @@ Q:::::::QQ::::::::Qu:::::::::::::::uuPP::::::PP                  y:::::::y      
 print("\nWelcome to")
 print(qupyt_logo_text)
 
-make_userdirs()
 parser = argparse.ArgumentParser(description="Start QuPyt measurement")
 parser.add_argument(
-    "--verbose", action="store_true", help="also show logging output on screen"
+    "--verbose", action="store_true", help="also show full logging output on screen"
 )
 parser.add_argument(
     "--debug",
@@ -73,9 +62,37 @@ parser.add_argument(
 args = parser.parse_args()
 
 logfile = get_log_dir() / f"log_{date.today()}.log"
-handlers: list[logging.Handler] = [logging.FileHandler(logfile, encoding="utf-8")]
-if args.verbose:
-    handlers.append(logging.StreamHandler())
+
+
+class _ConsoleErrorFormatter(logging.Formatter):
+    """Show the cause on the terminal while keeping tracebacks in the log file."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = f"{record.levelname}: {record.getMessage()}"
+        if record.exc_info is not None and record.exc_info[1] is not None:
+            error = record.exc_info[1]
+            message += f"\n{type(error).__name__}: {error}"
+        return f"{message}\nFull details: {logfile}"
+
+
+try:
+    make_userdirs()
+    handlers: list[logging.Handler] = [logging.FileHandler(logfile, encoding="utf-8")]
+except OSError as error:
+    print(
+        f"ERROR: Cannot create QuPyt directories or open the log file {logfile}.\n"
+        f"{type(error).__name__}: {error}\n"
+        "Check directory permissions and available disk space.",
+        file=sys.stderr,
+        flush=True,
+    )
+    raise SystemExit(1) from error
+
+console_handler = logging.StreamHandler()
+if not args.verbose:
+    console_handler.setLevel(logging.ERROR)
+    console_handler.setFormatter(_ConsoleErrorFormatter())
+handlers.append(console_handler)
 logging.basicConfig(
     handlers=handlers,
     format="%(levelname)s\t%(asctime)s [%(threadName)s] %(module)s:%(lineno)d %(message)s",
@@ -87,19 +104,43 @@ logging.info(
     "Logging initialized: file=%s, level=%s", logfile, "DEBUG" if args.debug else "INFO"
 )
 
-# Initialize logging before hardware imports so optional-driver warnings reach the log file.
-from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
-from qupyt.hardware.sensors import Sensor, SensorFactory
-from qupyt.hardware.synchronisers import Synchroniser, SynchroniserFactory
-from qupyt.measurement_logic.run_measurement import run_measurement
-from qupyt.pulse_sequences.pulse_sequence_handler import (
-    update_params_dict,
-    write_user_ps,
-)
-from qupyt.utils.errors import cleanup_after_error, cleanup_all, cleanup_on_exit
+# Initialize logging before imports so dependency failures also reach the terminal.
+try:
+    import yaml
+    from watchdog.events import (
+        FileClosedEvent,
+        FileCreatedEvent,
+        FileModifiedEvent,
+        FileMovedEvent,
+        PatternMatchingEventHandler,
+    )
+    from watchdog.observers import Observer
+    from watchdog.observers.api import BaseObserver
+
+    from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
+    from qupyt.hardware.sensors import Sensor, SensorFactory
+    from qupyt.hardware.synchronisers import Synchroniser, SynchroniserFactory
+    from qupyt.measurement_logic.run_measurement import run_measurement
+    from qupyt.pulse_sequences.pulse_sequence_handler import (
+        update_params_dict,
+        write_user_ps,
+    )
+    from qupyt.utils.errors import cleanup_after_error, cleanup_all, cleanup_on_exit
+except Exception as error:
+    logging.exception(
+        "Cannot load QuPyt components; check the installed dependencies and drivers"
+    )
+    raise SystemExit(1) from error
 
 queue: Queue[str]
 event_thread: threading.Event
+
+
+def _show_service_status(message: str) -> None:
+    """Keep service startup and shutdown visible without enabling verbose logs."""
+    logging.info(message)
+    if not args.verbose:
+        print(message, file=sys.stderr, flush=True)
 
 
 def _set_busy() -> None:
@@ -169,28 +210,45 @@ def _process_instruction(
     running_file = Path(f"{instruction_file}_running_{timestamp}")
     failed_file = Path(f"{instruction_file}_failed_{timestamp}")
     claimed = False
+    stage = "claiming the instruction file"
     try:
         os.replace(instruction_file, running_file)
         claimed = True
         logging.info(
             "Claimed instruction file: %s -> %s", instruction_file, running_file
         )
+        stage = "reading YAML instructions"
         with running_file.open("r", encoding="utf-8") as file:
             params = yaml.safe_load(file)
         if not isinstance(params, dict):
             raise ValueError("Measurement instructions must contain a YAML mapping")
+        stage = "measurement preparation"
         sensor, synchroniser = _prepare_measurement(
             params, static_devices, dynamic_devices
         )
+        stage = "measurement execution"
         success_status = run_measurement(
             static_devices, dynamic_devices, sensor, synchroniser, params
         )
         if success_status == "success":
+            stage = "removing the completed instruction file"
             running_file.unlink()
             logging.info("Removed completed instruction file %s", running_file)
         elif success_status == "failed":
+            # Report the primary cause before attempting recovery, which may fail too.
+            detail = params.get("measurement_error", {})
+            logging.error(
+                "Instruction %s failed during %s: %s: %s",
+                instruction_file,
+                detail.get("stage", "measurement execution"),
+                detail.get("type", "MeasurementError"),
+                detail.get(
+                    "message", "No failure details returned; check the log file"
+                ),
+            )
+            stage = "retaining the failed instruction file"
             os.replace(running_file, failed_file)
-            logging.warning("Retained failed instruction file at %s", failed_file)
+            logging.error("Retained failed instruction file at %s", failed_file)
         else:
             raise RuntimeError(f"Unexpected measurement status {success_status!r}")
         logging.info(
@@ -198,16 +256,24 @@ def _process_instruction(
         )
     except BaseException:
         logging.exception(
-            "Exception while processing measurement instructions %s", instruction_file
+            "Exception while processing measurement instructions %s during %s",
+            instruction_file,
+            stage,
         )
         if claimed:
 
             def retain_failed_instruction() -> None:
                 if running_file.exists():
-                    os.replace(running_file, failed_file)
-                    logging.warning(
-                        "Retained failed instruction file at %s", failed_file
-                    )
+                    try:
+                        os.replace(running_file, failed_file)
+                    except (Exception, SystemExit):
+                        logging.exception(
+                            "Cannot retain failed instruction as %s; recover it from %s",
+                            failed_file,
+                            running_file,
+                        )
+                        raise
+                    logging.error("Retained failed instruction file at %s", failed_file)
 
             cleanup_after_error(
                 retain_failed_instruction, "failed instruction retention"
@@ -216,10 +282,12 @@ def _process_instruction(
 
 
 def _release_idle_devices(
-    static_devices: DeviceHandler, dynamic_devices: DynamicDeviceHandler
+    static_devices: DeviceHandler | None, dynamic_devices: DynamicDeviceHandler | None
 ) -> None:
     """Attempt both handlers even if one device refuses to close."""
     for handler in (static_devices, dynamic_devices):
+        if handler is None:
+            continue
         try:
             handler.update_devices({})
         except (Exception, SystemExit):
@@ -229,11 +297,13 @@ def _release_idle_devices(
 
 
 def parse_input(stop_event: threading.Event | None = None) -> None:
-    static_devices = DeviceHandler({})
-    dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
+    static_devices = None
+    dynamic_devices = None
     stop_event = stop_event or threading.Event()
     idle = False
     try:
+        static_devices = DeviceHandler({})
+        dynamic_devices = DynamicDeviceHandler({}, number_dynamic_steps=1)
         while not stop_event.is_set() or not queue.empty():
             if queue.empty():
                 if not idle:
@@ -264,7 +334,9 @@ def parse_input(stop_event: threading.Event | None = None) -> None:
                 # The instruction helper already recorded the primary traceback.
                 # A failure must not terminate the worker or stall queue.join().
                 logging.exception(
-                    "Instruction %s failed; continuing with the queue", instruction_file
+                    "Instruction %s failed; continuing with the queue. "
+                    "QuPyt is still running and accepting instructions.",
+                    instruction_file,
                 )
             finally:
                 queue.task_done()
@@ -421,6 +493,19 @@ def _get_observer(event_handler: WaitingRoomEventHandler) -> BaseObserver:
     return my_observer
 
 
+def _join_service_thread(thread: threading.Thread, description: str) -> None:
+    """Wait for safe cleanup and explain delays without interrupting hardware."""
+    if thread.ident is None:
+        return
+    thread.join(timeout=5)
+    while thread.is_alive():
+        _show_service_status(
+            f"Still waiting for {description} to finish. "
+            "Queued measurements and hardware cleanup may take time."
+        )
+        thread.join(timeout=5)
+
+
 def main() -> None:
     """Start the main measurement loop."""
     logging.info(
@@ -430,49 +515,82 @@ def main() -> None:
     event_thread = threading.Event()
     global queue
     queue = Queue()
-    event_handler = _get_observer_event_handler()
-    observer = _get_observer(event_handler)
+    observer: BaseObserver | None = None
+    thread: threading.Thread | None = None
     stop_event = threading.Event()
-    thread = threading.Thread(
-        target=parse_input, args=(stop_event,), name="QuPyt-measurements"
-    )
+    service_failed = False
 
     def shutdown() -> None:
         stop_event.set()
         event_thread.set()
-        cleanup_all(
-            [
-                ("observer stop", observer.stop),
-                (
-                    "observer join",
-                    lambda: observer.join() if observer.ident is not None else None,
-                ),
+        operations: list[tuple[str, Callable[[], object]]] = []
+        if observer is not None:
+            operations.extend(
+                [
+                    ("observer stop", observer.stop),
+                    (
+                        "observer join",
+                        partial(
+                            _join_service_thread, observer, "waiting-room observer"
+                        ),
+                    ),
+                ]
+            )
+        if thread is not None:
+            operations.append(
                 (
                     "measurement worker join",
-                    lambda: thread.join() if thread.ident is not None else None,
-                ),
-            ]
-        )
-
-    with cleanup_on_exit(shutdown, "measurement service shutdown"):
-        try:
-            cast(Callable[[], None], observer.start)()
-            thread.start()
-            logging.info("Waiting-room observer and measurement worker started")
-            while True:
-                sleep(0.5)
-                if not thread.is_alive():
-                    raise RuntimeError(
-                        "Measurement worker terminated unexpectedly; see preceding error"
-                    )
-        except KeyboardInterrupt:
-            logging.info(
-                "Shutdown requested; waiting for queued measurements to finish"
+                    partial(_join_service_thread, thread, "measurement worker"),
+                )
             )
-        except Exception:
-            logging.exception("QuPyt measurement service failed")
-            raise
-    logging.info("QuPyt measurement service stopped")
+        cleanup_all(operations)
+
+    try:
+        with cleanup_on_exit(shutdown, "measurement service shutdown"):
+            try:
+                event_handler = _get_observer_event_handler()
+                observer = _get_observer(event_handler)
+                thread = threading.Thread(
+                    target=parse_input, args=(stop_event,), name="QuPyt-measurements"
+                )
+                cast(Callable[[], None], observer.start)()
+                thread.start()
+                _show_service_status(
+                    f"QuPyt is waiting for measurement instructions in {get_waiting_room()}."
+                )
+                logging.info("Waiting-room observer and measurement worker started")
+                while True:
+                    sleep(0.5)
+                    if not thread.is_alive():
+                        raise RuntimeError(
+                            "Measurement worker terminated unexpectedly; see preceding error"
+                        )
+                    if not observer.is_alive():
+                        raise RuntimeError(
+                            "Waiting-room observer terminated unexpectedly; "
+                            f"QuPyt can no longer accept instructions from {get_waiting_room()}"
+                        )
+                    for emitter in observer.emitters:
+                        if not emitter.is_alive():
+                            raise RuntimeError(
+                                "Waiting-room filesystem watcher terminated unexpectedly; "
+                                f"check that {get_waiting_room()} is accessible"
+                            )
+            except KeyboardInterrupt:
+                _show_service_status(
+                    "Shutdown requested; waiting for queued measurements to finish "
+                    "and hardware to be released."
+                )
+            except BaseException:
+                # Report before cleanup, which can itself be delayed by a driver.
+                service_failed = True
+                logging.exception("QuPyt measurement service failed")
+                raise
+    except (Exception, SystemExit):
+        if not service_failed:
+            logging.exception("QuPyt measurement service could not shut down cleanly")
+        raise
+    _show_service_status("QuPyt measurement service stopped")
 
 
 if __name__ == "__main__":
