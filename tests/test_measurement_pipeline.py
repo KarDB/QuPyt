@@ -289,6 +289,8 @@ def test_service_shutdown_signals_stop_and_attempts_all_joins(
 ) -> None:
     caplog.set_level(logging.INFO)
     observer, worker = Mock(), Mock()
+    observer.is_alive.return_value = False
+    worker.is_alive.return_value = False
     monkeypatch.setattr(service, "_get_observer", Mock(return_value=observer))
     thread_factory = Mock(return_value=worker)
     monkeypatch.setattr(service.threading, "Thread", thread_factory)
@@ -298,8 +300,8 @@ def test_service_shutdown_signals_stop_and_attempts_all_joins(
     assert stop_event.is_set()
     assert service.event_thread.is_set()
     observer.stop.assert_called_once_with()
-    observer.join.assert_called_once_with()
-    worker.join.assert_called_once_with()
+    observer.join.assert_called_once_with(timeout=5)
+    worker.join.assert_called_once_with(timeout=5)
     assert "QuPyt measurement service stopped" in caplog.text
 
 
@@ -309,6 +311,7 @@ def test_worker_death_remains_primary_if_service_shutdown_fails(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     observer, worker = Mock(), Mock()
+    observer.is_alive.return_value = False
     worker.is_alive.return_value = False
     observer.stop.side_effect = OSError("observer stop refused")
     monkeypatch.setattr(service, "_get_observer", Mock(return_value=observer))
@@ -318,6 +321,6 @@ def test_worker_death_remains_primary_if_service_shutdown_fails(
         RuntimeError, match="Measurement worker terminated unexpectedly"
     ):
         service.main()
-    observer.join.assert_called_once_with()
-    worker.join.assert_called_once_with()
+    observer.join.assert_called_once_with(timeout=5)
+    worker.join.assert_called_once_with(timeout=5)
     assert "Additional error during measurement service shutdown" in caplog.text
