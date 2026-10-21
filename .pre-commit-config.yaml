@@ -1,11 +1,17 @@
-# Install pre-commit to set up the git pre-commit hooks:
-# `pip install pre-commit`
-# Then install this pre-commit hook:
-# `pre-commit install`
-# Check if everything works using:
-# pre-commit run --all-files
+# Run these commands from the activated QuPyt development environment:
+# python -m pip install -e ".[dev]"
+# python -m pre_commit install
+# python -m pre_commit run --all-files
+
+minimum_pre_commit_version: "4.4.0"
+default_install_hook_types: [pre-commit, pre-push]
 
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff-check
+        args: [--fix]
   # Using this mirror lets us use mypyc-compiled black, which is about 2x faster
   - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 24.4.2
@@ -16,3 +22,13 @@ repos:
         # pre-commit's default_language_version, see
         # https://pre-commit.com/#top_level-default_language_version
         language_version: python3
+  - repo: local
+    hooks:
+      - id: pytest
+        name: Run all tests
+        entry: python -m pytest tests -q
+        language: unsupported
+        stages: [pre-commit, pre-push]
+        always_run: true
+        pass_filenames: false
+        require_serial: true

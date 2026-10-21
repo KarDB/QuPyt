@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # Copyright (c) 2023 SpinCore Technologies, Inc.
 # http://www.spincore.com
 #
@@ -16,30 +18,26 @@
 # 2. Altered source versions must be plainly marked as such, and must not be
 # misrepresented as being the original software.
 # 3. This notice may not be removed or altered from any source distribution.
-
 # Version 20230707
-
 # The following version of the file is NOT THE ORIGINAL version.
 # It has been altered subject to the original license above.
-# The changes made consiste mainly in formatting and type hints.
-
+# Changes include formatting, type hints, and explicit DLL import failures.
 import ctypes
-from typing import Any
-import logging
+from typing import Any, cast
 
 PULSE_PROGRAM = 0
 FREQ_REGS = 1
 
 try:
     spinapi = ctypes.CDLL("spinapi64")
-except:
+except OSError:
     try:
         spinapi = ctypes.CDLL("spinapi")
-    except Exception:
-        logging.warning("Falied to load spinapi DLL".ljust(65, ".") + "[failed]")
+    except OSError as error:
+        raise ImportError("Could not load either spinapi64 or spinapi DLL") from error
 
 
-def enum(**enums: Any) -> type:
+def enum(**enums: Any) -> type[Any]:
     return type("Enum", (), enums)
 
 
@@ -147,42 +145,42 @@ spinapi.pb_count_boards.restype = ctypes.c_int
 
 spinapi.pb_init.restype = ctypes.c_int
 
-spinapi.pb_select_board.argtype = ctypes.c_int
+spinapi.pb_select_board.argtypes = (ctypes.c_int,)
 spinapi.pb_select_board.restype = ctypes.c_int
 
-spinapi.pb_set_debug.argtype = ctypes.c_int
+spinapi.pb_set_debug.argtypes = (ctypes.c_int,)
 spinapi.pb_set_debug.restype = ctypes.c_int
 
 spinapi.pb_set_defaults.restype = ctypes.c_int
 
-spinapi.pb_set_freq.argtype = ctypes.c_double
+spinapi.pb_set_freq.argtypes = (ctypes.c_double,)
 spinapi.pb_set_freq.restype = ctypes.c_int
 
-spinapi.pb_set_phase.argtype = ctypes.c_double
+spinapi.pb_set_phase.argtypes = (ctypes.c_double,)
 spinapi.pb_set_phase.restype = ctypes.c_int
 
-spinapi.pb_set_amp.argtype = ctypes.c_float, ctypes.c_int
+spinapi.pb_set_amp.argtypes = ctypes.c_float, ctypes.c_int
 spinapi.pb_set_amp.restype = ctypes.c_int
 
-spinapi.pb_overflow.argtype = ctypes.c_int, ctypes.c_int
+spinapi.pb_overflow.argtypes = ctypes.c_int, ctypes.c_int
 spinapi.pb_overflow.restype = ctypes.c_int
 
-spinapi.pb_scan_count.argtype = ctypes.c_int
+spinapi.pb_scan_count.argtypes = (ctypes.c_int,)
 spinapi.pb_scan_count.restype = ctypes.c_int
 
-spinapi.pb_set_num_points.argtype = ctypes.c_int
+spinapi.pb_set_num_points.argtypes = (ctypes.c_int,)
 spinapi.pb_set_num_points.restype = ctypes.c_int
 
-spinapi.pb_set_radio_control.argtype = ctypes.c_int
+spinapi.pb_set_radio_control.argtypes = (ctypes.c_int,)
 spinapi.pb_set_radio_control.restype = ctypes.c_int
 
-spinapi.pb_core_clock.argtype = ctypes.c_double
+spinapi.pb_core_clock.argtypes = (ctypes.c_double,)
 spinapi.pb_core_clock.restype = ctypes.c_int
 
-spinapi.pb_write_register.argtype = ctypes.c_int, ctypes.c_int
+spinapi.pb_write_register.argtypes = ctypes.c_int, ctypes.c_int
 spinapi.pb_write_register.restype = ctypes.c_int
 
-spinapi.pb_start_programming.argtype = ctypes.c_int
+spinapi.pb_start_programming.argtypes = (ctypes.c_int,)
 spinapi.pb_start_programming.restype = ctypes.c_int
 
 spinapi.pb_stop_programming.restype = ctypes.c_int
@@ -201,10 +199,10 @@ spinapi.pb_status_message.restype = ctypes.c_char_p
 
 spinapi.pb_get_firmware_id.restype = ctypes.c_int
 
-spinapi.pb_sleep_ms.argtype = ctypes.c_int
+spinapi.pb_sleep_ms.argtypes = (ctypes.c_int,)
 spinapi.pb_sleep_ms.restype = ctypes.c_int
 
-spinapi.pb_get_data.argtype = (
+spinapi.pb_get_data.argtypes = (
     ctypes.c_int,  # num_points Number of complex points to read from RAM
     # real_data Real data from RAM is stored into this array
     ctypes.POINTER(ctypes.c_int),
@@ -213,13 +211,13 @@ spinapi.pb_get_data.argtype = (
 )
 spinapi.pb_get_data.restype = ctypes.c_int
 
-spinapi.pb_get_data_direct.argtype = (ctypes.c_int, ctypes.POINTER(ctypes.c_short))
+spinapi.pb_get_data_direct.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_short))
 spinapi.pb_get_data_direct.restype = ctypes.c_int
 
-spinapi.pb_unset_radio_control.argtype = ctypes.c_int
+spinapi.pb_unset_radio_control.argtypes = (ctypes.c_int,)
 spinapi.pb_unset_radio_control.restype = ctypes.c_int
 
-spinapi.pb_inst_pbonly.argtype = (
+spinapi.pb_inst_pbonly.argtypes = (
     ctypes.c_int,  # flags
     ctypes.c_int,  # inst
     ctypes.c_int,  # inst data
@@ -227,10 +225,10 @@ spinapi.pb_inst_pbonly.argtype = (
 )
 spinapi.pb_inst_pbonly.restype = ctypes.c_int
 
-spinapi.pb_dds_load.argtype = ctypes.c_float, ctypes.c_int
+spinapi.pb_dds_load.argtypes = ctypes.POINTER(ctypes.c_float), ctypes.c_int
 spinapi.pb_dds_load.restype = ctypes.c_int
 
-spinapi.pb_inst_radio.argtype = (
+spinapi.pb_inst_radio.argtypes = (
     ctypes.c_int,  # Frequency register
     ctypes.c_int,  # Cosine phase
     ctypes.c_int,  # Sin phase
@@ -245,7 +243,7 @@ spinapi.pb_inst_radio.argtype = (
 )
 spinapi.pb_inst_radio.restype = ctypes.c_int
 
-spinapi.pb_inst_radio_shape.argtype = (
+spinapi.pb_inst_radio_shape.argtypes = (
     ctypes.c_int,  # Frequency register
     ctypes.c_int,  # cos phase
     ctypes.c_int,  # sin phase
@@ -262,7 +260,7 @@ spinapi.pb_inst_radio_shape.argtype = (
 )
 spinapi.pb_inst_radio_shape.restype = ctypes.c_int
 
-spinapi.pb_inst_dds2.argtype = (
+spinapi.pb_inst_dds2.argtypes = (
     ctypes.c_int,  # Frequency register DDS0
     ctypes.c_int,  # Phase register DDS0
     ctypes.c_int,  # Amplitude register DDS0
@@ -280,25 +278,29 @@ spinapi.pb_inst_dds2.argtype = (
 )
 spinapi.pb_inst_dds2.restype = ctypes.c_int
 
-spinapi.pb_write_felix.argtype = (
+spinapi.pb_write_felix.argtypes = (
     ctypes.c_char_p,  # fnameout The filename for the Felix file you want to create
     ctypes.c_char_p,  # title_string 	Large string with all parameter information to include in Felix Title Block
     ctypes.c_int,  # num_points Number of points to write to the file
     ctypes.c_float,  # SW Spectral width of the baseband data in Hz
     ctypes.c_float,  # SF Spectrometer frequency in MHz
-    ctypes.c_int,  # real_data Integer array containing the real portion of the data points
-    ctypes.c_int,  # imag_data Integer array containing the imaginary portion of the data points
+    ctypes.POINTER(
+        ctypes.c_int
+    ),  # real_data Integer array containing the real portion of the data points
+    ctypes.POINTER(
+        ctypes.c_int
+    ),  # imag_data Integer array containing the imaginary portion of the data points
 )
 spinapi.pb_write_felix.restype = ctypes.c_int
 
-spinapi.pb_setup_filters.argtype = (
+spinapi.pb_setup_filters.argtypes = (
     ctypes.c_double,  # spectral_width
     ctypes.c_int,  # scan_repetitions
     ctypes.c_int,  # cmd
 )
 spinapi.pb_setup_filters.restype = ctypes.c_int
 
-spinapi.pb_inst_radio_shape_cyclops.argtype = (
+spinapi.pb_inst_radio_shape_cyclops.argtypes = (
     ctypes.c_int,  # Frequency register
     ctypes.c_int,  # cos phase
     ctypes.c_int,  # sin phase
@@ -331,7 +333,7 @@ spinapi.pb_fft_find_resonance.argtypes = (
 )
 spinapi.pb_fft_find_resonance.restype = ctypes.c_double
 
-spinapi.pb_write_ascii.argtype = (
+spinapi.pb_write_ascii.argtypes = (
     ctypes.c_char_p,  # fname
     ctypes.c_int,  # num_points
     ctypes.c_float,  # SW
@@ -340,7 +342,7 @@ spinapi.pb_write_ascii.argtype = (
 )
 spinapi.pb_write_ascii.restype = ctypes.c_int
 
-spinapi.pb_write_ascii_verbose.argtype = (
+spinapi.pb_write_ascii_verbose.argtypes = (
     ctypes.c_char_p,  # fname
     ctypes.c_int,  # num_points
     ctypes.c_float,  # SW
@@ -360,152 +362,159 @@ spinapi.pb_write_jcamp.argtypes = (
 )
 spinapi.pb_write_jcamp.restype = ctypes.c_int
 
-spinapi.pb_set_scan_segments.argtype = ctypes.c_int
+spinapi.pb_set_scan_segments.argtypes = (ctypes.c_int,)
 spinapi.pb_set_scan_segments.restype = ctypes.c_int
+
+
+def _decode_c_string(value: bytes | int | None, operation: str) -> str:
+    payload = ctypes.c_char_p(value).value
+    if payload is None:
+        raise RuntimeError(f"{operation} returned a null string pointer")
+    return payload.decode("utf-8")
 
 
 def pb_get_version() -> str:
     """Return library version as UTF-8 encoded string."""
     ret = spinapi.pb_get_version()
-    return str(ctypes.c_char_p(ret).value.decode("utf-8"))
+    return _decode_c_string(ret, "pb_get_version")
 
 
 def pb_get_error() -> str:
     """Return library error as UTF-8 encoded string."""
     ret = spinapi.pb_get_error()
-    return str(ctypes.c_char_p(ret).value.decode("utf-8"))
+    return _decode_c_string(ret, "pb_get_error")
 
 
-def pb_count_boards():
+def pb_count_boards() -> int:
     """Return the number of boards detected in the system."""
-    return spinapi.pb_count_boards()
+    return cast(int, spinapi.pb_count_boards())
 
 
-def pb_init():
+def pb_init() -> int:
     """Initialize currently selected board."""
-    return spinapi.pb_init()
+    return cast(int, spinapi.pb_init())
 
 
-def pb_set_debug(debug):
-    return spinapi.pb_set_debug(debug)
+def pb_set_debug(debug: int) -> int:
+    return cast(int, spinapi.pb_set_debug(debug))
 
 
-def pb_select_board(board_number):
-    """Select a specific board number"""
-    return spinapi.pb_select_board(board_number)
+def pb_select_board(board_number: int) -> int:
+    """Select a specific board number."""
+    return cast(int, spinapi.pb_select_board(board_number))
 
 
-def pb_set_defaults():
+def pb_set_defaults() -> int:
     """Set board defaults. Must be called before using any other board functions."""
-    return spinapi.pb_set_defaults()
+    return cast(int, spinapi.pb_set_defaults())
 
 
-def pb_set_freq(*args):
-    t = list(args)
-    # Argument 0 must be a double
-    t[0] = ctypes.c_double(t[0])
-    args = tuple(t)
-    return spinapi.pb_set_freq(*args)
+def pb_set_freq(frequency: float) -> int:
+    return cast(int, spinapi.pb_set_freq(ctypes.c_double(frequency)))
 
 
-def pb_set_phase(*args):
-    t = list(args)
-    # Argument 0 must be a double
-    t[0] = ctypes.c_double(t[0])
-    args = tuple(t)
-    return spinapi.pb_set_phase(*args)
+def pb_set_phase(phase: float) -> int:
+    return cast(int, spinapi.pb_set_phase(ctypes.c_double(phase)))
 
 
-def pb_set_amp(*args):
-    t = list(args)
-    # Argument 0 must be a float
-    t[0] = ctypes.c_float(t[0])
-    args = tuple(t)
-    return spinapi.pb_set_amp(*args)
+def pb_set_amp(amplitude: float, register: int) -> int:
+    return cast(int, spinapi.pb_set_amp(ctypes.c_float(amplitude), register))
 
 
-def pb_overflow(*args):
-    return spinapi.pb_overflow(*args)
+def pb_overflow(*args: int) -> int:
+    return cast(int, spinapi.pb_overflow(*args))
 
 
-def pb_scan_count(*args):
-    return spinapi.pb_scan_count(*args)
+def pb_scan_count(reset: int) -> int:
+    return cast(int, spinapi.pb_scan_count(reset))
 
 
-def pb_set_num_points(*args):
-    return spinapi.pb_set_num_points(*args)
+def pb_set_num_points(num_points: int) -> int:
+    return cast(int, spinapi.pb_set_num_points(num_points))
 
 
-def pb_set_radio_control(*args):
-    return spinapi.pb_set_radio_control(*args)
+def pb_set_radio_control(control: int) -> int:
+    return cast(int, spinapi.pb_set_radio_control(control))
 
 
-def pb_core_clock(clock):
-    return spinapi.pb_core_clock(ctypes.c_double(clock))
+def pb_core_clock(clock: float) -> int:
+    return cast(int, spinapi.pb_core_clock(ctypes.c_double(clock)))
 
 
-def pb_write_register(address, value):
-    return spinapi.pb_write_register(address, value)
+def pb_write_register(address: int, value: int) -> int:
+    return cast(int, spinapi.pb_write_register(address, value))
 
 
-def pb_start_programming(target):
-    return spinapi.pb_start_programming(target)
+def pb_start_programming(target: int) -> int:
+    return cast(int, spinapi.pb_start_programming(target))
 
 
-def pb_stop_programming():
-    return spinapi.pb_stop_programming()
+def pb_stop_programming() -> int:
+    return cast(int, spinapi.pb_stop_programming())
 
 
-def pb_dds_load(*args):
+def pb_dds_load(*args: Any) -> int:
     t = list(args)
     # List of argument 0 must be floats
     t[0] = (ctypes.c_float * len(t[0]))(*t[0])
     args = tuple(t)
-    return spinapi.pb_dds_load(*args)
+    return cast(int, spinapi.pb_dds_load(*args))
 
 
-def pb_inst_pbonly(*args):
-    t = list(args)
-    # Argument 3 must be a double
-    t[3] = ctypes.c_double(t[3])
-    args = tuple(t)
-    return spinapi.pb_inst_pbonly(*args)
+def pb_inst_pbonly(
+    flags: int, instruction: int, instruction_data: int, length: float
+) -> int:
+    return cast(
+        int,
+        spinapi.pb_inst_pbonly(
+            flags, instruction, instruction_data, ctypes.c_double(length)
+        ),
+    )
 
 
-def pb_inst_radio(*args):
+def pb_inst_radio(*args: Any) -> int:
     t = list(args)
     # Argument 10 must be a double
     t[10] = ctypes.c_double(t[10])
     args = tuple(t)
-    return spinapi.pb_inst_radio(*args)
+    return cast(int, spinapi.pb_inst_radio(*args))
 
 
-def pb_inst_dds(FREQ, TX_PHASE, TX_ENABLE, PHASE_RESET, FLAGS, INST, INST_DATA, LENGTH):
+def pb_inst_dds(
+    FREQ: int,
+    TX_PHASE: int,
+    TX_ENABLE: int,
+    PHASE_RESET: int,
+    FLAGS: int,
+    INST: int,
+    INST_DATA: int,
+    LENGTH: float,
+) -> int:
     return pb_inst_radio(
         FREQ, 0, 0, TX_PHASE, TX_ENABLE, PHASE_RESET, 0, FLAGS, INST, INST_DATA, LENGTH
     )
 
 
-def pb_inst_radio_shape(*args):
+def pb_inst_radio_shape(*args: Any) -> int:
     t = list(args)
     # Argument 12 must be a double
     t[12] = ctypes.c_double(t[12])
     args = tuple(t)
-    return spinapi.pb_inst_radio_shape(*args)
+    return cast(int, spinapi.pb_inst_radio_shape(*args))
 
 
 def pb_inst_dds_shape(
-    FREQ,
-    TX_PHASE,
-    TX_ENABLE,
-    PHASE_RESET,
-    USESHAPE,
-    AMP,
-    FLAGS,
-    INST,
-    INST_DATA,
-    LENGTH,
-):
+    FREQ: int,
+    TX_PHASE: int,
+    TX_ENABLE: int,
+    PHASE_RESET: int,
+    USESHAPE: int,
+    AMP: int,
+    FLAGS: int,
+    INST: int,
+    INST_DATA: int,
+    LENGTH: float,
+) -> int:
     return pb_inst_radio_shape(
         FREQ,
         0,
@@ -523,49 +532,49 @@ def pb_inst_dds_shape(
     )
 
 
-def pb_inst_dds2(*args):
+def pb_inst_dds2(*args: Any) -> int:
     t = list(args)
     # Argument 13 must be a double
     t[13] = ctypes.c_double(t[13])
     args = tuple(t)
-    return spinapi.pb_inst_dds2(*args)
+    return cast(int, spinapi.pb_inst_dds2(*args))
 
 
-def pb_start():
-    return spinapi.pb_start()
+def pb_start() -> int:
+    return cast(int, spinapi.pb_start())
 
 
-def pb_stop():
-    return spinapi.pb_stop()
+def pb_stop() -> int:
+    return cast(int, spinapi.pb_stop())
 
 
-def pb_reset():
-    return spinapi.pb_reset()
+def pb_reset() -> int:
+    return cast(int, spinapi.pb_reset())
 
 
-def pb_close():
-    return spinapi.pb_close()
+def pb_close() -> int:
+    return cast(int, spinapi.pb_close())
 
 
-def pb_read_status():
-    return spinapi.pb_read_status()
+def pb_read_status() -> int:
+    return cast(int, spinapi.pb_read_status())
 
 
-def pb_status_message():
+def pb_status_message() -> str:
     """Return library version as UTF-8 encoded string."""
     ret = spinapi.pb_status_message()
-    return str(ctypes.c_char_p(ret).value.decode("utf-8"))
+    return _decode_c_string(ret, "pb_status_message")
 
 
-def pb_get_firmware_id():
-    return spinapi.pb_get_firmware_id()
+def pb_get_firmware_id() -> int:
+    return cast(int, spinapi.pb_get_firmware_id())
 
 
-def pb_sleep_ms(mlsc):
-    return spinapi.pb_sleep_ms(mlsc)
+def pb_sleep_ms(mlsc: int) -> int:
+    return cast(int, spinapi.pb_sleep_ms(mlsc))
 
 
-def pb_get_data(num_points, real_data, imag_data):
+def pb_get_data(num_points: int, real_data: Any, imag_data: Any) -> int:
     # Create arrays to store the data
     c_real_data = (ctypes.c_int * num_points)(*real_data)
     c_imag_data = (ctypes.c_int * num_points)(*imag_data)
@@ -580,10 +589,10 @@ def pb_get_data(num_points, real_data, imag_data):
     # Call the C function with the updated data pointers
     result = spinapi.pb_get_data(num_points, real_data, imag_data)
 
-    return result
+    return cast(int, result)
 
 
-def pb_get_data_direct(num_points, data):
+def pb_get_data_direct(num_points: int, data: Any) -> int:
     # Create a C-style array of shorts using ctypes
     c_data = (ctypes.c_short * num_points)(*data)
 
@@ -594,14 +603,14 @@ def pb_get_data_direct(num_points, data):
     # Call the C function with the updated data pointer
     result = spinapi.pb_get_data_direct(num_points, data)
 
-    return result
+    return cast(int, result)
 
 
-def pb_unset_radio_control(ctrl):
-    return spinapi.pb_unset_radio_control(ctrl)
+def pb_unset_radio_control(ctrl: int) -> int:
+    return cast(int, spinapi.pb_unset_radio_control(ctrl))
 
 
-def pb_write_felix(*args):
+def pb_write_felix(*args: Any) -> int:
     t = list(args)
     t[0] = ctypes.c_char_p(t[0].encode())
     t[1] = ctypes.c_char_p(t[1].encode())
@@ -614,26 +623,28 @@ def pb_write_felix(*args):
     # List of argument 6 must be integers
     t[6] = (ctypes.c_int * len(t[6]))(*t[6])
     args = tuple(t)
-    return spinapi.pb_write_felix(*args)
+    return cast(int, spinapi.pb_write_felix(*args))
 
 
-def pb_setup_filters(*args):
+def pb_setup_filters(*args: Any) -> int:
     t = list(args)
     # Argument 0 must be a double
     t[0] = ctypes.c_double(t[0])
     args = tuple(t)
-    return spinapi.pb_setup_filters(*args)
+    return cast(int, spinapi.pb_setup_filters(*args))
 
 
-def pb_inst_radio_shape_cyclops(*args):
+def pb_inst_radio_shape_cyclops(*args: Any) -> int:
     t = list(args)
     # Argument 15 must be a double
     t[15] = ctypes.c_double(t[15])
     args = tuple(t)
-    return spinapi.pb_inst_radio_shape_cyclops(*args)
+    return cast(int, spinapi.pb_inst_radio_shape_cyclops(*args))
 
 
-def pb_fft_find_resonance(num_points, SF, SW, real_data, imag_data):
+def pb_fft_find_resonance(
+    num_points: int, SF: float, SW: float, real_data: Any, imag_data: Any
+) -> float:
     # Create a C-style array of ints using ctypes
     c_real_data = (ctypes.c_int * num_points)(*real_data)
     c_imag_data = (ctypes.c_int * num_points)(*imag_data)
@@ -647,10 +658,12 @@ def pb_fft_find_resonance(num_points, SF, SW, real_data, imag_data):
         num_points, SF, SW, real_data_pointer, imag_data_pointer
     )
 
-    return result
+    return cast(float, result)
 
 
-def pb_write_ascii(fname, num_points, SW, real_data, imag_data):
+def pb_write_ascii(
+    fname: str, num_points: int, SW: float, real_data: Any, imag_data: Any
+) -> int:
     # Convert the file name to a C-style string
     c_fname = ctypes.c_char_p(fname.encode())
 
@@ -661,10 +674,12 @@ def pb_write_ascii(fname, num_points, SW, real_data, imag_data):
     # Call the C function
     result = spinapi.pb_write_ascii(c_fname, num_points, SW, c_real_data, c_imag_data)
 
-    return result
+    return cast(int, result)
 
 
-def pb_write_ascii_verbose(fname, num_points, SW, SF, real_data, imag_data):
+def pb_write_ascii_verbose(
+    fname: str, num_points: int, SW: float, SF: float, real_data: Any, imag_data: Any
+) -> int:
     # Convert the file name to a C-style string
     c_fname = ctypes.c_char_p(fname.encode())
 
@@ -673,16 +688,18 @@ def pb_write_ascii_verbose(fname, num_points, SW, SF, real_data, imag_data):
     c_imag_data = (ctypes.c_int * num_points)(*imag_data)
 
     # Call the C function
-    SW = ctypes.c_float(SW)
-    SF = ctypes.c_float(SF)
+    c_sw = ctypes.c_float(SW)
+    c_sf = ctypes.c_float(SF)
     result = spinapi.pb_write_ascii_verbose(
-        c_fname, num_points, SW, SF, c_real_data, c_imag_data
+        c_fname, num_points, c_sw, c_sf, c_real_data, c_imag_data
     )
 
-    return result
+    return cast(int, result)
 
 
-def pb_write_jcamp(fname, num_points, SW, SF, real_data, imag_data):
+def pb_write_jcamp(
+    fname: str, num_points: int, SW: float, SF: float, real_data: Any, imag_data: Any
+) -> int:
     # Convert the file name to a C-style string
     c_fname = ctypes.c_char_p(fname.encode())
 
@@ -690,17 +707,17 @@ def pb_write_jcamp(fname, num_points, SW, SF, real_data, imag_data):
     c_real_data = (ctypes.c_int * num_points)(*real_data)
     c_imag_data = (ctypes.c_int * num_points)(*imag_data)
 
-    SF = ctypes.c_float(SF)
-    SW = ctypes.c_float(SW)
+    c_sf = ctypes.c_float(SF)
+    c_sw = ctypes.c_float(SW)
 
     # Call the C function
     result = spinapi.pb_write_jcamp(
-        c_fname, num_points, SW, SF, c_real_data, c_imag_data
+        c_fname, num_points, c_sw, c_sf, c_real_data, c_imag_data
     )
 
-    return result
+    return cast(int, result)
 
 
-def pb_set_scan_segments(num_segments):
+def pb_set_scan_segments(num_segments: int) -> int:
     # Call the C function
-    return spinapi.pb_set_scan_segments(num_segments)
+    return cast(int, spinapi.pb_set_scan_segments(num_segments))

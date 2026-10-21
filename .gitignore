@@ -10,6 +10,10 @@ __pychache__/
 *.gif
 *.mp4
 *test.py
+!tests/conftest.py
+.coverage
+.coverage.*
+htmlcov/
 *test.sqlite
 pylab/scripts/prewritten_sequences/*
 measurements/ESR/*
