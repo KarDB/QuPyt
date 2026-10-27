@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 from qupyt.hardware.device_handler import DeviceHandler, DynamicDeviceHandler
-from qupyt.pulse_sequences.awg_archive import CompiledSequence, read_awg_archive
+from qupyt.pulse_sequences.awg_sequence import CompiledSequence, read_awg_archive
 from qupyt.pulse_sequences.pulse_sequence_handler import write_user_ps
 from qupyt.pulse_sequences.SequenceDesigner import PulseSequenceYaml
 from qupyt.set_up import get_seq_dir, make_userdirs

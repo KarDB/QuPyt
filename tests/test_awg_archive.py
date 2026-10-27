@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from qupyt.pulse_sequences.awg_archive import (
+from qupyt.pulse_sequences.awg_sequence import (
     CompiledBlock,
     CompiledSequence,
     parse_awg_flag,

@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 from qupyt.pulse_sequences import SequenceDesigner as designer
-from qupyt.pulse_sequences.awg_archive import read_awg_archive
+from qupyt.pulse_sequences.awg_sequence import read_awg_archive
 from qupyt.pulse_sequences.yaml_sequence import YamlSequence
 from qupyt.set_up import get_seq_dir, make_userdirs
 

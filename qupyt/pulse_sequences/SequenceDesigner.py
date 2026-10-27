@@ -13,12 +13,12 @@ import yaml
 from numpy.typing import NDArray
 from termcolor import colored
 
-from qupyt.pulse_sequences.awg_archive import (
+from qupyt.pulse_sequences.awg_sequence import (
     CompiledBlock,
     CompiledSequence,
     write_awg_archive,
 )
-from qupyt.pulse_sequences.awg_archive import parse_awg_flag as parse_awg_flag
+from qupyt.pulse_sequences.awg_sequence import parse_awg_flag as parse_awg_flag
 from qupyt.set_up import get_seq_dir
 from qupyt.utils.errors import cleanup_after_error
 

@@ -14,12 +14,12 @@ import pyvisa
 import yaml
 from pyvisa.resources import MessageBasedResource
 
-from qupyt.hardware.awg_sequence import (
+from qupyt.hardware.synchronisers import AWGenerator, MockGenerator
+from qupyt.pulse_sequences import SequenceDesigner as designer
+from qupyt.pulse_sequences.awg_sequence import (
     get_awg_sequence_options,
     validate_awg_sequence_plan,
 )
-from qupyt.hardware.synchronisers import AWGenerator, MockGenerator
-from qupyt.pulse_sequences import SequenceDesigner as designer
 from qupyt.pulse_sequences.SequenceDesigner import PulseSequenceYaml
 from qupyt.set_up import get_seq_dir, make_userdirs
 

@@ -29,21 +29,22 @@ from termcolor import colored
 from tqdm import tqdm
 
 from qupyt import set_up
-from qupyt.hardware.awg_sequence import (
+from qupyt.hardware.visa_handler import VisaObject
+from qupyt.mixins import ConfigurationMixin, PulseSequenceError, UpdateConfigurationType
+from qupyt.pulse_sequences.awg_sequence import (
     DEFAULT_MAX_SEQUENCE_STEPS,
     DEFAULT_MAX_STEP_REPEAT,
+    CompiledSequence,
     build_logical_awg_steps,
     get_awg_sequence_options,
     infer_child_repetitions,
+    read_awg_archive,
     validate_awg_limit,
     validate_awg_metadata_lengths,
     validate_awg_repeat_count,
     validate_awg_sequence_plan,
     validate_repeated_child_region,
 )
-from qupyt.hardware.visa_handler import VisaObject
-from qupyt.mixins import ConfigurationMixin, PulseSequenceError, UpdateConfigurationType
-from qupyt.pulse_sequences.awg_archive import CompiledSequence, read_awg_archive
 from qupyt.pulse_sequences.SequenceDesigner import (
     PulseBlasterSequence,
     PulseSequenceYaml,
