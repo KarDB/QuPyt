@@ -1,0 +1,2857 @@
+[
+  {
+    "channels": [
+      1
+    ],
+    "mode": "flat",
+    "instructions": {
+      "total_duration": 4.0,
+      "sequencing_order": [
+        "prep",
+        "drive",
+        "readout",
+        "drive",
+        "readout",
+        "done"
+      ],
+      "sequencing_repeats": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        1
+      ],
+      "prep": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "drive": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "flag": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "readout": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "done": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "awg_sequence_mode": "flat"
+    },
+    "mapping": {
+      "analog0": 0,
+      "marker0": 1,
+      "flag": "A1"
+    },
+    "calls": [
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "2209b47b538102da4fbbed5344f7911a82393646981a07af8425a518fcff7418"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"sub\",6,1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"sub\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"sub\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"sub\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tasset1:waveform \"sub\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset1:waveform \"sub\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tasset1:waveform \"sub\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tasset1:waveform \"sub\",\"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"autoseq\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"autoseq\",2,1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:goto \"autoseq\",first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"autoseq\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejinput \"autoseq\", ATR"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejump \"autoseq\", 2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\", 1"
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP2:TASS1:SEQ \"autoseq\",\"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE1:CASS:SEQUENCE \"autoseq\",1"
+      }
+    ]
+  },
+  {
+    "channels": [
+      1
+    ],
+    "mode": "repeated_child",
+    "instructions": {
+      "total_duration": 4.0,
+      "sequencing_order": [
+        "prep",
+        "drive",
+        "readout",
+        "drive",
+        "readout",
+        "done"
+      ],
+      "sequencing_repeats": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        1
+      ],
+      "prep": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "drive": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "flag": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "readout": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "done": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "awg_sequence_mode": "repeated_child",
+      "awg_repeated_child": {
+        "prefix_steps": 1,
+        "child_steps": 2,
+        "repetitions": 2
+      }
+    },
+    "mapping": {
+      "analog0": 0,
+      "marker0": 1,
+      "flag": "A1"
+    },
+    "calls": [
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "2209b47b538102da4fbbed5344f7911a82393646981a07af8425a518fcff7418"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"child\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"child\",2,1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"child\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"child\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"child\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Aflag \"child\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"child\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"child\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"child\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"autoseq\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"autoseq\",4,1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"autoseq\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejinput \"autoseq\", ATR"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejump \"autoseq\", 2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"autoseq\",2"
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP3:TASS1:SEQ \"autoseq\",\"child\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset1:waveform \"autoseq\",\"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE1:CASS:SEQUENCE \"autoseq\",1"
+      }
+    ]
+  },
+  {
+    "channels": [
+      1,
+      2
+    ],
+    "mode": "flat",
+    "instructions": {
+      "total_duration": 4.0,
+      "sequencing_order": [
+        "prep",
+        "drive",
+        "readout",
+        "drive",
+        "readout",
+        "done"
+      ],
+      "sequencing_repeats": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        1
+      ],
+      "prep": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "drive": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "flag": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "analog1": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": -0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "qualified": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "overlap": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "readout": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker1": {
+          "pulse1": {
+            "start": 0,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "done": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "awg_sequence_mode": "flat"
+    },
+    "mapping": {
+      "analog0": 0,
+      "marker0": 1,
+      "flag": "A1",
+      "analog1": 5,
+      "marker1": 6,
+      "qualified": "B2",
+      "overlap": "A"
+    },
+    "calls": [
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "2209b47b538102da4fbbed5344f7911a82393646981a07af8425a518fcff7418"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "bb98da1c2eb42d6f1257504c7bd19f3c74814bb7f84ddaf4cde0f1376964f324"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "bd4709787cca5954716dfd79dc2d55056f8a83f1a786901186b86e914b0351ab"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"sub\",6,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"sub\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"sub\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"sub\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag2:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"sub\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset2:waveform \"sub\",\"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Bflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tasset1:waveform \"sub\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tasset2:waveform \"sub\",\"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tflag2:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset1:waveform \"sub\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset2:waveform \"sub\",\"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag2:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag2:Bflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tasset1:waveform \"sub\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tasset2:waveform \"sub\",\"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tflag2:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tasset1:waveform \"sub\",\"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tasset2:waveform \"sub\",\"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tflag2:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"autoseq\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"autoseq\",2,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:goto \"autoseq\",first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"autoseq\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejinput \"autoseq\", ATR"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejump \"autoseq\", 2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"autoseq\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\", 1"
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP2:TASS1:SEQ \"autoseq\",\"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP2:TASS2:SEQ \"autoseq\",\"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE1:CASS:SEQUENCE \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE2:CASS:SEQUENCE \"autoseq\",2"
+      }
+    ]
+  },
+  {
+    "channels": [
+      1,
+      2
+    ],
+    "mode": "repeated_child",
+    "instructions": {
+      "total_duration": 4.0,
+      "sequencing_order": [
+        "prep",
+        "drive",
+        "readout",
+        "drive",
+        "readout",
+        "done"
+      ],
+      "sequencing_repeats": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        1
+      ],
+      "prep": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "drive": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "flag": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "analog1": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": -0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "qualified": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "overlap": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "readout": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker1": {
+          "pulse1": {
+            "start": 0,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "done": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "awg_sequence_mode": "repeated_child",
+      "awg_repeated_child": {
+        "prefix_steps": 1,
+        "child_steps": 2,
+        "repetitions": 2
+      }
+    },
+    "mapping": {
+      "analog0": 0,
+      "marker0": 1,
+      "flag": "A1",
+      "analog1": 5,
+      "marker1": 6,
+      "qualified": "B2",
+      "overlap": "A"
+    },
+    "calls": [
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "2209b47b538102da4fbbed5344f7911a82393646981a07af8425a518fcff7418"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "bb98da1c2eb42d6f1257504c7bd19f3c74814bb7f84ddaf4cde0f1376964f324"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "bd4709787cca5954716dfd79dc2d55056f8a83f1a786901186b86e914b0351ab"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"child\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"child\",2,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"child\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"child\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"child\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Aflag \"child\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"child\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"child\",\"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag2:Aflag \"child\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag2:Bflag \"child\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"child\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"child\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"child\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"child\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset2:waveform \"child\",\"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Aflag \"child\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Bflag \"child\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"autoseq\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"autoseq\",4,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"autoseq\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejinput \"autoseq\", ATR"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejump \"autoseq\", 2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"autoseq\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset2:waveform \"autoseq\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Bflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"autoseq\",2"
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP3:TASS1:SEQ \"autoseq\",\"child\""
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP3:TASS2:SEQ \"autoseq\",\"child\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset1:waveform \"autoseq\",\"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset2:waveform \"autoseq\",\"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag2:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag2:Bflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE1:CASS:SEQUENCE \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE2:CASS:SEQUENCE \"autoseq\",2"
+      }
+    ]
+  },
+  {
+    "channels": [
+      2,
+      1
+    ],
+    "mode": "flat",
+    "instructions": {
+      "total_duration": 4.0,
+      "sequencing_order": [
+        "prep",
+        "drive",
+        "readout",
+        "drive",
+        "readout",
+        "done"
+      ],
+      "sequencing_repeats": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        1
+      ],
+      "prep": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "drive": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "flag": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "analog1": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": -0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "qualified": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "overlap": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "readout": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker1": {
+          "pulse1": {
+            "start": 0,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "done": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "awg_sequence_mode": "flat"
+    },
+    "mapping": {
+      "analog0": 0,
+      "marker0": 1,
+      "flag": "A1",
+      "analog1": 5,
+      "marker1": 6,
+      "qualified": "B2",
+      "overlap": "A"
+    },
+    "calls": [
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "2209b47b538102da4fbbed5344f7911a82393646981a07af8425a518fcff7418"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "bb98da1c2eb42d6f1257504c7bd19f3c74814bb7f84ddaf4cde0f1376964f324"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "bd4709787cca5954716dfd79dc2d55056f8a83f1a786901186b86e914b0351ab"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"sub\",6,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"sub\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"sub\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"sub\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"sub\",\"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Bflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset2:waveform \"sub\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tasset1:waveform \"sub\",\"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tflag1:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tasset2:waveform \"sub\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset1:waveform \"sub\",\"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Bflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"sub\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset2:waveform \"sub\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag2:Aflag \"sub\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tasset1:waveform \"sub\",\"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tflag1:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tasset2:waveform \"sub\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step5:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tasset1:waveform \"sub\",\"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tflag1:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tflag1:Bflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:rcount \"sub\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tasset2:waveform \"sub\",\"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step6:tflag2:Aflag \"sub\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"autoseq\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"autoseq\",2,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:goto \"autoseq\",first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"autoseq\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejinput \"autoseq\", ATR"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejump \"autoseq\", 2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"autoseq\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\", 1"
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP2:TASS1:SEQ \"autoseq\",\"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP2:TASS2:SEQ \"autoseq\",\"sub\""
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE2:CASS:SEQUENCE \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE1:CASS:SEQUENCE \"autoseq\",2"
+      }
+    ]
+  },
+  {
+    "channels": [
+      2,
+      1
+    ],
+    "mode": "repeated_child",
+    "instructions": {
+      "total_duration": 4.0,
+      "sequencing_order": [
+        "prep",
+        "drive",
+        "readout",
+        "drive",
+        "readout",
+        "done"
+      ],
+      "sequencing_repeats": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        1
+      ],
+      "prep": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "drive": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "flag": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "analog1": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": -0.25,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "qualified": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "overlap": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "readout": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker1": {
+          "pulse1": {
+            "start": 0,
+            "duration": 2,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "done": {
+        "analog0": {
+          "pulse1": {
+            "start": 1,
+            "duration": 2,
+            "amplitude": 0.5,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        },
+        "marker0": {
+          "pulse1": {
+            "start": 2,
+            "duration": 1,
+            "amplitude": 1,
+            "frequency": 0.0,
+            "phase": 0.0
+          }
+        }
+      },
+      "awg_sequence_mode": "repeated_child",
+      "awg_repeated_child": {
+        "prefix_steps": 1,
+        "child_steps": 2,
+        "repetitions": 2
+      }
+    },
+    "mapping": {
+      "analog0": 0,
+      "marker0": 1,
+      "flag": "A1",
+      "analog1": 5,
+      "marker1": 6,
+      "qualified": "B2",
+      "overlap": "A"
+    },
+    "calls": [
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"done_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"done_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"done_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "2209b47b538102da4fbbed5344f7911a82393646981a07af8425a518fcff7418"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"drive_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"drive_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "bb98da1c2eb42d6f1257504c7bd19f3c74814bb7f84ddaf4cde0f1376964f324"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"drive_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"prep_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"prep_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"prep_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "adaa8a498bb53e2a689bfab7bbf7224f0edf3ea336d01f5313a959bc868dea49"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_2\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_2\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "f870b8fb8751034f252786183957fad25b2dff4a652cf9567281bba2f92aef9f"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_2\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "8aae7256bd98f73b0a9735299d9f1bc95614156ea59624f551d5fd2b2f2f913b"
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:delete \"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "wlist:waveform:new \"readout_1\",4,real"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:data \"readout_1\",",
+        "datatype": "f",
+        "bytes": 20,
+        "sha256": "7cb91348fb9ecb02619d94e9b995f455f0bb517a346d9533306932778a347ce4"
+      },
+      {
+        "kind": "binary",
+        "message": "wlist:waveform:marker:data \"readout_1\",",
+        "datatype": "B",
+        "bytes": 7,
+        "sha256": "bd4709787cca5954716dfd79dc2d55056f8a83f1a786901186b86e914b0351ab"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"child\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"child\",2,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"child\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"child\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"child\",\"drive_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Aflag \"child\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag1:Bflag \"child\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:rcount \"child\",2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"child\",\"drive_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tflag2:Aflag \"child\",HIGH"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"child\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"child\",\"readout_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"child\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Bflag \"child\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"child\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset2:waveform \"child\",\"readout_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Aflag \"child\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:delete \"autoseq\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:new \"autoseq\",4,2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:event:jtiming \"autoseq\", immediate"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejinput \"autoseq\", ATR"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:ejump \"autoseq\", 2"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset1:waveform \"autoseq\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step1:tasset2:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset1:waveform \"autoseq\",\"prep_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag1:Bflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tasset2:waveform \"autoseq\",\"prep_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step2:tflag2:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step3:rcount \"autoseq\",2"
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP3:TASS1:SEQ \"autoseq\",\"child\""
+      },
+      {
+        "kind": "text",
+        "message": "SLIS:SEQ:STEP3:TASS2:SEQ \"autoseq\",\"child\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset1:waveform \"autoseq\",\"done_2\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag1:Bflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:rcount \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tasset2:waveform \"autoseq\",\"done_1\""
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:tflag2:Aflag \"autoseq\",LOW"
+      },
+      {
+        "kind": "text",
+        "message": "slist:sequence:step4:goto \"autoseq\", first"
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE2:CASS:SEQUENCE \"autoseq\",1"
+      },
+      {
+        "kind": "text",
+        "message": "SOURCE1:CASS:SEQUENCE \"autoseq\",2"
+      }
+    ]
+  }
+]
