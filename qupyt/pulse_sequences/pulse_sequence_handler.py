@@ -10,6 +10,7 @@ from types import ModuleType
 from typing import Any, Protocol, cast
 
 from qupyt.set_up import get_seq_dir
+from qupyt.utils.logging import log_value, log_values
 
 
 # pylint: disable=too-few-public-methods
@@ -69,8 +70,8 @@ def write_user_ps(path: Path, params: dict[str, Any]) -> dict[str, Any] | None:
     """
     started = perf_counter()
     sequence_dir = get_seq_dir()
-    logging.info(
-        "Generating pulse sequences using %s; output_directory=%s", path, sequence_dir
+    log_values(
+        f"Generating pulse sequences using {path}", {"output_directory": sequence_dir}
     )
     try:
         previous_sequence_files = {
@@ -94,13 +95,17 @@ def write_user_ps(path: Path, params: dict[str, Any]) -> dict[str, Any] | None:
     except Exception:
         logging.exception("Pulse sequence generation failed for %s", path)
         raise
-    logging.info(
-        "Pulse sequence generation completed: module=%s, changed_files=%s, elapsed=%.3fs",
-        path,
-        len(changed_sequence_files),
-        perf_counter() - started,
+    log_values(
+        "Pulse sequence generation completed",
+        {
+            "module": path,
+            "changed_files": len(changed_sequence_files),
+            "elapsed": f"{perf_counter() - started:.3f}s",
+        },
     )
-    logging.debug("Generated pulse sequence files: %s", changed_sequence_files)
+    log_value(
+        "Generated pulse sequence files", changed_sequence_files, level=logging.DEBUG
+    )
     return dependent_parameters
 
 

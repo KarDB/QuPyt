@@ -12,6 +12,7 @@ from qupyt._version import __version__ as qupyt_version
 from qupyt.hardware.sensors import Sensor
 from qupyt.mixins import ConfigurationMixin, UpdateConfigurationType
 from qupyt.utils.errors import record_failure
+from qupyt.utils.logging import log_done, log_values
 
 
 class Data(ConfigurationMixin):
@@ -152,15 +153,16 @@ class Data(ConfigurationMixin):
             raise ValueError(f"averaging_mode {self.averaging_mode} not available")
         self.data = np.zeros(data_array_dim, dtype=getattr(self, "data_type", float))
         self.chunk_data = np.zeros_like(self.data)
-        logging.info(
-            "Created data arrays: shape=%s, dtype=%s, averaging_mode=%s, "
-            "live_compression=%s, chunk_size=%s, allocated_bytes=%s",
-            self.data.shape,
-            self.data.dtype,
-            self.averaging_mode,
-            self.live_compression,
-            self.save_in_chunks,
-            self.data.nbytes + self.chunk_data.nbytes,
+        log_values(
+            "Created data arrays",
+            {
+                "shape": self.data.shape,
+                "dtype": self.data.dtype,
+                "averaging_mode": self.averaging_mode,
+                "live_compression": self.live_compression,
+                "chunk_size": self.save_in_chunks,
+                "allocated_bytes": self.data.nbytes + self.chunk_data.nbytes,
+            },
         )
 
     def update_data(
@@ -284,13 +286,14 @@ class Data(ConfigurationMixin):
         except Exception:
             logging.exception("Failed to save data to %s", output_path)
             raise
-        logging.info(
-            "Saved data to %s: shape=%s, source_dtype=%s, average_count=%s, chunk=%s",
-            output_path,
-            source_data.shape,
-            source_data.dtype,
-            average_count,
-            source_data is getattr(self, "chunk_data", None),
+        log_values(
+            f"Saved data to {output_path}",
+            {
+                "shape": source_data.shape,
+                "source_dtype": source_data.dtype,
+                "average_count": average_count,
+                "chunk": source_data is getattr(self, "chunk_data", None),
+            },
         )
 
 
@@ -317,19 +320,19 @@ def save_measurement_results(
         except Exception as error:
             params["measurement_status"] = "failed"
             record_failure(params, error, "data saving")
-            logging.exception("Measurement %s: failed to save data", filename)
+            logging.exception("%s: failed to save data", filename)
     else:
         logging.warning(
-            "Measurement %s has no allocated data to save",
+            "%s has no allocated data to save",
             filename or params.get("experiment_type"),
         )
     if filename is not None:
         try:
             with open(filename + ".yaml", "w", encoding="utf-8") as file:
                 yaml.dump(params, file)
-            logging.info("Saved measurement metadata to %s.yaml", filename)
+            log_done(f"Saved measurement metadata to {filename}.yaml")
         except Exception as error:
             params["measurement_status"] = "failed"
             record_failure(params, error, "metadata saving")
-            logging.exception("Measurement %s: failed to save metadata", filename)
+            logging.exception("%s: failed to save metadata", filename)
     return str(params["measurement_status"])

@@ -16,6 +16,7 @@ from qupyt.hardware.synchronisers import Synchroniser
 from qupyt.measurement_logic.data_handling import Data, save_measurement_results
 from qupyt.set_up import get_seq_dir
 from qupyt.utils.errors import record_failure
+from qupyt.utils.logging import log_done, log_values
 
 
 def _as_bool(value: Any) -> bool:
@@ -49,7 +50,7 @@ def _close_hardware(
                 detail = record_failure(params, error, f"{resource_name} close")
                 params.setdefault("cleanup_errors", []).append(detail)
             logging.exception(
-                "%sMeasurement %s: failed to close %s",
+                "%s%s: failed to close %s",
                 (
                     "Additional cleanup error after measurement failure: "
                     if had_error
@@ -92,12 +93,13 @@ def run_measurement(
         synchroniser_params = params.get("synchroniser", {})
         upload_to_synchroniser = _as_bool(synchroniser_params.get("upload", True))
         has_dynamic_devices = bool(dynamic_devices.devices)
-        logging.info(
-            "Starting measurement %s: pulse_sequences=%s, dynamic_steps=%s, averages=%s",
-            filename,
-            ps_iterator_size,
-            iterator_size,
-            averages,
+        log_values(
+            "\n" + "=" * 88 + f"\nMEASUREMENT START: {filename}\n" + "=" * 88,
+            {
+                "pulse_sequences": ps_iterator_size,
+                "dynamic_steps": iterator_size,
+                "averages": averages,
+            },
         )
         stage = "static device configuration"
         static_devices.set_all_params()
@@ -110,7 +112,7 @@ def run_measurement(
         for ps_itervalue in tqdm(range(ps_iterator_size)):
             itervalue = avg = None
             logging.info(
-                "Measurement %s: starting pulse sequence %s/%s",
+                "%s: starting pulse sequence %s/%s",
                 filename,
                 ps_itervalue + 1,
                 ps_iterator_size,
@@ -124,9 +126,7 @@ def run_measurement(
                 sequence_path = get_seq_dir() / f"sequence_{ps_itervalue}.yaml"
                 synchroniser.load_sequence(sequence_path)
             else:
-                logging.info(
-                    "Skipped synchroniser sequence upload".ljust(65, ".") + "[done]"
-                )
+                log_done("Skipped synchroniser sequence upload")
             stage = "synchroniser run"
             synchroniser.run()
             sleep(2)
@@ -151,19 +151,13 @@ def run_measurement(
                     data = sensor.acquire_data(synchroniser)
                     stage = "data accumulation"
                     data_container.update_data(data, ps_itervalue, itervalue, avg)
-                logging.info(
-                    "Measurement %s: dynamic step %s/%s completed (%s averages)",
-                    filename,
-                    itervalue + 1,
-                    iterator_size,
-                    averages,
+                log_done(
+                    f"{filename}: dynamic step {itervalue + 1}/{iterator_size} "
+                    f"({averages} average{'s' if averages != 1 else ''})"
                 )
             dynamic_devices.current_dynamic_step = 0
-            logging.info(
-                "Measurement %s: pulse sequence %s/%s completed",
-                filename,
-                ps_itervalue + 1,
-                ps_iterator_size,
+            log_done(
+                f"{filename}: pulse sequence {ps_itervalue + 1}/{ps_iterator_size}"
             )
         acquisition_completed = True
         return_status = "success"
@@ -177,7 +171,7 @@ def run_measurement(
             average=avg,
         )
         logging.exception(
-            "Measurement %s failed during %s (zero-based pulse_sequence=%s, dynamic_step=%s, average=%s)",
+            "%s failed during %s (zero-based pulse_sequence=%s, dynamic_step=%s, average=%s)",
             filename or mid,
             stage,
             ps_itervalue,
@@ -186,7 +180,7 @@ def run_measurement(
         )
     except (KeyboardInterrupt, SystemExit) as error:
         record_failure(params, error, stage)
-        logging.warning("Measurement %s interrupted during %s", filename or mid, stage)
+        logging.warning("%s interrupted during %s", filename or mid, stage)
         raise
     finally:
         if not _close_hardware(
@@ -206,11 +200,9 @@ def run_measurement(
         )
         del data_container
         gc.collect()
-        log_result = logging.info if return_status == "success" else logging.error
-        log_result(
-            "Measurement %s finished: status=%s, elapsed=%.3fs",
-            filename or mid,
-            return_status,
-            perf_counter() - started,
+        log_values(
+            f"{filename or mid}: finished",
+            {"status": return_status, "elapsed": f"{perf_counter() - started:.3f}s"},
+            level=logging.INFO if return_status == "success" else logging.ERROR,
         )
     return return_status

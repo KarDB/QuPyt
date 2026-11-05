@@ -14,7 +14,6 @@ import pytest
 import pyvisa
 import serial
 import yaml
-from pypylon import pylon
 
 from qupyt.hardware import sensors, signal_sources, synchronisers, visa_handler
 from qupyt.hardware.device_handler import DeviceHandler
@@ -313,6 +312,8 @@ def test_visa_timeout_configuration_failure_survives_close_failure(
 def test_basler_constructor_preserves_configuration_error_if_close_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from pypylon import pylon
+
     cam = Mock()
     error = ValueError("invalid camera configuration")
     cam.BinningHorizontal.SetValue.side_effect = error

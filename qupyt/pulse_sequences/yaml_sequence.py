@@ -10,6 +10,7 @@ import numpy as np
 import yaml
 
 from qupyt import set_up
+from qupyt.utils.logging import log_values
 
 
 class YamlSequence:
@@ -66,12 +67,13 @@ class YamlSequence:
         except Exception:
             logging.exception("Failed to write pulse sequence to %s", output_path)
             raise
-        logging.info(
-            "Wrote pulse sequence to %s: duration=%s, blocks=%s, sequencing_steps=%s",
-            output_path,
-            self.pulse_sequence["total_duration"],
-            len(self.counter),
-            len(self.sequencing_order),
+        log_values(
+            f"Wrote pulse sequence to {output_path}",
+            {
+                "duration [us]": self.pulse_sequence["total_duration"],
+                "blocks": len(self.counter),
+                "sequencing_steps": len(self.sequencing_order),
+            },
         )
 
 

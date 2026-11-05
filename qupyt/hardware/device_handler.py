@@ -18,6 +18,7 @@ from pydantic import validate_call
 
 from qupyt.hardware.signal_sources import DeviceFactory
 from qupyt.utils.errors import cleanup_all
+from qupyt.utils.logging import log_done, log_value, log_values
 
 DynamicParameterInput: TypeAlias = (
     list[float | int]
@@ -61,10 +62,10 @@ class DeviceHandler:
             self.requested_devices = {}
         else:
             self.requested_devices = copy.deepcopy(requested_devices)
-        logging.debug(
-            "Updating %s: requested_devices=%s",
-            type(self).__name__,
-            list(self.requested_devices),
+        log_values(
+            f"Updating {type(self).__name__}",
+            {"requested_devices": list(self.requested_devices)},
+            level=logging.DEBUG,
         )
         self.close_superfluous_devices()
         self.open_new_requested_devices()
@@ -84,7 +85,7 @@ class DeviceHandler:
             logging.info("Closing unused device %s at %s", key, value["address"])
             value["device"].close()
             self.devices.pop(key)
-            logging.info("Removed device %s at %s", key, value["address"])
+            log_done(f"Removed device {key} at {value['address']}")
 
         cleanup_all(
             (f"device {key} close at {value['address']}", partial(close_device, key))
@@ -105,21 +106,11 @@ class DeviceHandler:
                 device = DeviceFactory.create_device(value)
                 self.devices[key] = value
                 self.devices[key]["device"] = device
-                logging.info(
-                    f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
-                )
+                log_done(f"Added device {key} at {value['address']}")
             else:
                 self.devices[key]["config"] = value["config"]
                 self.devices[key]["device"].update_configuration(value["config"])
-                logging.info(
-                    f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
-                )
+                log_done(f"Updated device {key} at {value['address']}")
 
     def set_all_params(self) -> None:
         """Set all values requested for static devices.
@@ -140,8 +131,8 @@ class DeviceHandler:
                     value["address"],
                 )
                 raise
-        logging.info(
-            "Static device configuration completed: devices=%s", list(self.devices)
+        log_values(
+            "Static device configuration completed", {"devices": list(self.devices)}
         )
 
     def update_requested_device_dict(self, requested_devices: dict[str, Any]) -> None:
@@ -193,20 +184,10 @@ class DynamicDeviceHandler(DeviceHandler):
                 self.devices[key] = value
                 self.devices[key]["device"] = device
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
-                logging.info(
-                    f"Added {repr(self.devices[key]['device'])} to active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
-                )
+                log_done(f"Added device {key} at {value['address']}")
             else:
                 self.devices[key]["sweep_config"] = copy.deepcopy(value["config"])
-                logging.info(
-                    f"Updated {repr(self.devices[key]['device'])} in active devices dict".ljust(
-                        65, "."
-                    )
-                    + "[done]"
-                )
+                log_done(f"Updated device {key} at {value['address']}")
         self._reset_step_counter()
         self._make_sweep_lists()
 
@@ -215,11 +196,9 @@ class DynamicDeviceHandler(DeviceHandler):
 
         Update each device's configuration to the current step and apply its values.
         """
-        logging.info(
-            "Applying dynamic step %s/%s: devices=%s",
-            self.current_dynamic_step + 1,
-            self.number_dynamic_steps,
-            list(self.devices),
+        log_values(
+            f"Applying dynamic step {self.current_dynamic_step + 1}/{self.number_dynamic_steps}",
+            {"devices": list(self.devices)},
         )
         for name, device in self.devices.items():
             current_config: dict[str, list[tuple[str, float | int]]] = {}
@@ -229,12 +208,10 @@ class DynamicDeviceHandler(DeviceHandler):
                     current_config[parameter].append(
                         (channel, sweep_values[self.current_dynamic_step])
                     )
-            logging.debug(
-                "Applying dynamic step %s/%s for device %s: %s",
-                self.current_dynamic_step + 1,
-                self.number_dynamic_steps,
-                name,
+            log_value(
+                f"Dynamic step {self.current_dynamic_step + 1}/{self.number_dynamic_steps} configuration for {name}",
                 current_config,
+                level=logging.DEBUG,
             )
             try:
                 device["device"].update_configuration(current_config)
@@ -252,7 +229,7 @@ class DynamicDeviceHandler(DeviceHandler):
     def _reset_step_counter(self) -> None:
         """Reset the dynamic step counter to zero."""
         self.current_dynamic_step = 0
-        logging.debug("Reset dynamic device step counter")
+        log_done("Reset dynamic device step counter", level=logging.DEBUG)
 
     def _make_sweep_lists(self) -> None:
         """Construct arrays or lists of values to be swept for each dynamic device.
@@ -285,10 +262,9 @@ class DynamicDeviceHandler(DeviceHandler):
                             )
                         device["sweep_lists"][parameter][channel] = value_range
         if self.devices:
-            logging.info(
-                "Prepared dynamic sweeps: devices=%s, steps=%s",
-                list(self.devices),
-                self.number_dynamic_steps,
+            log_values(
+                "Prepared dynamic sweeps",
+                {"devices": list(self.devices), "steps": self.number_dynamic_steps},
             )
 
     @validate_call

@@ -6,6 +6,8 @@ import logging
 from collections.abc import Callable
 from typing import Any, Protocol, TypeAlias
 
+from qupyt.utils.logging import log_value
+
 
 # pylint: disable=too-few-public-methods
 class UpdateConfigurationProtocol(Protocol):
@@ -50,7 +52,9 @@ class ConfigurationMixin:
                     "Failed to configure %s.%s=%r", type(self).__name__, attr, value
                 )
                 raise
-            logging.debug("Configured %s.%s", type(self).__name__, attr)
+            log_value(
+                f"Configured {type(self).__name__}.{attr}", value, level=logging.DEBUG
+            )
 
 
 class PulseSequenceError(Exception):

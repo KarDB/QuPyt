@@ -17,7 +17,8 @@ from typing import Any
 import numpy as np
 from harvesters.core import Harvester
 from numpy.typing import NDArray
-from pypylon import pylon
+
+from qupyt.utils.logging import log_done, log_value, log_values
 
 try:
     from egrabber import (
@@ -35,8 +36,7 @@ try:
     )
 except ImportError:
     logging.warning(
-        "Could not load egrabber library".ljust(65, ".")
-        + "[failed]\nIf you are not using a Phantom S710 (or similar) camera you do not need this!"
+        "Could not load egrabber library\nIf you are not using a Phantom S710 (or similar) camera you do not need this!"
     )
 
 from qupyt.hardware.synchronisers import Synchroniser
@@ -60,8 +60,7 @@ try:
     import libHeLIC as heli
 except ImportError:
     logging.warning(
-        "Could not load HeliCam library".ljust(65, ".")
-        + "[failed]\nIf you are not using a HeliCam you do not need this!"
+        "Could not load HeliCam library\nIf you are not using a HeliCam you do not need this!"
     )
 try:
     import nidaqmx
@@ -73,8 +72,7 @@ try:
     )
 except ImportError:
     logging.warning(
-        "Could not load NI-DAQ library".ljust(65, ".")
-        + "[failed]\nIf you are not using a NI-DAQ you do not need this!"
+        "Could not load NI-DAQ library\nIf you are not using a NI-DAQ you do not need this!"
     )
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -115,7 +113,7 @@ class SensorFactory:
         ImportError
             If the selected sensor's optional driver is unavailable.
         """
-        logging.info("Creating sensor type=%s", sensor_type)
+        log_value("Creating sensor", sensor_type)
         try:
             sensor_types: dict[str, Callable[[dict[str, Any]], Sensor]] = {
                 "Basler1920": BaslerCam,
@@ -137,7 +135,7 @@ class SensorFactory:
         except Exception:
             logging.exception("Could not create sensor type=%s", sensor_type)
             raise
-        logging.info("Created sensor type=%s", sensor_type)
+        log_done(f"Created sensor {sensor_type}")
         return sensor
 
 
@@ -362,11 +360,9 @@ class GenICamPhantom(Sensor):
         roi_shape_h_and_w = roi_shape_and_offset[:2]
         if roi_shape_and_offset[2] or roi_shape_and_offset[3]:
             logging.warning(
-                f"Offset X:{roi_shape_and_offset[2]} and Y:{roi_shape_and_offset[3]} are ignored, as the Phantom S710\n"
-                + "does not support ROI offset and is always centered. Consider resizing the ROI to 0,0.".ljust(
-                    65, "."
-                )
-                + "[warning]"
+                "Offset X:%s and Y:%s are ignored, as the Phantom S710\ndoes not support ROI offset and is always centered. Consider resizing the ROI to 0,0.",
+                roi_shape_and_offset[2],
+                roi_shape_and_offset[3],
             )
 
         # Checking size compatibility of chosen FOV.
@@ -403,18 +399,15 @@ class GenICamPhantom(Sensor):
             self.cam.remote.set("Height", roi_shape_h_and_w[0])
             self.cam.remote.set("Width", roi_shape_h_and_w[1])
             self.roi_shape = [roi_shape_h_and_w[0] * 4, roi_shape_h_and_w[1]]
-            logging.info(
-                f"Set Sensor roi to height: {roi_shape_h_and_w[0]*4} and width: {roi_shape_h_and_w[1]}\n".ljust(
-                    65, "."
-                )
-                + "[done]"
+            log_values(
+                "Configured sensor ROI",
+                {"height": roi_shape_h_and_w[0] * 4, "width": roi_shape_h_and_w[1]},
             )
         except Exception:
             logging.exception(
-                f"Failed to set roi of height: {roi_shape_h_and_w[0]*4} and width: {roi_shape_h_and_w[1]}\n".ljust(
-                    65, "."
-                )
-                + "[failed]"
+                "Failed to configure sensor ROI: height=%s, width=%s",
+                roi_shape_h_and_w[0] * 4,
+                roi_shape_h_and_w[1],
             )
             raise
 
@@ -445,10 +438,11 @@ class GenICamPhantom(Sensor):
                     timesteps[i] += timestep
 
         if self.number_measurements > 1 and timesteps[-1] > timesteps[0]:
-            logging.debug(
-                "Camera measured framerate: %s Hz",
+            log_value(
+                "Camera measured framerate [Hz]",
                 (self.number_measurements - 1)
-                / ((timesteps[-1] - timesteps[0]) * 1e-6),
+                / ((timesteps[-1] - timesteps[0]) * 1e-06),
+                level=logging.DEBUG,
             )
 
         return data
@@ -473,7 +467,7 @@ class GenICamPhantom(Sensor):
 
     def open(self) -> None:
         """Keep the camera connection established during initialization."""
-        logging.info("GenICamPhantom camera ready (configured during initialization)")
+        log_done("GenICamPhantom camera ready")
 
     def close(self) -> None:
         """Destroy the camera instance and release its exclusive connection.
@@ -489,7 +483,7 @@ class GenICamPhantom(Sensor):
         self.cam_instance = None
         self.grabber = None
         gc.collect()
-        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
+        log_done("Closed GenICam camera connection")
 
 
 class GenICamHarvester(Sensor):
@@ -527,9 +521,7 @@ class GenICamHarvester(Sensor):
         try:
             self.harvester.add_file(self.cti_file)
         except OSError:
-            logging.exception(
-                "Could not find GenTL producer file (.cti)".ljust(65, ".") + "[failed]"
-            )
+            logging.exception("Could not find GenTL producer file (.cti)")
             logging.exception("Tried to locate file at %s", self.cti_file)
             raise
         self.harvester.update()
@@ -594,30 +586,22 @@ class GenICamHarvester(Sensor):
             self.cam.remote_device.node_map.OffsetX.value = roi_offset_x_and_y[0]
             self.cam.remote_device.node_map.OffsetY.value = roi_offset_x_and_y[1]
             self.roi_shape = roi_shape_h_and_w
-            logging.info(
-                "Set Sensor roi to height: {} and width: {}\n\
-                          with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(
-                    65, "."
-                )
-                + "[done]"
+            log_values(
+                "Configured sensor ROI",
+                {
+                    "height": roi_shape_h_and_w[0],
+                    "width": roi_shape_h_and_w[1],
+                    "x_offset": roi_offset_x_and_y[0],
+                    "y_offset": roi_offset_x_and_y[1],
+                },
             )
         except Exception:
             logging.exception(
-                "Failed to set roi of height: {} and width: {}\n\
-                               with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(
-                    65, "."
-                )
-                + "[failed]"
+                "Failed to configure sensor ROI: height=%s, width=%s, x_offset=%s, y_offset=%s",
+                roi_shape_h_and_w[0],
+                roi_shape_h_and_w[1],
+                roi_offset_x_and_y[0],
+                roi_offset_x_and_y[1],
             )
             raise
 
@@ -637,14 +621,16 @@ class GenICamHarvester(Sensor):
                     component = buffer.payload.components[0]
                     data[i] = component.data
         time_2 = time()
-        logging.debug(
-            f"Data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+        log_value(
+            "GenICam acquisition duration [s]",
+            f"{time_2 - time_1:.3f}",
+            level=logging.DEBUG,
         )
         return data.reshape((self.number_measurements, height, width))
 
     def open(self) -> None:
         """Keep the camera connection established during initialization."""
-        logging.info("GenICamHarvester camera ready (configured during initialization)")
+        log_done("GenICamHarvester camera ready")
 
     def close(self) -> None:
         """Destroy the camera instance and reset Harvester.
@@ -663,7 +649,7 @@ class GenICamHarvester(Sensor):
             if cam is not None:
                 cam.destroy()
                 self.cam = None
-        logging.info("Closed GenICam camera connection".ljust(65, ".") + "[done]")
+        log_done("Closed GenICam camera connection")
 
 
 class BaslerCam(Sensor):
@@ -686,11 +672,14 @@ class BaslerCam(Sensor):
     -----
     Install Basler's pylon software and the
     `pypylon <https://github.com/basler/pypylon>`_ package.
+    The pypylon driver is loaded only when a BaslerCam is used.
     GenICam-compatible Basler cameras can also use GenICamHarvester.
     """
 
     @close_on_initialization_error
     def __init__(self, configuration: dict[str, Any]) -> None:
+        from pypylon import pylon
+
         self.cam = pylon.InstantCamera(
             pylon.TlFactory.GetInstance().CreateFirstDevice()
         )
@@ -744,6 +733,8 @@ class BaslerCam(Sensor):
     @log_sensor_acquisition
     def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
         """See :meth:`Sensor.acquire_data`."""
+        from pypylon import pylon
+
         time_1 = time()
         arr = np.zeros((self.number_measurements, *self.roi_shape))
         with cleanup_on_exit(self.cam.StopGrabbing, "Basler acquisition stop"):
@@ -762,8 +753,10 @@ class BaslerCam(Sensor):
                     frame = np.asarray(grab_result.Array)
                     arr[i] = frame
         time_2 = time()
-        logging.debug(
-            f"Basler data acquisition took {time_2-time_1} s".ljust(65, ".") + "[done]"
+        log_value(
+            "Basler acquisition duration [s]",
+            f"{time_2 - time_1:.3f}",
+            level=logging.DEBUG,
         )
         return arr
 
@@ -817,30 +810,22 @@ class BaslerCam(Sensor):
             self._set_roi_shape(roi_shape_h_and_w)
             self._set_roi_offset_x_and_y(roi_offset_x_and_y)
             self.roi_shape = roi_shape_h_and_w
-            logging.info(
-                "Set Sensor roi to height: {} and width: {}\n\
-                          with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(
-                    65, "."
-                )
-                + "[done]"
+            log_values(
+                "Configured sensor ROI",
+                {
+                    "height": roi_shape_h_and_w[0],
+                    "width": roi_shape_h_and_w[1],
+                    "x_offset": roi_offset_x_and_y[0],
+                    "y_offset": roi_offset_x_and_y[1],
+                },
             )
         except Exception:
             logging.exception(
-                "Failed to set roi of height: {} and width {}\n\
-                               with offset X: {} and Y: {}".format(
-                    roi_shape_h_and_w[0],
-                    roi_shape_h_and_w[1],
-                    roi_offset_x_and_y[0],
-                    roi_offset_x_and_y[1],
-                ).ljust(
-                    65, "."
-                )
-                + "[failed]"
+                "Failed to configure sensor ROI: height=%s, width=%s, x_offset=%s, y_offset=%s",
+                roi_shape_h_and_w[0],
+                roi_shape_h_and_w[1],
+                roi_offset_x_and_y[0],
+                roi_offset_x_and_y[1],
             )
             raise
 
@@ -854,7 +839,7 @@ class BaslerCam(Sensor):
 
     def open(self) -> None:
         """Open the camera connection."""
-        logging.info("Opened Basler camera".ljust(65, ".") + "[done]")
+        log_done("Opened Basler camera")
 
     def close(self) -> None:
         """Close the camera connection.
@@ -867,7 +852,7 @@ class BaslerCam(Sensor):
             if self.cam.IsGrabbing():
                 self.cam.StopGrabbing()
         self.cam = None
-        logging.info("Closed Basler camera connection".ljust(65, ".") + "[done]")
+        log_done("Closed Basler camera connection")
 
 
 class HeliCam(Sensor):
@@ -964,7 +949,7 @@ class HeliCam(Sensor):
             logging.exception("HeliCam setup failed")
             cleanup_after_error(self.close, "HeliCam setup cleanup")
             raise
-        logging.info("Heli C3 opened".ljust(65, ".") + "[done]")
+        log_done("Heli C3 opened")
 
     @log_sensor_acquisition
     def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
@@ -992,9 +977,10 @@ class HeliCam(Sensor):
         return_frames[::2] = raw_frames[:, :, :, 0]
         return_frames[1::2] = raw_frames[:, :, :, 1]
         time_2 = time()
-        logging.debug(
-            f"HeliCam C3 data acquisition took {time_2-time_1} s".ljust(65, ".")
-            + "[done]"
+        log_value(
+            "HeliCam C3 acquisition duration [s]",
+            f"{time_2 - time_1:.3f}",
+            level=logging.DEBUG,
         )
         return return_frames
 
@@ -1007,7 +993,7 @@ class HeliCam(Sensor):
             return
         self.he_sys.Close()
         self._is_open = False
-        logging.info("HeliCam C3 closed".ljust(65, ".") + "[done]")
+        log_done("HeliCam C3 closed")
 
 
 class DAQ(Sensor):
@@ -1078,7 +1064,7 @@ class DAQ(Sensor):
             self._create_analog_input_channel()
             self._configure_sample_clock()
             self._configure_analog_input_trigger()
-            logging.info("DAQ opened and created read task".ljust(65, "."))
+            log_done("DAQ opened and created read task")
         except BaseException:
             logging.exception(
                 "Failed to open or configure DAQ input %s", self.daq_apd_input
@@ -1147,7 +1133,9 @@ class DAQ(Sensor):
                 self.daq_timeout,
             )
             raise
-        logging.debug("DAQ acquisition completed: samples=%s", len(samples))
+        log_values(
+            "DAQ acquisition completed", {"samples": len(samples)}, level=logging.DEBUG
+        )
         return np.asarray(samples).reshape((len(samples), 1))
 
     def _set_min_voltage(self, min_voltage: float) -> None:
@@ -1174,7 +1162,7 @@ class DAQ(Sensor):
             return
         self.daq_task.close()
         self.daq_task = None
-        logging.info("DAQ closed".ljust(65, "."))
+        log_done("DAQ closed")
 
 
 class MockCam(Sensor):
@@ -1218,7 +1206,7 @@ class MockCam(Sensor):
 
     def open(self) -> None:
         """Mark the mock sensor ready for acquisition."""
-        logging.info("MockCam sensor ready")
+        log_done("MockCam sensor ready")
 
     @log_sensor_acquisition
     def acquire_data(self, synchroniser: Synchroniser | None = None) -> NDArray[Any]:
@@ -1244,4 +1232,4 @@ class MockCam(Sensor):
 
     def close(self) -> None:
         """Record completion of mock sensor cleanup."""
-        logging.info("MockCam sensor cleanup completed")
+        log_done("MockCam sensor cleanup completed")

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, TypeVar
+
+from qupyt.utils.logging import log_value
 
 Step = TypeVar("Step")
 
@@ -24,7 +25,7 @@ def validate_awg_limit(value: Any, key: str, device_type: str) -> int:
         raise ValueError(
             f"{key} must be a positive AWG limit for {device_type}, got {limit}."
         )
-    logging.info("%s configured %s=%s", device_type, key, limit)
+    log_value(f"{device_type} {key}", limit)
     return limit
 
 

@@ -37,6 +37,52 @@ with patch.object(Path, "home", return_value=home):
     )
 
 
+def test_cli_startup_and_mock_acquisition_work_without_basler_driver(
+    tmp_path: Path,
+) -> None:
+    result = _run_cli(
+        tmp_path,
+        """
+        with patch.dict(sys.modules, {"pypylon": None, "pypylon.pylon": None}):
+            import qupyt.main as service
+            sensor = service.SensorFactory.create_sensor(
+                "MockCam", {"number_measurements": 2, "image_roi": [2, 3]}
+            )
+            sensor.open()
+            try:
+                assert sensor.acquire_data().shape == (2, 2, 3)
+            finally:
+                sensor.close()
+            try:
+                service.SensorFactory.create_sensor("Basler1920", {})
+            except ModuleNotFoundError as error:
+                assert error.name == "pypylon"
+            else:
+                raise AssertionError("BaslerCam must require its driver")
+        logging.shutdown()
+        """,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "SwigPyPacked" not in result.stderr
+    assert "SwigPyObject" not in result.stderr
+    assert "swigvarlink" not in result.stderr
+
+
+@pytest.mark.parametrize("width", ["0", "20"])
+def test_cli_rejects_log_width_too_small_for_continuation_indent(
+    tmp_path: Path, width: str
+) -> None:
+    result = _run_cli(
+        tmp_path,
+        f"""
+        sys.argv = ["qupyt", "--log-width", {width!r}]
+        import qupyt.main
+        """,
+    )
+    assert result.returncode == 2
+    assert "--log-width must be at least 21 columns" in result.stderr
+
+
 def test_default_cli_reports_malformed_instruction_and_recovery_path(
     tmp_path: Path,
 ) -> None:

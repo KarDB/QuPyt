@@ -5,6 +5,7 @@ __pychache__/
 *.pyc
 *.log
 *.svg
+!assets/awg-pipeline/*.svg
 *.png
 *.npy
 *.gif

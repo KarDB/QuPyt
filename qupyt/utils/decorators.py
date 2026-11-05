@@ -10,6 +10,8 @@ from typing import Any, ParamSpec, TypeVar, cast
 
 from numpy.typing import NDArray
 
+from qupyt.utils.logging import log_values
+
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -22,10 +24,10 @@ def log_sensor_acquisition(func: Callable[P, ArrayResult]) -> Callable[P, ArrayR
 
     @wraps(func)
     def wrapper(self: Any, *args: Any, **kwargs: Any) -> ArrayResult:
-        logging.debug(
-            "Starting %s acquisition: measurements=%s",
-            type(self).__name__,
-            self.number_measurements,
+        log_values(
+            f"Starting {type(self).__name__} acquisition",
+            {"measurements": self.number_measurements},
+            level=logging.DEBUG,
         )
         started = perf_counter()
         try:
@@ -37,12 +39,15 @@ def log_sensor_acquisition(func: Callable[P, ArrayResult]) -> Callable[P, ArrayR
                 perf_counter() - started,
             )
             raise
-        logging.debug(
-            "Acquired data: sensor=%s, shape=%s, dtype=%s, elapsed=%.3fs",
-            type(self).__name__,
-            data.shape,
-            data.dtype,
-            perf_counter() - started,
+        log_values(
+            "Acquired data",
+            {
+                "sensor": type(self).__name__,
+                "shape": data.shape,
+                "dtype": data.dtype,
+                "elapsed": f"{perf_counter() - started:.3f}s",
+            },
+            level=logging.DEBUG,
         )
         return data
 

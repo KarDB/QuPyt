@@ -11,6 +11,8 @@ import logging
 
 import serial
 
+from qupyt.utils.logging import log_done
+
 
 class PowerSupply:
     """Remote control for Konrad KD300/6000 power supplies connected by USB.
@@ -41,20 +43,12 @@ class PowerSupply:
         self.address = address
         try:
             self.instance = serial.Serial(self.address, timeout=1)
-            logging.info(
-                f"Connected to power supply {address}".ljust(65, ".") + "[done]"
-            )
+            log_done(f"Connected to power supply {address}")
         except ValueError:
-            logging.exception(
-                f"Connection to power supply {address} failed".ljust(65, ".")
-                + "[failed]"
-            )
+            logging.exception("Connection to power supply %s failed", address)
             raise
         except serial.SerialException:
-            logging.exception(
-                f"Connection to power supply {address} failed".ljust(65, ".")
-                + "[failed]"
-            )
+            logging.exception("Connection to power supply %s failed", address)
             raise
 
     def __repr__(self) -> str:
@@ -72,7 +66,7 @@ class PowerSupply:
                 "Failed to turn ON power supply output at %s", self.address
             )
             raise
-        logging.info("Turned ON power supply output at %s", self.address)
+        log_done(f"Turned ON power supply output at {self.address}")
 
     def off(self) -> None:
         """Turn off the power supply output."""
@@ -83,7 +77,7 @@ class PowerSupply:
                 "Failed to turn OFF power supply output at %s", self.address
             )
             raise
-        logging.info("Turned OFF power supply output at %s", self.address)
+        log_done(f"Turned OFF power supply output at {self.address}")
 
     def close(self) -> None:
         """Close the serial connection; repeated cleanup is harmless."""
@@ -91,4 +85,4 @@ class PowerSupply:
             return
         self.instance.close()
         self.instance = None
-        logging.info("Closed power supply connection at %s", self.address)
+        log_done(f"Closed power supply connection at {self.address}")

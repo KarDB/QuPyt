@@ -14,6 +14,7 @@ import pyvisa
 
 from qupyt.mixins import ConfigurationError
 from qupyt.utils.errors import cleanup_after_error
+from qupyt.utils.logging import log_done
 
 
 class VisaObject:
@@ -51,13 +52,9 @@ class VisaObject:
             resource_manager = pyvisa.ResourceManager()
             self.instance = resource_manager.open_resource(handle)
             self.instance.timeout = 60000
-            logging.info(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[done]"
-            )
+            log_done(f"Opened {s_type} at address {handle}")
         except BaseException:
-            logging.exception(
-                f"Opening {s_type} at adress {handle}".ljust(65, ".") + "[failed]"
-            )
+            logging.exception("Failed to open %s at address %s", s_type, handle)
             # Resource managers are shared; closing one also closes other devices.
             if self.instance is not None:
                 cleanup_after_error(
@@ -174,10 +171,9 @@ class VisaObject:
             last_response = opc
             try:
                 if float(opc.strip()) != 0:
-                    logging.debug(
-                        "%s at %s completed pending operations",
-                        self.s_type,
-                        self.handle,
+                    log_done(
+                        f"{self.s_type} at {self.handle} completed pending operations",
+                        level=logging.DEBUG,
                     )
                     return
             except ValueError:
@@ -211,10 +207,7 @@ class VisaObject:
         try:
             self.instance.close()
             self.instance = None
-            logging.info(
-                f"Closing {self.s_type} at adress {self.handle}".ljust(65, ".")
-                + "[done]"
-            )
+            log_done(f"Closed {self.s_type} at address {self.handle}")
         except Exception:
             logging.exception(
                 "Closing %s at address %s failed", self.s_type, self.handle

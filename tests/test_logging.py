@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import importlib
 import logging
+import re
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import Mock
 
 import numpy as np
@@ -21,6 +23,7 @@ from qupyt.measurement_logic.run_measurement import (
 )
 from qupyt.mixins import ConfigurationMixin
 from qupyt.pulse_sequences.yaml_sequence import YamlSequence
+from qupyt.utils.logging import log_done, log_value, log_values
 from tests.support import MeasurementEnvironment
 
 measurement_module = importlib.import_module("qupyt.measurement_logic.run_measurement")
@@ -37,6 +40,163 @@ def run_measurement(environment: MeasurementEnvironment) -> str:
     )
 
 
+@pytest.mark.parametrize("width", [80, 150])
+@pytest.mark.parametrize(
+    "level,thread_name",
+    [(logging.INFO, "MainThread"), (logging.CRITICAL, "QuPyt-measurements")],
+)
+def test_log_formatter_wraps_long_messages_without_changing_the_record(
+    service: ModuleType, width: int, level: int, thread_name: str
+) -> None:
+    message = "Uploading waveform to " + "/very_long_waveform_name" * 12
+    record = logging.LogRecord(
+        "qupyt", level, "measurement.py", 42, "%s", (message,), None
+    )
+    record.threadName = thread_name
+    formatter = service._WrappingFormatter(
+        "%(levelname)s\t%(asctime)s [%(threadName)s] %(module)s:%(lineno)d %(message)s",
+        width=width,
+        datefmt="%Y/%m/%d %I:%M:%S %p",
+    )
+    rendered = formatter.format(record)
+    lines = rendered.splitlines()
+    assert len(lines) > 1
+    assert all(len(line) <= width for line in lines)
+    prefix = lines[0].split("measurement:42", 1)[0]
+    assert lines[0].startswith(prefix + "measurement:42")
+    assert prefix.startswith(logging.getLevelName(level))
+    assert prefix.endswith(f"[{thread_name}] ")
+    assert all(len(line) - len(line.lstrip()) == len(prefix) for line in lines[1:])
+    assert "".join(rendered.split()).endswith("".join(message.split()))
+    assert record.getMessage() == message
+
+
+def test_log_formatter_preserves_blank_lines_and_tracebacks(
+    service: ModuleType,
+) -> None:
+    message = "\n" + "=" * 60 + "\nMEASUREMENT START\n\n    " + "step " * 40
+    try:
+        raise ValueError("Invalid configuration: " + "x" * 200)
+    except ValueError:
+        record = logging.makeLogRecord({"msg": message, "exc_info": sys.exc_info()})
+    record.levelname = "INFO"
+    record.threadName = "QuPyt-measurements"
+    formatter = service._WrappingFormatter(
+        "%(levelname)s\t%(asctime)s [%(threadName)s] %(message)s",
+        width=80,
+        datefmt="%Y/%m/%d %I:%M:%S %p",
+    )
+    rendered = formatter.format(record)
+    prefix = rendered.split("\n", 1)[0]
+    assert rendered.startswith(
+        prefix + "\n" + "=" * 60 + "\nMEASUREMENT START\n\n    step"
+    )
+    assert "\n" + " " * (len(prefix) + 4) + "step" in rendered
+    assert all(len(line) <= 80 for line in rendered.splitlines())
+    assert "Traceback (most recent call last)" in rendered
+    assert "ValueError:" in rendered
+    assert "x" * 200 in "".join(rendered.split())
+    # Other handlers must still receive the original unwrapped message/traceback.
+    unwrapped = logging.Formatter("%(message)s").format(record)
+    assert message in unwrapped
+    assert "x" * 200 in unwrapped
+
+
+@pytest.mark.parametrize("width", [120, 150])
+def test_dotted_log_entries_fill_the_width_and_keep_the_calling_source(
+    service: ModuleType, caplog: pytest.LogCaptureFixture, width: int
+) -> None:
+    assert service.args.log_width == 150
+    caplog.set_level(logging.INFO)
+    caplog.clear()
+    log_done("Configured mock camera")
+    log_value("sampling_rate", 8e9)
+    log_values("Sequence details", {"sampling_rate": 8e9, "channels": [1, 2]})
+    records = list(caplog.records)
+    formatter = service._WrappingFormatter(
+        "%(levelname)s\t%(asctime)s [%(threadName)s] %(module)s:%(lineno)d %(message)s",
+        width=width,
+        datefmt="%Y/%m/%d %I:%M:%S %p",
+    )
+    assert len(records) == 3
+    for record in records:
+        assert Path(record.pathname).resolve() == Path(__file__).resolve()
+        assert record.module == "test_logging"
+        original_message = record.getMessage()
+        rendered = formatter.format(record)
+        assert record.getMessage() == original_message
+        assert all(len(line) <= width for line in rendered.splitlines())
+    done = formatter.format(records[0])
+    assert done.endswith("[done]") and len(done) == width
+    value = formatter.format(records[1])
+    assert re.search(r"sampling_rate\.{3,}8000000000\.0$", value)
+    assert len(value) == width
+    detail_lines = formatter.format(records[2]).splitlines()
+    assert len(detail_lines) == 3
+    assert all(len(line) == width for line in detail_lines[1:])
+    assert detail_lines[1].endswith("8000000000.0")
+    assert detail_lines[2].endswith("[1, 2]")
+
+
+@pytest.mark.parametrize("width", [100, 150, 180])
+@pytest.mark.parametrize(
+    "path",
+    [
+        r"C:\Users\ge34dug\.qupyt\sequences\sequence_0.yaml",
+        r"C:\Users\ge34dug" + r"\long_sequence_directory" * 20 + r"\sequence_0.yaml",
+    ],
+)
+def test_wrapped_cache_completion_fills_the_final_line(
+    service: ModuleType, caplog: pytest.LogCaptureFixture, width: int, path: str
+) -> None:
+    caplog.set_level(logging.INFO)
+    caplog.clear()
+    log_done(
+        f"Reusing cached numeric pulse sequence for unchanged configuration {path}"
+    )
+    record = caplog.records[-1]
+    record.module = "SequenceDesigner"
+    record.lineno = 141
+    record.threadName = "QuPyt-measurements"
+    formatter = service._WrappingFormatter(
+        "%(levelname)s\t%(asctime)s [%(threadName)s] %(module)s:%(lineno)d %(message)s",
+        width=width,
+        datefmt="%Y/%m/%d %I:%M:%S %p",
+    )
+    rendered = formatter.format(record)
+    lines = rendered.splitlines()
+    assert len(lines) > 1
+    assert all(len(line) <= width for line in lines)
+    assert len(lines[-1]) == width
+    assert re.search(r"\.{3,}\[done\]$", lines[-1])
+    assert rendered.count("[done]") == 1
+    assert path in "".join(rendered.split())
+
+
+def test_dotted_value_rows_wrap_long_paths_without_double_indentation(
+    service: ModuleType, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    caplog.clear()
+    path = "/very_long_sequence_directory" * 20
+    log_values("Sequence details", {"source": path, "sampling_rate": 8e9})
+    record = caplog.records[-1]
+    record.threadName = "QuPyt-measurements"
+    formatter = service._WrappingFormatter(
+        "%(levelname)s\t%(asctime)s [%(threadName)s] %(module)s:%(lineno)d %(message)s",
+        width=100,
+        datefmt="%Y/%m/%d %I:%M:%S %p",
+    )
+    rendered = formatter.format(record)
+    lines = rendered.splitlines()
+    prefix = lines[0].split("test_logging:", 1)[0]
+    assert all(len(line) <= 100 for line in lines)
+    assert all(len(line) - len(line.lstrip()) == len(prefix) for line in lines[1:])
+    assert path in "".join(rendered.split())
+    assert len(lines[-1]) == 100
+    assert lines[-1].endswith("8000000000.0")
+
+
 def test_measurement_logs_progress_and_saved_outputs(
     measurement_environment: MeasurementEnvironment, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -48,13 +208,14 @@ def test_measurement_logs_progress_and_saved_outputs(
         Path(environment.params["filename"] + ".yaml").read_text()
     )
     assert metadata["measurement_status"] == "success"
-    assert "pulse sequence 2/2 completed" in caplog.text
-    assert "dynamic step 2/2 completed (2 averages)" in caplog.text
+    assert "pulse sequence 2/2 [done]" in caplog.text
+    assert "dynamic step 2/2 (2 averages) [done]" in caplog.text
+    assert f"Measurement {environment.params['filename']}" not in caplog.text
     assert "Saved data to" in caplog.text
     assert "Saved measurement metadata to" in caplog.text
     assert "status=success" in caplog.text
     assert "elapsed=" in caplog.text
-    assert "Acquired data:" not in caplog.text
+    assert "Acquired data" not in caplog.text
 
 
 def test_debug_logs_acquisition_details(
@@ -63,7 +224,8 @@ def test_debug_logs_acquisition_details(
     caplog.set_level(logging.DEBUG)
     assert run_measurement(measurement_environment) == "success"
     assert "pulse_sequence=2, dynamic_step=2, average=2" in caplog.text
-    assert "shape=(2, 1), dtype=float64" in caplog.text
+    assert "shape=(2, 1)" in caplog.text
+    assert "dtype=float64" in caplog.text
 
 
 def test_direct_sensor_acquisition_logs_details(
@@ -74,8 +236,11 @@ def test_direct_sensor_acquisition_logs_details(
     monkeypatch.setattr(np.random, "poisson", Mock(return_value=np.ones((2, 1))))
     data = sensor.acquire_data()
     np.testing.assert_array_equal(data, np.ones((2, 1)))
-    assert "Starting MockCam acquisition: measurements=2" in caplog.text
-    assert "sensor=MockCam, shape=(2, 1), dtype=float64" in caplog.text
+    assert "Starting MockCam acquisition" in caplog.text
+    assert "measurements=2" in caplog.text
+    assert "sensor=MockCam" in caplog.text
+    assert "shape=(2, 1)" in caplog.text
+    assert "dtype=float64" in caplog.text
     assert "elapsed=" in caplog.text
 
 
@@ -378,7 +543,7 @@ from typing import Any
 from unittest.mock import Mock, patch
 
 home = Path(sys.argv[1])
-sys.argv = ["qupyt", "--debug"]
+sys.argv = ["qupyt", "--debug", "--verbose", "--log-width", "100"]
 original_import = builtins.__import__
 faulthandler.enable()
 faulthandler.dump_traceback_later(60)
@@ -426,7 +591,10 @@ faulthandler.cancel_dump_traceback_later()
     logs = list((tmp_path / ".qupyt" / "log").glob("*.log"))
     assert len(logs) == 1
     content = logs[0].read_text(encoding="utf-8")
-    assert "level=DEBUG" in content
+    assert all(len(line.expandtabs()) <= 100 for line in content.splitlines())
+    assert all(len(line.expandtabs()) <= 100 for line in result.stderr.splitlines())
+    content = " ".join(content.split())
+    assert re.search(r"level\.{3,}DEBUG", content)
     assert "Could not load egrabber library" in content
     assert "[MainThread]" in content
     assert "Claimed instruction file" in content

@@ -186,7 +186,7 @@ def test_acquisition_error_saves_partial_data_and_next_instruction_recovers(
     assert success["measurement_status"] == "success"
     assert "measurement_error" not in success
     np.testing.assert_array_equal(np.load(tmp_path / (success["filename"] + ".npy")), 1)
-    assert "Updated MockSignalSource(address: mock-dynamic)" in caplog.text
+    assert "Updated device dynamic at mock-dynamic [done]" in caplog.text
     assert "OSError: camera connection lost" in caplog.text
 
 

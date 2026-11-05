@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 from termcolor import colored
 
 from qupyt.set_up import get_seq_dir
+from qupyt.utils.logging import log_done, log_value, log_values
 
 # Bump when numeric compilation changes so older artifacts are regenerated.
 NUMERIC_SEQUENCE_CACHE_VERSION = 1
@@ -129,18 +130,16 @@ class PulseSequenceYaml:
             )
 
     def translate_yaml_to_numeric_instructions(self) -> None:
-        logging.info(
-            "Translating pulse sequence from %s at sampling_rate=%s",
-            self.yaml_file,
-            self.samp_rate,
+        log_values(
+            f"Translating pulse sequence from {self.yaml_file}",
+            {"sampling_rate": self.samp_rate},
         )
         for selector in self.channel_mapping.values():
             if isinstance(selector, str):
                 parse_awg_flag(selector, self.awg_sources)
         if self._sequence_didnt_change():
-            logging.info(
-                "Reusing cached numeric pulse sequence for unchanged configuration %s",
-                self.yaml_file,
+            log_done(
+                f"Reusing cached numeric pulse sequence for unchanged configuration {self.yaml_file}"
             )
             return
         with open(self.yaml_file, "r", encoding="utf-8") as file:
@@ -178,11 +177,9 @@ class PulseSequenceYaml:
         seq.sequencernames = sequence_order
         seq.make("sequence.npz")
         self._record_compiled_sequence()
-        logging.info(
-            "Translated pulse sequence from %s: blocks=%s, channels=%s",
-            self.yaml_file,
-            len(sorted_pulse_blocks),
-            self.awg_sources,
+        log_values(
+            f"Translated pulse sequence from {self.yaml_file}",
+            {"blocks": len(sorted_pulse_blocks), "channels": self.awg_sources},
         )
 
 
@@ -225,10 +222,7 @@ class PulseSequence:
                 )
             )
             logging.warning(
-                "The sequence duration is not an integer multiple of samples".ljust(
-                    65, "."
-                )
-                + "[WARNING]"
+                "The sequence duration is not an integer multiple of samples"
             )
 
         #  5 => 1 for analog, 4 for 8 bit marker.
@@ -340,10 +334,7 @@ class PulseSequence:
             )
 
     def make(self, name: str) -> None:
-        logging.info(
-            "Pulse sequence generation produced %s timing warnings",
-            self.warning_counter,
-        )
+        log_value("Pulse-sequence timing warnings", self.warning_counter)
         final = np.zeros((self.numseqs, 2 * len(self.awg_sources), self.num_points))
         for source_index, _source in enumerate(self.awg_sources):
             final[:, 2 * source_index, :] = self.pulses[:, 5 * source_index, :]
@@ -383,8 +374,8 @@ class PulseSequence:
                 "Failed to save numeric pulse sequence to %s", file_dir / name
             )
             raise
-        logging.info(
-            "Saved numeric pulse sequence to %s: shape=%s", file_dir / name, final.shape
+        log_values(
+            f"Saved numeric pulse sequence to {file_dir / name}", {"shape": final.shape}
         )
 
 
@@ -410,7 +401,7 @@ class PulseBlasterSequence:
         with open(path, "r", encoding="utf-8") as file:
             yaml_sequence = yaml.safe_load(file)
         validate_sequence_instructions(yaml_sequence)
-        logging.debug("Loaded PulseBlaster pulse sequence from %s", path)
+        log_done(f"Loaded PulseBlaster pulse sequence from {path}", level=logging.DEBUG)
         return cast(dict[str, Any], yaml_sequence)
 
     def parse_pulse_sequence_file(self) -> None:
@@ -445,10 +436,9 @@ class PulseBlasterSequence:
             channel_bits += self.ps[sequence_block]["channel_bits"] * block_repeats
             bits_duration += self.ps[sequence_block]["durations"] * block_repeats
 
-        logging.info(
-            "Compiled PulseBlaster pulse sequence: instructions=%s, duration=%s us",
-            len(channel_bits),
-            sum(bits_duration),
+        log_values(
+            "Compiled PulseBlaster pulse sequence",
+            {"instructions": len(channel_bits), "duration [us]": sum(bits_duration)},
         )
         return channel_bits, bits_duration
 

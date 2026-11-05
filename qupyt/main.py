@@ -9,9 +9,11 @@ import logging
 import os
 import platform
 import sys
+import textwrap
 import threading
 import time
 from collections.abc import Callable
+from copy import copy
 from datetime import date
 from functools import partial
 from pathlib import Path
@@ -20,6 +22,7 @@ from time import sleep
 from typing import Any, cast
 
 from qupyt.set_up import get_home_dir, get_log_dir, get_waiting_room, make_userdirs
+from qupyt.utils.logging import LogDetails, log_done, log_value, log_values
 
 qupyt_logo_text = """                                                                                                        
                                                                                                          
@@ -59,9 +62,69 @@ parser.add_argument(
     action="store_true",
     help="include detailed acquisition and configuration logs",
 )
+parser.add_argument(
+    "--log-width",
+    type=int,
+    default=150,
+    metavar="COLUMNS",
+    help="maximum line width in log files and verbose output (default: 150)",
+)
 args = parser.parse_args()
+if args.log_width < 21:
+    parser.error("--log-width must be at least 21 columns")
 
 logfile = get_log_dir() / f"log_{date.today()}.log"
+
+
+class _WrappingFormatter(logging.Formatter):
+    """Align wrapped lines after the level, timestamp, and thread prefix."""
+
+    def __init__(self, fmt: str, *, width: int, datefmt: str | None = None) -> None:
+        super().__init__(fmt=fmt, datefmt=datefmt)
+        self._width = width
+
+    def format(self, record: logging.LogRecord) -> str:
+        prefix = (
+            f"{record.levelname}\t{self.formatTime(record, self.datefmt)} "
+            f"[{record.threadName}] "
+        ).expandtabs()
+        details = getattr(record, "qupyt_details", None)
+        if isinstance(details, LogDetails):
+            record = copy(record)
+            record.message = ""
+            record.asctime = self.formatTime(record, self.datefmt)
+            first_indent = len(self.formatMessage(record).expandtabs())
+            record.msg = details.render(
+                width=self._width,
+                first_indent=first_indent,
+                continuation_indent=min(len(prefix), self._width - 1),
+            )
+            record.args = ()
+        formatted = super().format(record).expandtabs()
+        lines: list[str] = []
+        for index, line in enumerate(formatted.split("\n")):
+            if len(line) <= self._width:
+                lines.append(line)
+                continue
+            leading_space = line[: len(line) - len(line.lstrip())]
+            # Leave room for text at narrow widths or with very long thread names.
+            indent_width = min(len(prefix) + len(leading_space), self._width - 1)
+            if isinstance(details, LogDetails) and index > 0:
+                indent_width = min(
+                    max(len(prefix), len(leading_space)), self._width - 1
+                )
+            continuation_indent = " " * indent_width
+            lines.extend(
+                textwrap.wrap(
+                    line,
+                    width=self._width,
+                    subsequent_indent=continuation_indent,
+                    expand_tabs=False,
+                    replace_whitespace=False,
+                    break_on_hyphens=False,
+                )
+            )
+        return "\n".join(lines)
 
 
 class _ConsoleErrorFormatter(logging.Formatter):
@@ -88,20 +151,24 @@ except OSError as error:
     )
     raise SystemExit(1) from error
 
+log_formatter = _WrappingFormatter(
+    "%(levelname)s\t%(asctime)s [%(threadName)s] %(module)s:%(lineno)d %(message)s",
+    width=args.log_width,
+    datefmt="%Y/%m/%d %I:%M:%S %p",
+)
+handlers[0].setFormatter(log_formatter)
 console_handler = logging.StreamHandler()
-if not args.verbose:
+if args.verbose:
+    console_handler.setFormatter(log_formatter)
+else:
     console_handler.setLevel(logging.ERROR)
     console_handler.setFormatter(_ConsoleErrorFormatter())
 handlers.append(console_handler)
 logging.basicConfig(
-    handlers=handlers,
-    format="%(levelname)s\t%(asctime)s [%(threadName)s] %(module)s:%(lineno)d %(message)s",
-    datefmt="%Y/%m/%d %I:%M:%S %p",
-    level=logging.DEBUG if args.debug else logging.INFO,
-    force=True,
+    handlers=handlers, level=logging.DEBUG if args.debug else logging.INFO, force=True
 )
-logging.info(
-    "Logging initialized: file=%s, level=%s", logfile, "DEBUG" if args.debug else "INFO"
+log_values(
+    "Logging initialized", {"file": logfile, "level": "DEBUG" if args.debug else "INFO"}
 )
 
 # Initialize logging before imports so dependency failures also reach the terminal.
@@ -146,13 +213,13 @@ def _show_service_status(message: str) -> None:
 def _set_busy() -> None:
     with open(get_home_dir() / "status.txt", "w", encoding="utf-8") as file:
         file.write("busy")
-    logging.debug("Measurement service status changed to busy")
+    log_value("Measurement service status", "busy", level=logging.DEBUG)
 
 
 def _set_ready() -> None:
     with open(get_home_dir() / "status.txt", "w", encoding="utf-8") as file:
         file.write("ready")
-    logging.debug("Measurement service status changed to ready")
+    log_value("Measurement service status", "ready", level=logging.DEBUG)
 
 
 def _prepare_measurement(
@@ -196,7 +263,7 @@ def _prepare_measurement(
                     f"{type(handler).__name__} preparation cleanup",
                 )
         raise
-    logging.info("Hardware preparation completed")
+    log_done("Hardware preparation completed")
     return sensor, synchroniser
 
 
@@ -233,7 +300,7 @@ def _process_instruction(
         if success_status == "success":
             stage = "removing the completed instruction file"
             running_file.unlink()
-            logging.info("Removed completed instruction file %s", running_file)
+            log_done(f"Removed completed instruction file {running_file}")
         elif success_status == "failed":
             # Report the primary cause before attempting recovery, which may fail too.
             detail = params.get("measurement_error", {})
@@ -251,9 +318,7 @@ def _process_instruction(
             logging.error("Retained failed instruction file at %s", failed_file)
         else:
             raise RuntimeError(f"Unexpected measurement status {success_status!r}")
-        logging.info(
-            "Instruction %s finished with status=%s", instruction_file, success_status
-        )
+        log_value(f"Instruction {instruction_file} status", success_status)
     except BaseException:
         logging.exception(
             "Exception while processing measurement instructions %s during %s",
@@ -508,8 +573,8 @@ def _join_service_thread(thread: threading.Thread, description: str) -> None:
 
 def main() -> None:
     """Start the main measurement loop."""
-    logging.info(
-        "Starting QuPyt measurement service; waiting_room=%s", get_waiting_room()
+    log_values(
+        "Starting QuPyt measurement service", {"waiting_room": get_waiting_room()}
     )
     global event_thread
     event_thread = threading.Event()
@@ -558,7 +623,7 @@ def main() -> None:
                 _show_service_status(
                     f"QuPyt is waiting for measurement instructions in {get_waiting_room()}."
                 )
-                logging.info("Waiting-room observer and measurement worker started")
+                log_done("Waiting-room observer and measurement worker started")
                 while True:
                     sleep(0.5)
                     if not thread.is_alive():

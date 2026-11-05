@@ -69,6 +69,21 @@ $ python3 -m build $ python3 -m pip install dost/<releasename>.whl
 
 QuPyt writes a daily UTF-8 log to `~/.qupyt/log/log_YYYY-MM-DD.log`.
 Each entry includes its level, timestamp, thread, source module, and line number.
+Log-file lines wrap at 150 columns. Continuation lines align with the source
+module, after the level, timestamp, and thread prefix; indentation adjusts to
+each entry's actual prefix length. Existing indentation, explicit line breaks,
+and blank lines are preserved. Use `qupyt --log-width 100` to choose another width
+(at least 21 columns); this also applies to `--verbose` output. At narrow widths,
+the continuation indent is shortened to leave room for text.
+Completed actions use dotted leaders ending in `[done]`. Settings and related
+details use one `label...value` row per value, right-aligned to the configured
+line width. This includes the log prefix when calculating the available space.
+For wrapped actions, padding is calculated on the final line so `[done]` stays
+at the right margin. Ordinary messages and intermediate wrapped lines may end
+earlier.
+Measurement progress uses the experiment name and timestamp directly, without
+an extra `Measurement` prefix. Warnings and errors retain their diagnostic text
+and tracebacks instead of receiving a success marker.
 The default INFO level records instruction files, pulse sequence generation,
 hardware setup, measurement steps, saved data and metadata, and the final status
 and elapsed time. Failures include context and tracebacks where available.
