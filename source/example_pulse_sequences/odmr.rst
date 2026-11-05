@@ -5,4 +5,4 @@ ODMR PS File
 
 Below you find an example PS file for an ODMR measurement:
 
-.. literalinclude:: odmr.py
+.. literalinclude:: odmr_cam.py

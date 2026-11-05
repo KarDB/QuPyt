@@ -1,20 +1,22 @@
-"""
-Generate a sample ODMR pulse sequence file.
-This pulse sequence is not suited to be used directly in a measurement.
-Instead, the pulse sequence needs to be adjusted to the particularities
-of the hardware used.
+"""Generate an example ODMR pulse sequence.
+
+Adjust this example to the timing and channel requirements of the hardware
+used for the measurement.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import Any
+
 from qupyt.pulse_sequences.yaml_sequence import YamlSequence
 
 
-def generate_sequence(params: dict):
-    """
-    Interface function to be called when this module
-    is imported into the running python instance.
-    """
+def generate_sequence(params: dict[str, Any]) -> dict[str, Any]:
+    """Generate ODMR sequence files and return dependent measurement parameters."""
     pulse_sequence_steps = int(params.get("pulse_sequence_steps", 1))
+    if pulse_sequence_steps < 1:
+        raise ValueError("pulse_sequence_steps must be positive")
 
     sweep_param_raw = params.get("sweep_param", None)
     sweep_param = None if sweep_param_raw in (None, "") else str(sweep_param_raw)
@@ -26,7 +28,7 @@ def generate_sequence(params: dict):
             sweep_param,
         )
 
-    def _value_for_step(step: int):
+    def _value_for_step(step: int) -> float | None:
         if sweep_values is None:
             return None
 
@@ -35,8 +37,11 @@ def generate_sequence(params: dict):
         else:
             values = [sweep_values]
 
+        if not values:
+            raise ValueError("sweep_values must not be empty")
+
         if pulse_sequence_steps <= 1:
-            return values[-1]
+            return float(values[-1])
 
         # Endpoint form: [start, stop] -> interpolate across all steps
         if len(values) == 2:
@@ -46,7 +51,7 @@ def generate_sequence(params: dict):
 
         # Explicit list form: must match steps
         if len(values) == pulse_sequence_steps:
-            return values[step]
+            return float(values[step])
 
         logging.warning(
             "generate_sequence(): sweep_values must be either [start, stop] or have length == pulse_sequence_steps. "
@@ -57,38 +62,31 @@ def generate_sequence(params: dict):
         return None
 
     for ps_step in range(pulse_sequence_steps):
-        if sweep_param is None:
-            ps_step = 0
         if sweep_param is not None and sweep_param in params:
             v = _value_for_step(ps_step)
             if v is not None:
                 params[sweep_param] = v
 
         backup_params = gen_odmr(
-            params.get("mw_duration"),
-            params.get("laser_duration"),
-            params.get("number_measurements"),
-            params.get("readout_time"),
-            params.get("max_framerate"),
+            params["mw_duration"],
+            params["laser_duration"],
+            params["number_measurements"],
+            params["readout_time"],
+            params["max_framerate"],
             ps_step,
         )
     return backup_params
 
 
-
 def gen_odmr(
-        mw_duration: float,
-        laser_duration: float,
-        number_measurements: int,
-        readout_time: float,
-        max_framerate: float,
-        ps_step: int= 0
-) -> dict:
-    """
-    Implementation of the ESR pulsesequence.
-    Will compute the optimal parameters for ESR
-    pulse sequence.
-    """
+    mw_duration: float,
+    laser_duration: float,
+    number_measurements: int,
+    readout_time: float,
+    max_framerate: float,
+    ps_step: int = 0,
+) -> dict[str, Any]:
+    """Write the ODMR pulse sequence and compute its dependent parameters."""
     # All times in microseconds.
     readout_and_repol_gap = 2
     buffer_between_pulses = 1
@@ -101,9 +99,10 @@ def gen_odmr(
     # logical block of the pulse sequence to avoid playback errors.
     # We compute the time it takes to perform the measurement step,
     # and double the time needed to take into account the reference.
-    time_half = buffer_between_pulses * 3 + \
-        mw_duration + laser_duration + readout_and_repol_gap
-    time_half = max(time_half, 1/max_framerate * 1e6)
+    time_half = (
+        buffer_between_pulses * 3 + mw_duration + laser_duration + readout_and_repol_gap
+    )
+    time_half = max(time_half, 1 / max_framerate * 1e6)
     total_time = 2 * time_half
 
     esr = YamlSequence(duration=total_time)
@@ -116,17 +115,15 @@ def gen_odmr(
         buffer_between_pulses,  # Starting time of the pulse.
         mw_duration,  # Pulse duration.
         # This pulse appears in two sequence blocks.
-        sequence_blocks=['wait_loop', 'block_0']
+        sequence_blocks=["wait_loop", "block_0"],
     )
     # Write the pulses that appear in the microwave and referece section.
     for i in range(2):
         esr.add_pulse(
             "LASER",
-            i * time_half
-            + 2 * buffer_between_pulses
-            + mw_duration,
+            i * time_half + 2 * buffer_between_pulses + mw_duration,
             readout_time,
-            sequence_blocks=['wait_loop', 'block_0']
+            sequence_blocks=["wait_loop", "block_0"],
         )
         esr.add_pulse(
             "LASER",
@@ -135,24 +132,21 @@ def gen_odmr(
             + mw_duration
             + readout_time
             + readout_and_repol_gap,
-            laser_duration
-            - readout_time,
-            sequence_blocks=['wait_loop', 'block_0']
+            laser_duration - readout_time,
+            sequence_blocks=["wait_loop", "block_0"],
         )
         esr.add_pulse(
             "READ",
-            i * time_half
-            + buffer_between_pulses
-            + mw_duration,
+            i * time_half + buffer_between_pulses + mw_duration,
             read_trigger_duration,
-            sequence_blocks=['block_0']
+            sequence_blocks=["block_0"],
         )
     # Here we sequence the defined sequence blocks in the order and number
     # of repetitions we want them to be played during the measurement.
     # This defines the order of the pulse blocks.
-    esr.sequencing_order = ['wait_loop', 'block_0']
+    esr.sequencing_order = ["wait_loop", "block_0"]
     # This defines how often each block in the sequence gets repeated.
-    esr.sequencing_repeats = [1, int(number_measurements/2) + 10]
+    esr.sequencing_repeats = [1, int(number_measurements / 2) + 10]
     esr.write(ps_step)
     # you can return a dict here that added / updates the configuration file.
     # In case of using a camera you might want to return the readout_time here.

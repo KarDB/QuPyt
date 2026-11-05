@@ -1,60 +1,55 @@
 # pylint: disable=logging-format-interpolation
 # pylint: disable=logging-not-lazy
-"""
-Power Supply remote control.
-Currently only the Konrad KD300/6000 are supported.
+"""Control Konrad KD300/6000 power supplies remotely.
 
-Configuration and use through a YAML config file
-is not currently supported but will be added soon.
+Configuration through measurement YAML files is currently unsupported.
 """
-import traceback
+
+from __future__ import annotations
+
 import logging
+
 import serial
+
+from qupyt.utils.logging import log_done
 
 
 class PowerSupply:
-    """
-    Remote control for Konrad KD300/6000 series power supplies.
+    """Remote control for Konrad KD300/6000 power supplies connected by USB.
 
-    This class facilitates remote control of Konrad KD300/6000 series power supplies
-    via USB connection. It provides easy access to the most relevant functions such
-    as turning the power supply on and off.
-
-    Attributes:
-        address (str): The USB address of the power supply.
-        instance (serial.Serial): The serial connection instance to the power supply.
+    Attributes
+    ----------
+    address : str
+        USB address of the power supply.
+    instance : serial.Serial or None
+        Active serial connection, or None after successful cleanup.
     """
 
     def __init__(self, address: str) -> None:
-        """
-        Initializes the PowerSupply instance and establishes a serial connection.
+        """Initialize the power supply and establish its serial connection.
 
-        Args:
-            address (str): The USB address of the power supply.
+        Parameters
+        ----------
+        address : str
+            USB address of the power supply.
 
-        Raises:
-            ValueError: If connection parameters are out of range. This should
-            not happen, as these values are set automatically.
-            SerialException: If the device is not found or not configurable.
+        Raises
+        ------
+        ValueError
+            If serial connection parameters are out of range.
+        serial.SerialException
+            If the device is missing or cannot be configured.
         """
         self.address = address
         try:
             self.instance = serial.Serial(self.address, timeout=1)
-            logging.info(
-                f"Connected to power supply {address}".ljust(65, ".") + "[done]"
-            )
-        except ValueError as exc:
-            logging.exception(
-                f"Connection to power supply {address} failed".ljust(65, ".")
-                + "[failed]"
-            )
-            raise exc
-        except serial.SerialException as exc:
-            logging.exception(
-                f"Connection to power supply {address} failed".ljust(65, ".")
-                + "[failed]"
-            )
-            raise exc
+            log_done(f"Connected to power supply {address}")
+        except ValueError:
+            logging.exception("Connection to power supply %s failed", address)
+            raise
+        except serial.SerialException:
+            logging.exception("Connection to power supply %s failed", address)
+            raise
 
     def __repr__(self) -> str:
         return f"PowerSupply(address: {self.address})"
@@ -63,28 +58,31 @@ class PowerSupply:
         return f"PowerSupply (address: {self.address})"
 
     def on(self) -> None:
-        """
-        Turns on the power supply output.
-
-        This method sends a command to the power supply to turn on the output.
-        """
-        self.instance.write(b"OUT1")
-        logging.info("Turned ON power supply output".ljust(65, ".") + "[done]")
+        """Turn on the power supply output."""
+        try:
+            self.instance.write(b"OUT1")
+        except Exception:
+            logging.exception(
+                "Failed to turn ON power supply output at %s", self.address
+            )
+            raise
+        log_done(f"Turned ON power supply output at {self.address}")
 
     def off(self) -> None:
-        """
-        Turns off the power supply output.
-
-        This method sends a command to the power supply to turn off the output.
-        """
-        self.instance.write(b"OUT0")
-        logging.info("Turned OFF power supply output".ljust(65, ".") + "[done]")
+        """Turn off the power supply output."""
+        try:
+            self.instance.write(b"OUT0")
+        except Exception:
+            logging.exception(
+                "Failed to turn OFF power supply output at %s", self.address
+            )
+            raise
+        log_done(f"Turned OFF power supply output at {self.address}")
 
     def close(self) -> None:
-        """
-        Closes the connection to the power supply.
-
-        Note:
-            This method is not yet implemented.
-        """
-        print("close not yet implemented")
+        """Close the serial connection; repeated cleanup is harmless."""
+        if getattr(self, "instance", None) is None:
+            return
+        self.instance.close()
+        self.instance = None
+        log_done(f"Closed power supply connection at {self.address}")

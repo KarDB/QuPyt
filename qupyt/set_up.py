@@ -1,51 +1,56 @@
-"""
-This is run at every startup up qupyt to make sure
-all necessary user directories exist, and provide
-get functions to query to correct path
-on the user's machine.
-"""
+"""Provide QuPyt user-directory paths and create missing directories."""
+
+from __future__ import annotations
 
 import pathlib
 from pathlib import Path
-from typing import Dict
 
 
 def get_log_dir() -> Path:
-    """
-    :return: Directory for logging output.
-    :rtype: Path
+    """Return the user logging directory.
+
+    Returns
+    -------
+    pathlib.Path
+        Directory for logging output.
     """
     return _make_user_dir_list()["homepath_log"]
 
 
 def get_seq_dir() -> Path:
-    """
-    :return: Directory to which pulse sequences
-     will be written and read.
-    :rtype: Path
+    """Return the user pulse-sequence directory.
+
+    Returns
+    -------
+    pathlib.Path
+        Directory for writing and reading pulse sequences.
     """
     return _make_user_dir_list()["homepath_sequences"]
 
 
 def get_waiting_room() -> Path:
-    """
-    :return: Directory to which measurement instruction
-     files will be written and read.
-    :rtype: Path
+    """Return the measurement instruction waiting-room directory.
+
+    Returns
+    -------
+    pathlib.Path
+        Directory for writing and reading measurement instruction files.
     """
     return _make_user_dir_list()["homepath_waitingroom"]
 
 
 def get_home_dir() -> Path:
-    """
-    :return: Directory to which status
-     files will be written and read.
-    :rtype: Path
+    """Return the QuPyt user-data directory.
+
+    Returns
+    -------
+    pathlib.Path
+        Base directory containing status files and other QuPyt user data.
     """
     return _make_user_dir_list()["homepath"]
 
 
-def _make_user_dir_list() -> Dict[str, Path]:
+def _make_user_dir_list() -> dict[str, Path]:
     homepath = pathlib.Path.home() / ".qupyt"
     homepath_log = pathlib.Path.home() / ".qupyt/log"
     homepath_sequences = pathlib.Path.home() / ".qupyt/sequences"
@@ -60,10 +65,7 @@ def _make_user_dir_list() -> Dict[str, Path]:
 
 
 def make_userdirs() -> None:
-    """
-    Create all necessary user directories if they don't
-    yet exists.
-    """
+    """Create the required QuPyt user directories if they are missing."""
     dirs = _make_user_dir_list()
     for directory in dirs.values():
         directory.mkdir(exist_ok=True)
