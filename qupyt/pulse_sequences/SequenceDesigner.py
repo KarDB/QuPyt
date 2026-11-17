@@ -378,6 +378,6 @@ class PulseBlasterSequence:
             for index, duration in enumerate(self.event_durations)
             if duration == 0
         ]
-        for pop_index in indices_to_pop:
+        for pop_index in reversed(indices_to_pop):
             self.event_durations.pop(pop_index)
             self.channel_bits.pop(pop_index)
